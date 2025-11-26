@@ -1,0 +1,218 @@
+{
+    "Aethermind Agent": {
+        "prefix": "aether-agent",
+        "body": [
+            "import { createRuntime, createAgent } from '@aethermind/core';",
+            "",
+            "const runtime = createRuntime();",
+            "",
+            "const ${1:agentName} = runtime.createAgent(",
+            "  {",
+            "    name: '${2:Agent Name}',",
+            "    model: '${3|gpt-4o,gpt-4o-mini,claude-3-5-sonnet-20241022,claude-3-5-haiku-20241022,llama3.2|}',",
+            "    systemPrompt: '${4:You are a helpful assistant}',",
+            "    temperature: ${5:0.7},",
+            "    maxTokens: ${6:1000}",
+            "  },",
+            "  async (input, context) => {",
+            "    // Agent logic here",
+            "    ${7:return `Processed: \\${input}`;}",
+            "  }",
+            ");",
+            "",
+            "$0"
+        ],
+        "description": "Create a new Aethermind agent"
+    },
+    "Aethermind Workflow": {
+        "prefix": "aether-workflow",
+        "body": [
+            "import { createWorkflowEngine } from '@aethermind/core';",
+            "",
+            "const workflowEngine = createWorkflowEngine(orchestrator);",
+            "",
+            "workflowEngine.registerWorkflow({",
+            "  id: '${1:workflow-id}',",
+            "  name: '${2:Workflow Name}',",
+            "  description: '${3:Workflow description}',",
+            "  steps: [",
+            "    {",
+            "      id: '${4:step1}',",
+            "      agentId: '${5:agent-id}',",
+            "      dependsOn: [],",
+            "      transform: (input) => input",
+            "    },",
+            "    {",
+            "      id: '${6:step2}',",
+            "      agentId: '${7:agent-id}',",
+            "      dependsOn: ['${4:step1}'],",
+            "      transform: (input, results) => results['${4:step1}']",
+            "    }",
+            "  ]",
+            "});",
+            "",
+            "$0"
+        ],
+        "description": "Create a new Aethermind workflow"
+    },
+    "OpenAI Provider": {
+        "prefix": "aether-provider-openai",
+        "body": [
+            "import { createOpenAIProvider } from '@aethermind/core';",
+            "",
+            "const openaiProvider = createOpenAIProvider(",
+            "  process.env.OPENAI_API_KEY || ''",
+            ");",
+            "",
+            "runtime.setDefaultProvider(openaiProvider);",
+            "$0"
+        ],
+        "description": "Configure OpenAI provider"
+    },
+    "Anthropic Provider": {
+        "prefix": "aether-provider-anthropic",
+        "body": [
+            "import { createAnthropicProvider } from '@aethermind/core';",
+            "",
+            "const anthropicProvider = createAnthropicProvider(",
+            "  process.env.ANTHROPIC_API_KEY || ''",
+            ");",
+            "",
+            "runtime.registerProvider('anthropic', anthropicProvider);",
+            "$0"
+        ],
+        "description": "Configure Anthropic provider"
+    },
+    "Ollama Provider": {
+        "prefix": "aether-provider-ollama",
+        "body": [
+            "import { createOllamaProvider } from '@aethermind/core';",
+            "",
+            "const ollamaProvider = createOllamaProvider({",
+            "  baseUrl: '${1:http://localhost:11434}'",
+            "});",
+            "",
+            "runtime.registerProvider('ollama', ollamaProvider);",
+            "$0"
+        ],
+        "description": "Configure Ollama provider"
+    },
+    "Execute Agent": {
+        "prefix": "aether-execute",
+        "body": [
+            "const result = await runtime.executeAgent(",
+            "  '${1:agent-id}',",
+            "  ${2:input}",
+            ");",
+            "",
+            "if (result.success) {",
+            "  console.log('Result:', result.output);",
+            "} else {",
+            "  console.error('Error:', result.error);",
+            "}",
+            "$0"
+        ],
+        "description": "Execute an agent"
+    },
+    "Chat with Agent": {
+        "prefix": "aether-chat",
+        "body": [
+            "const response = await runtime.chat(",
+            "  '${1:agent-id}',",
+            "  [",
+            "    { role: 'user', content: '${2:Hello!}' }",
+            "  ],",
+            "  '${3|openai,anthropic,ollama|}'",
+            ");",
+            "",
+            "console.log('Response:', response.content);",
+            "console.log('Tokens:', response.tokenUsage);",
+            "$0"
+        ],
+        "description": "Chat with an agent"
+    },
+    "Execute Workflow": {
+        "prefix": "aether-workflow-execute",
+        "body": [
+            "const result = await workflowEngine.executeWorkflow(",
+            "  '${1:workflow-id}',",
+            "  ${2:input}",
+            ");",
+            "",
+            "if (result.success) {",
+            "  console.log('Workflow completed:', result.results);",
+            "} else {",
+            "  console.error('Workflow failed:', result.error);",
+            "}",
+            "$0"
+        ],
+        "description": "Execute a workflow"
+    },
+    "Event Listener": {
+        "prefix": "aether-event",
+        "body": [
+            "runtime.on('${1|agent:event,log,workflow:started,workflow:completed,workflow:failed,agent:reloaded,agent:reload-failed|}', (${2:event}) => {",
+            "  console.log('Event:', ${2:event});",
+            "  $0",
+            "});"
+        ],
+        "description": "Add an event listener"
+    },
+    "Error Handler": {
+        "prefix": "aether-error",
+        "body": [
+            "import { ${1|ConfigurationError,ProviderError,WorkflowError,AgentError,AuthError|} } from '@aethermind/core';",
+            "",
+            "try {",
+            "  $0",
+            "} catch (error) {",
+            "  if (error instanceof ${1:ConfigurationError}) {",
+            "    console.error('Error Code:', error.code);",
+            "    console.error('Message:', error.message);",
+            "    console.error('Suggestion:', error.suggestion);",
+            "  } else {",
+            "    throw error;",
+            "  }",
+            "}"
+        ],
+        "description": "Handle Aethermind errors"
+    },
+    "Cost Estimation": {
+        "prefix": "aether-cost-estimate",
+        "body": [
+            "import { createCostEstimationService } from '@aethermind/core';",
+            "",
+            "const costService = createCostEstimationService(store);",
+            "",
+            "const estimate = await costService.estimateWorkflowCost(",
+            "  '${1:workflow-id}',",
+            "  workflow",
+            ");",
+            "",
+            "console.log('Estimated cost:', estimate.estimatedCost);",
+            "console.log('Confidence:', estimate.confidence);",
+            "$0"
+        ],
+        "description": "Estimate workflow cost"
+    },
+    "Config Watcher": {
+        "prefix": "aether-config-watcher",
+        "body": [
+            "import { createConfigWatcher } from '@aethermind/core';",
+            "",
+            "const configWatcher = createConfigWatcher({",
+            "  watchPath: '${1:./config/agents}',",
+            "  patterns: ['${2:**/*.json}'],",
+            "  debounceMs: ${3:300}",
+            "});",
+            "",
+            "configWatcher.on('config:change', async (event) => {",
+            "  console.log('Config changed:', event.path);",
+            "  $0",
+            "});",
+            "",
+            "configWatcher.start();"
+        ],
+        "description": "Create a config watcher for hot reload"
+    }
+}

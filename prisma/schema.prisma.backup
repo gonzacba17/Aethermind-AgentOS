@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id         String      @id @db.Uuid
+  name       String      @db.VarChar(255)
+  model      String      @db.VarChar(255)
+  config     Json        @default("{}")
+  createdAt  DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  executions Execution[]
+  logs       Log[]
+
+  @@map("agents")
+}
+
+model Execution {
+  id          String    @id @db.Uuid
+  agentId     String?   @map("agent_id") @db.Uuid
+  status      String    @db.VarChar(50)
+  input       Json?
+  output      Json?
+  error       String?   @db.Text
+  startedAt   DateTime  @default(now()) @map("started_at") @db.Timestamptz(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  durationMs  Int?      @map("duration_ms")
+  
+  agent  Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  logs   Log[]
+  traces Trace[]
+  costs  Cost[]
+
+  @@index([agentId], map: "idx_executions_agent_id")
+  @@index([status], map: "idx_executions_status")
+  @@map("executions")
+}
+
+model Log {
+  id          String   @id @db.Uuid
+  executionId String?  @map("execution_id") @db.Uuid
+  agentId     String?  @map("agent_id") @db.Uuid
+  level       String   @db.VarChar(20)
+  message     String   @db.Text
+  metadata    Json?
+  timestamp   DateTime @default(now()) @db.Timestamptz(6)
+  
+  execution Execution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  agent     Agent?     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([executionId], map: "idx_logs_execution_id")
+  @@index([timestamp], map: "idx_logs_timestamp")
+  @@index([level], map: "idx_logs_level")
+  @@map("logs")
+}
+
+model Trace {
+  id          String   @id @db.Uuid
+  executionId String?  @map("execution_id") @db.Uuid
+  treeData    Json     @map("tree_data")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  execution Execution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId], map: "idx_traces_execution_id")
+  @@map("traces")
+}
+
+model Cost {
+  id               String   @id @db.Uuid
+  executionId      String?  @map("execution_id") @db.Uuid
+  model            String   @db.VarChar(255)
+  promptTokens     Int      @default(0) @map("prompt_tokens")
+  completionTokens Int      @default(0) @map("completion_tokens")
+  totalTokens      Int      @default(0) @map("total_tokens")
+  cost             Decimal  @default(0) @db.Decimal(10, 6)
+  currency         String?  @default("USD") @db.VarChar(10)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  execution Execution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId], map: "idx_costs_execution_id")
+  @@index([model], map: "idx_costs_model")
+  @@map("costs")
+}
+
+model Workflow {
+  id          String   @id @db.Uuid
+  name        String   @unique @db.VarChar(255)
+  description String?  @db.Text
+  definition  Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("workflows")
+}

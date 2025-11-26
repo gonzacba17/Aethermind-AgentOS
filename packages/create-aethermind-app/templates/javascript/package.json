@@ -1,0 +1,14 @@
+{
+    "name": "{{PROJECT_NAME}}",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "node src/index.js",
+        "start": "node src/index.js"
+    },
+    "dependencies": {
+        "@aethermind/sdk": "workspace:*",
+        "dotenv": "^16.4.0"
+    }
+}

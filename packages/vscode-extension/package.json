@@ -1,0 +1,39 @@
+{
+    "name": "aethermind-agentos",
+    "displayName": "Aethermind AgentOS",
+    "description": "Code snippets and tools for Aethermind AgentOS development",
+    "version": "0.1.0",
+    "publisher": "aethermind",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Snippets",
+        "Programming Languages"
+    ],
+    "keywords": [
+        "aethermind",
+        "agent",
+        "ai",
+        "llm",
+        "workflow"
+    ],
+    "contributes": {
+        "snippets": [
+            {
+                "language": "typescript",
+                "path": "./snippets/aethermind.json"
+            },
+            {
+                "language": "javascript",
+                "path": "./snippets/aethermind.json"
+            }
+        ]
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/aethermind/agentos"
+    },
+    "license": "MIT",
+    "icon": "icon.png"
+}

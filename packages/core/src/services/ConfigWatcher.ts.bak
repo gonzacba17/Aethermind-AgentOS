@@ -1,0 +1,204 @@
+﻿import { EventEmitter } from 'events';
+import chokidar, { FSWatcher } from 'chokidar';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+
+export interface ConfigWatcherOptions {
+    /**
+     * Directory to watch for configuration changes
+     */
+    watchPath: string;
+
+    /**
+     * File patterns to watch (default: ['**/*.json', ' **/*.ts', '**/*.js'])
+    */
+patterns?: string[];
+
+/**
+ * Debounce delay in milliseconds (default: 300)
+ */
+debounceMs?: number;
+
+/**
+ * Whether to watch for changes (default: true)
+ */
+enabled?: boolean;
+}
+
+export interface ConfigChangeEvent {
+    type: 'add' | 'change' | 'unlink';
+    path: string;
+    timestamp: Date;
+}
+
+export interface ConfigReloadEvent {
+    configPath: string;
+    success: boolean;
+    error?: Error;
+    timestamp: Date;
+}
+
+/**
+ * ConfigWatcher monitors configuration files and emits events when they change.
+ * Supports debouncing to avoid multiple reloads for rapid file changes.
+ */
+export class ConfigWatcher extends EventEmitter {
+    private watcher: FSWatcher | null = null;
+    private debounceTimers: Map<string, NodeJS.Timeout> = new Map();
+    private options: Required<ConfigWatcherOptions>;
+    private isWatching = false;
+
+    constructor(options: ConfigWatcherOptions) {
+        super();
+
+        this.options = {
+            watchPath: options.watchPath,
+            patterns: options.patterns || ['**/*.json', '**/*.ts', '**/*.js'],
+            debounceMs: options.debounceMs ?? 300,
+            enabled: options.enabled ?? true,
+        };
+    }
+
+    /**
+     * Start watching for configuration changes
+     */
+    public start(): void {
+        if (!this.options.enabled) {
+            console.log('[ConfigWatcher] Disabled, skipping file watching');
+            return;
+        }
+
+        if (this.isWatching) {
+            console.warn('[ConfigWatcher] Already watching');
+            return;
+        }
+
+        console.log(`[ConfigWatcher] Starting to watch: ${this.options.watchPath}`);
+
+        this.watcher = chokidar.watch(this.options.patterns, {
+            cwd: this.options.watchPath,
+            persistent: true,
+            ignoreInitial: true,
+            awaitWriteFinish: {
+                stabilityThreshold: 100,
+                pollInterval: 50,
+            },
+        });
+
+        this.watcher.on('add', (path) => this.handleFileChange('add', path));
+        this.watcher.on('change', (path) => this.handleFileChange('change', path));
+        this.watcher.on('unlink', (path) => this.handleFileChange('unlink', path));
+
+        this.watcher.on('error', (error) => {
+            console.error('[ConfigWatcher] Error:', error);
+            this.emit('error', error);
+        });
+
+        this.watcher.on('ready', () => {
+            this.isWatching = true;
+            console.log('[ConfigWatcher] Ready and watching for changes');
+            this.emit('ready');
+        });
+    }
+
+    /**
+     * Stop watching for configuration changes
+     */
+    public async stop(): Promise<void> {
+        if (!this.isWatching) {
+            return;
+        }
+
+        console.log('[ConfigWatcher] Stopping file watcher');
+
+        // Clear all pending debounce timers
+        for (const timer of this.debounceTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.debounceTimers.clear();
+
+        if (this.watcher) {
+            await this.watcher.close();
+            this.watcher = null;
+        }
+
+        this.isWatching = false;
+        this.emit('stopped');
+    }
+
+    /**
+     * Handle file change events with debouncing
+     */
+    private handleFileChange(type: 'add' | 'change' | 'unlink', relativePath: string): void {
+        const fullPath = join(this.options.watchPath, relativePath);
+
+        // Clear existing debounce timer for this file
+        const existingTimer = this.debounceTimers.get(fullPath);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+        }
+
+        // Set new debounce timer
+        const timer = setTimeout(() => {
+            this.debounceTimers.delete(fullPath);
+            this.emitConfigChange(type, fullPath);
+        }, this.options.debounceMs);
+
+        this.debounceTimers.set(fullPath, timer);
+    }
+
+    /**
+     * Emit config change event
+     */
+    private emitConfigChange(type: 'add' | 'change' | 'unlink', path: string): void {
+        const event: ConfigChangeEvent = {
+            type,
+            path,
+            timestamp: new Date(),
+        };
+
+        console.log(`[ConfigWatcher] Config ${type}: ${path}`);
+        this.emit('config:change', event);
+    }
+
+    /**
+     * Read and parse a configuration file
+     */
+    public async readConfig<T = unknown>(configPath: string): Promise<T> {
+        try {
+            const content = await readFile(configPath, 'utf-8');
+
+            // Handle JSON files
+            if (configPath.endsWith('.json')) {
+                return JSON.parse(content) as T;
+            }
+
+            // Handle TypeScript/JavaScript files (would need dynamic import)
+            // For now, we'll just support JSON
+            throw new Error(`Unsupported config file type: ${configPath}`);
+        } catch (error) {
+            throw new Error(`Failed to read config from ${configPath}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Check if the watcher is currently active
+     */
+    public isActive(): boolean {
+        return this.isWatching;
+    }
+
+    /**
+     * Get the current watch path
+     */
+    public getWatchPath(): string {
+        return this.options.watchPath;
+    }
+}
+
+/**
+ * Create a new ConfigWatcher instance
+ */
+export function createConfigWatcher(options: ConfigWatcherOptions): ConfigWatcher {
+    return new ConfigWatcher(options);
+}
