@@ -1,17 +1,19 @@
 import { Router } from 'express';
 import type { Router as ExpressRouter } from 'express';
+import { validateQuery } from '../middleware/validator.js';
+import { CostFilterSchema } from '@aethermind/core';
 
 const router: ExpressRouter = Router();
 
-router.get('/', async (req, res) => {
+router.get('/', validateQuery(CostFilterSchema), async (req, res) => {
   try {
-    const { executionId, model, limit, offset } = req.query;
+    const { executionId, model, limit, offset } = req.query as any;
 
     const costs = await req.store.getCosts({
-      executionId: executionId as string | undefined,
-      model: model as string | undefined,
-      limit: limit ? parseInt(limit as string, 10) : undefined,
-      offset: offset ? parseInt(offset as string, 10) : undefined,
+      executionId,
+      model,
+      limit,
+      offset,
     });
 
     const total = await req.store.getTotalCost();

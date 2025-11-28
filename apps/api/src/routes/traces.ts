@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import type { Router as ExpressRouter } from 'express';
+import { validateParams } from '../middleware/validator.js';
+import { IdParamSchema } from '@aethermind/core';
 
 const router: ExpressRouter = Router();
 
@@ -12,7 +14,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateParams(IdParamSchema), async (req, res) => {
   try {
     const trace = await req.store.getTrace(req.params['id']!);
     if (!trace) {

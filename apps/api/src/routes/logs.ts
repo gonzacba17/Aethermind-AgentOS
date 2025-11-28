@@ -1,18 +1,20 @@
 import { Router } from 'express';
 import type { Router as ExpressRouter } from 'express';
+import { validateQuery } from '../middleware/validator.js';
+import { LogFilterSchema } from '@aethermind/core';
 
 const router: ExpressRouter = Router();
 
-router.get('/', async (req, res) => {
+router.get('/', validateQuery(LogFilterSchema), async (req, res) => {
   try {
-    const { level, agentId, executionId, limit, offset } = req.query;
+    const { level, agentId, executionId, limit, offset } = req.query as any;
 
     const logsResult = await req.store.getLogs({
-      level: level as string | undefined,
-      agentId: agentId as string | undefined,
-      executionId: executionId as string | undefined,
-      limit: limit ? parseInt(limit as string, 10) : undefined,
-      offset: offset ? parseInt(offset as string, 10) : undefined,
+      level,
+      agentId,
+      executionId,
+      limit,
+      offset,
     });
 
     res.json(logsResult);

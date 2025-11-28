@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import type { Router as ExpressRouter } from 'express';
+import { validateParams } from '../middleware/validator.js';
+import { IdParamSchema } from '@aethermind/core';
 
 const router: ExpressRouter = Router();
 
@@ -12,7 +14,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateParams(IdParamSchema), async (req, res) => {
   try {
     const execution = await req.store.getExecution(req.params['id']!);
     if (!execution) {
@@ -25,7 +27,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.get('/:id/logs', async (req, res) => {
+router.get('/:id/logs', validateParams(IdParamSchema), async (req, res) => {
   try {
     const logs = await req.store.getLogs({ executionId: req.params['id'] });
     res.json(logs);
@@ -34,7 +36,7 @@ router.get('/:id/logs', async (req, res) => {
   }
 });
 
-router.get('/:id/trace', async (req, res) => {
+router.get('/:id/trace', validateParams(IdParamSchema), async (req, res) => {
   try {
     const trace = await req.store.getTrace(req.params['id']!);
     if (!trace) {
@@ -47,7 +49,7 @@ router.get('/:id/trace', async (req, res) => {
   }
 });
 
-router.get('/agent/:agentId', async (req, res) => {
+router.get('/agent/:agentId', validateParams(IdParamSchema.extend({ agentId: IdParamSchema.shape.id })), async (req, res) => {
   try {
     const executions = await req.store.getExecutionsByAgent(req.params['agentId']!);
     res.json(executions);
