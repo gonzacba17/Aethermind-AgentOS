@@ -1,14 +1,24 @@
 import { Router } from 'express';
 import type { Router as ExpressRouter } from 'express';
-import { validateParams } from '../middleware/validator.js';
-import { IdParamSchema } from '@aethermind/core';
+import { validateParams, validateQuery } from '../middleware/validator.js';
+import { IdParamSchema, PaginationSchema } from '@aethermind/core';
 
 const router: ExpressRouter = Router();
 
-router.get('/', async (req, res) => {
+router.get('/', validateQuery(PaginationSchema), async (req, res) => {
   try {
     const executions = await req.store.getAllExecutions();
-    res.json(executions);
+    const { offset, limit } = req.query as any;
+    
+    const paginatedExecutions = executions.slice(offset, offset + limit);
+    
+    res.json({
+      data: paginatedExecutions,
+      total: executions.length,
+      offset,
+      limit,
+      hasMore: offset + limit < executions.length,
+    });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
