@@ -37,6 +37,8 @@ Open http://localhost:3000 to see the dashboard.
 - **📈 Observability** - Comprehensive logging, tracing, and metrics
 - **🔄 Workflow Engine** - Define complex multi-step agent workflows
 - **⚡ WebSocket Updates** - Real-time updates via WebSocket
+- **🧪 Comprehensive Testing** - 146+ tests across 6 categories (unit, integration, E2E, API, WebSocket)
+- **🔒 Enhanced Security** - CSP, Zod validation, non-root containers, Redis caching
 
 ## 📋 Prerequisites
 
@@ -92,6 +94,7 @@ pnpm run generate-api-key
 ```
 
 Copy the hash to your `.env` file:
+
 ```env
 API_KEY_HASH=$2b$10$your_generated_hash_here
 ```
@@ -145,12 +148,14 @@ You should see a multi-agent workflow execute successfully!
 Open two terminals:
 
 **Terminal 1 - API Server:**
+
 ```bash
 cd apps/api
 pnpm dev
 ```
 
 **Terminal 2 - Dashboard:**
+
 ```bash
 cd packages/dashboard
 pnpm dev
@@ -193,6 +198,7 @@ pnpm dev
 ```
 
 Disable hot reload:
+
 ```env
 ENABLE_HOT_RELOAD=false
 ```
@@ -200,6 +206,7 @@ ENABLE_HOT_RELOAD=false
 ### Debugging with VSCode
 
 Source maps are enabled for all TypeScript packages. For debugging information:
+
 - VSCode launch configurations
 - Setting breakpoints in TypeScript
 - Debugging agents and workflows
@@ -219,6 +226,7 @@ code --install-extension aethermind-agentos-0.1.0.vsix
 ```
 
 Available snippets:
+
 - `aether-agent` - Create a new agent
 - `aether-workflow` - Create a workflow
 - `aether-provider-openai` - Configure OpenAI
@@ -231,6 +239,7 @@ Available snippets:
 ### Error Codes
 
 All errors include unique codes and helpful suggestions. Example error response:
+
 ```json
 {
   "error": "ProviderError",
@@ -245,15 +254,15 @@ All errors include unique codes and helpful suggestions. Example error response:
 ### Creating an Agent
 
 ```typescript
-import { createAgent, startOrchestrator } from '@aethermind/sdk';
+import { createAgent, startOrchestrator } from "@aethermind/sdk";
 
 const researcher = createAgent({
-  name: 'researcher',
-  model: 'gpt-4',
-  systemPrompt: 'You are a research assistant.',
+  name: "researcher",
+  model: "gpt-4",
+  systemPrompt: "You are a research assistant.",
   logic: async (ctx) => {
     // Your agent logic here
-    return { findings: ['Finding 1', 'Finding 2'] };
+    return { findings: ["Finding 1", "Finding 2"] };
   },
 });
 ```
@@ -275,7 +284,7 @@ const orchestrator = startOrchestrator({
 ```typescript
 const result = await orchestrator.execute({
   agentId: researcher.id,
-  input: { topic: 'AI market analysis' },
+  input: { topic: "AI market analysis" },
 });
 
 console.log(result);
@@ -286,14 +295,14 @@ console.log(result);
 ```typescript
 const workflow = {
   steps: [
-    { id: 'research', agent: researcher.id },
-    { id: 'analyze', agent: analyst.id },
-    { id: 'write', agent: writer.id },
+    { id: "research", agent: researcher.id },
+    { id: "analyze", agent: analyst.id },
+    { id: "write", agent: writer.id },
   ],
 };
 
 const result = await orchestrator.executeWorkflow(workflow, {
-  topic: 'Market analysis',
+  topic: "Market analysis",
 });
 ```
 
@@ -306,26 +315,26 @@ Connect to the WebSocket endpoint for real-time updates on logs, executions, and
 #### Option 1: Using Header (Recommended)
 
 ```javascript
-const WebSocket = require('ws');
+const WebSocket = require("ws");
 
-const ws = new WebSocket('ws://localhost:3001/ws', {
+const ws = new WebSocket("ws://localhost:3001/ws", {
   headers: {
-    'x-api-key': 'your-api-key-here'
-  }
+    "x-api-key": "your-api-key-here",
+  },
 });
 
-ws.on('open', () => {
-  console.log('Connected to WebSocket');
+ws.on("open", () => {
+  console.log("Connected to WebSocket");
 });
 
-ws.on('message', (data) => {
+ws.on("message", (data) => {
   const message = JSON.parse(data);
-  console.log('Received:', message.type, message.data);
+  console.log("Received:", message.type, message.data);
 });
 
-ws.on('close', (code, reason) => {
+ws.on("close", (code, reason) => {
   if (code === 1008) {
-    console.error('Authentication failed:', reason.toString());
+    console.error("Authentication failed:", reason.toString());
   }
 });
 ```
@@ -333,10 +342,10 @@ ws.on('close', (code, reason) => {
 #### Option 2: Using Query Parameter
 
 ```javascript
-const ws = new WebSocket('ws://localhost:3001/ws?apiKey=your-api-key-here');
+const ws = new WebSocket("ws://localhost:3001/ws?apiKey=your-api-key-here");
 
-ws.on('open', () => {
-  console.log('Connected to WebSocket');
+ws.on("open", () => {
+  console.log("Connected to WebSocket");
 });
 ```
 
@@ -344,20 +353,22 @@ ws.on('open', () => {
 
 ```javascript
 // Using query parameter (browsers don't support custom headers in WebSocket constructor)
-const ws = new WebSocket(`ws://localhost:3001/ws?apiKey=${encodeURIComponent(apiKey)}`);
+const ws = new WebSocket(
+  `ws://localhost:3001/ws?apiKey=${encodeURIComponent(apiKey)}`
+);
 
 ws.onopen = () => {
-  console.log('Connected');
+  console.log("Connected");
 };
 
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data);
-  console.log('Received:', message.type, message.data);
+  console.log("Received:", message.type, message.data);
 };
 
 ws.onclose = (event) => {
   if (event.code === 1008) {
-    console.error('Authentication failed:', event.reason);
+    console.error("Authentication failed:", event.reason);
   }
 };
 ```
@@ -378,23 +389,25 @@ ws.onclose = (event) => {
 
 ```javascript
 // Subscribe to specific channels
-ws.send(JSON.stringify({
-  type: 'subscribe',
-  channels: ['log', 'agent:event']
-}));
+ws.send(
+  JSON.stringify({
+    type: "subscribe",
+    channels: ["log", "agent:event"],
+  })
+);
 
 // Unsubscribe from channels
-ws.send(JSON.stringify({
-  type: 'unsubscribe',
-  channels: ['log']
-}));
+ws.send(
+  JSON.stringify({
+    type: "unsubscribe",
+    channels: ["log"],
+  })
+);
 
 // Ping/pong for keepalive
-ws.send(JSON.stringify({ type: 'ping' }));
+ws.send(JSON.stringify({ type: "ping" }));
 // Server responds with { type: 'pong', data: { timestamp: ... } }
 ```
-
-
 
 ## 🧪 Testing
 
@@ -402,17 +415,20 @@ ws.send(JSON.stringify({ type: 'ping' }));
 # Run all tests
 pnpm test:all
 
-# Run unit tests
+# Run unit tests (146+ tests)
 pnpm test
 
-# Run integration tests
+# Run integration tests (37+ tests)
 pnpm test:integration
 
 # Run E2E tests
 pnpm test:e2e
 
-# Run API tests
+# Run API tests (32+ tests)
 pnpm test:api
+
+# Run with coverage (baseline: 20%)
+pnpm test:coverage
 ```
 
 ## 📦 Project Structure
@@ -437,17 +453,17 @@ aethermind-agentos/
 
 ## 🔧 Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `pnpm dev` | Start all services in development mode |
-| `pnpm build` | Build all packages for production |
-| `pnpm test` | Run unit tests |
-| `pnpm test:all` | Run all test suites |
-| `pnpm validate` | Validate system setup |
-| `pnpm demo` | Run the full demo |
-| `pnpm docker:up` | Start Docker services |
-| `pnpm docker:down` | Stop Docker services |
-| `pnpm docker:logs` | View Docker logs |
+| Script             | Description                            |
+| ------------------ | -------------------------------------- |
+| `pnpm dev`         | Start all services in development mode |
+| `pnpm build`       | Build all packages for production      |
+| `pnpm test`        | Run unit tests                         |
+| `pnpm test:all`    | Run all test suites                    |
+| `pnpm validate`    | Validate system setup                  |
+| `pnpm demo`        | Run the full demo                      |
+| `pnpm docker:up`   | Start Docker services                  |
+| `pnpm docker:down` | Stop Docker services                   |
+| `pnpm docker:logs` | View Docker logs                       |
 
 ## 🐛 Troubleshooting
 
@@ -522,12 +538,15 @@ MIT License - see LICENSE file for details
 ## 🙏 Acknowledgments
 
 Built with:
+
 - [Next.js](https://nextjs.org/) - Dashboard framework
 - [Express](https://expressjs.com/) - API server
 - [PostgreSQL](https://www.postgresql.org/) - Database
 - [Redis](https://redis.io/) - Caching and pub/sub
 - [TypeScript](https://www.typescriptlang.org/) - Type safety
 - [Turborepo](https://turbo.build/) - Monorepo management
+- [Prisma](https://www.prisma.io/) - ORM and migrations (v6.19.0)
+- [Jest](https://jestjs.io/) - Testing framework (v30.2.0)
 
 ## 📞 Support
 

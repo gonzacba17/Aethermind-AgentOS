@@ -1,4 +1,5 @@
-import { authMiddleware, configureAuth, verifyApiKey } from '../../../apps/api/src/middleware/auth';
+import { jest } from '@jest/globals';
+import { authMiddleware, configureAuth, verifyApiKey } from '../../src/middleware/auth';
 import bcrypt from 'bcryptjs';
 import { Request, Response, NextFunction } from 'express';
 
@@ -9,13 +10,13 @@ describe('Auth Middleware', () => {
 
   beforeEach(() => {
     mockReq = {
-      header: jest.fn(),
+      header: jest.fn() as any,
     };
     mockRes = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
+      status: jest.fn().mockReturnThis() as any,
+      json: jest.fn() as any,
     };
-    mockNext = jest.fn();
+    mockNext = jest.fn() as any;
   });
 
   describe('authMiddleware', () => {

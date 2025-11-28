@@ -82,25 +82,25 @@ graph TB
     Dashboard --> API
     SDK --> API
     CLI --> API
-    
+
     API --> Auth
     Auth --> Runtime
     API --> WS
     WS --> Runtime
-    
+
     Runtime --> Orchestrator
     Runtime --> Agent
     Orchestrator --> WorkflowEngine
     Orchestrator --> CostService
-    
+
     WorkflowEngine --> Agent
     Agent --> OpenAI
     Agent --> Anthropic
     Agent --> Ollama
-    
+
     Runtime --> PostgresStore
     Orchestrator --> Logger
-    
+
     PostgresStore --> DB
     OpenAI --> OpenAIAPI
     Anthropic --> AnthropicAPI
@@ -195,19 +195,19 @@ sequenceDiagram
     API->>API: Authenticate (API Key)
     API->>Runtime: executeAgent(agentId, input)
     Runtime->>Agent: execute(input)
-    
+
     Agent->>Agent: Emit 'agent:started'
     Agent->>LLM: chat(messages, config)
     LLM-->>Agent: response
-    
+
     Agent->>Agent: Emit 'agent:completed'
     Agent-->>Runtime: ExecutionResult
-    
+
     Runtime->>DB: saveExecution(result)
     Runtime->>DB: saveLogs(logs)
     Runtime->>DB: saveTrace(trace)
     Runtime->>DB: saveCost(cost)
-    
+
     Runtime-->>API: result
     API-->>Client: 200 OK + result
 ```
@@ -225,19 +225,19 @@ sequenceDiagram
 
     Client->>Orchestrator: executeWorkflow(name, input)
     Orchestrator->>WorkflowEngine: execute(name, input)
-    
+
     WorkflowEngine->>WorkflowEngine: Validate workflow DAG
     WorkflowEngine->>Agent1: execute(step1.input)
     Agent1-->>WorkflowEngine: result1
-    
+
     par Parallel Execution
         WorkflowEngine->>Agent2: execute(step2.input)
         WorkflowEngine->>Agent3: execute(step3.input)
     end
-    
+
     Agent2-->>WorkflowEngine: result2
     Agent3-->>WorkflowEngine: result3
-    
+
     WorkflowEngine->>WorkflowEngine: Aggregate results
     WorkflowEngine-->>Orchestrator: WorkflowResult
     Orchestrator-->>Client: result
@@ -252,6 +252,7 @@ sequenceDiagram
 **Location**: `apps/api/src/routes/`, `apps/api/src/websocket/`
 
 **Responsibilities**:
+
 - HTTP request handling
 - Input validation (Zod schemas)
 - Authentication and authorization
@@ -259,6 +260,7 @@ sequenceDiagram
 - Response formatting
 
 **Key Files**:
+
 - `routes/agents.ts` - Agent CRUD and execution endpoints
 - `routes/workflows.ts` - Workflow management endpoints
 - `routes/executions.ts` - Execution history endpoints
@@ -272,6 +274,7 @@ sequenceDiagram
 **Location**: `packages/core/src/orchestrator/`, `packages/core/src/agent/`
 
 **Responsibilities**:
+
 - Business logic orchestration
 - Workflow execution
 - Task queue management
@@ -279,6 +282,7 @@ sequenceDiagram
 - Trace generation
 
 **Key Files**:
+
 - `orchestrator/Orchestrator.ts` - Multi-agent coordination
 - `workflow/WorkflowEngine.ts` - Workflow DAG execution
 - `agent/AgentRuntime.ts` - Agent lifecycle management
@@ -289,12 +293,14 @@ sequenceDiagram
 **Location**: `packages/core/src/agent/`, `packages/core/src/types/`
 
 **Responsibilities**:
+
 - Core business entities
 - Domain logic
 - Type definitions
 - Validation schemas
 
 **Key Files**:
+
 - `agent/Agent.ts` - Agent entity
 - `types/index.ts` - Type definitions and schemas
 - `state/StateManager.ts` - State management
@@ -305,12 +311,14 @@ sequenceDiagram
 **Location**: `apps/api/src/services/`, `packages/core/src/providers/`
 
 **Responsibilities**:
+
 - Database access
 - External API integration
 - Caching
 - File system operations
 
 **Key Files**:
+
 - `services/PostgresStore.ts` - PostgreSQL data access
 - `services/InMemoryStore.ts` - In-memory fallback
 - `providers/OpenAIProvider.ts` - OpenAI integration
@@ -326,17 +334,19 @@ sequenceDiagram
 **Purpose**: Central runtime for managing agents and LLM providers
 
 **Features**:
+
 - Agent registration and lifecycle management
 - LLM provider registration
 - Concurrent execution control
 - Event emission for monitoring
 
 **Configuration**:
+
 ```typescript
 const runtime = new AgentRuntime({
   maxConcurrentExecutions: 10,
   defaultTimeout: 30000,
-  defaultRetries: 3
+  defaultRetries: 3,
 });
 ```
 
@@ -345,6 +355,7 @@ const runtime = new AgentRuntime({
 **Purpose**: Coordinate multiple agents in complex workflows
 
 **Features**:
+
 - Priority-based task queue
 - Workflow DAG execution
 - Trace tree generation
@@ -352,14 +363,15 @@ const runtime = new AgentRuntime({
 - Parallel execution support
 
 **Workflow Example**:
+
 ```typescript
 const workflow = {
-  name: 'research-workflow',
+  name: "research-workflow",
   steps: [
-    { id: 'research', agent: 'researcher' },
-    { id: 'analyze', agent: 'analyst', dependsOn: ['research'] },
-    { id: 'write', agent: 'writer', dependsOn: ['analyze'] }
-  ]
+    { id: "research", agent: "researcher" },
+    { id: "analyze", agent: "analyst", dependsOn: ["research"] },
+    { id: "write", agent: "writer", dependsOn: ["analyze"] },
+  ],
 };
 ```
 
@@ -368,6 +380,7 @@ const workflow = {
 **Purpose**: Individual AI agent with specific capabilities
 
 **Features**:
+
 - Retry logic with exponential backoff
 - Timeout handling
 - Event emission (started, completed, failed)
@@ -375,6 +388,7 @@ const workflow = {
 - Structured logging
 
 **Lifecycle Events**:
+
 - `agent:started` - Execution begins
 - `agent:status` - Status updates
 - `agent:completed` - Successful completion
@@ -385,6 +399,7 @@ const workflow = {
 **Purpose**: Abstract LLM API integrations
 
 **Interface**:
+
 ```typescript
 interface LLMProvider {
   chat(messages: ChatMessage[], config: LLMConfig): Promise<ChatResponse>;
@@ -393,6 +408,7 @@ interface LLMProvider {
 ```
 
 **Implementations**:
+
 - **OpenAIProvider** - GPT-3.5, GPT-4, GPT-4-turbo
 - **AnthropicProvider** - Claude 3 (Opus, Sonnet, Haiku)
 - **OllamaProvider** - Local models (Llama 2, Mistral, etc.)
@@ -402,6 +418,7 @@ interface LLMProvider {
 **Purpose**: Persistent storage for all system data
 
 **Schema**:
+
 - `logs` - Structured logs with levels and metadata
 - `traces` - Execution traces (DAG structure)
 - `executions` - Agent execution records
@@ -410,6 +427,7 @@ interface LLMProvider {
 - `agents` - Agent configurations
 
 **Indexes**:
+
 - `logs(executionId, timestamp, level)`
 - `traces(executionId)`
 - `executions(agentId, status, createdAt)`
@@ -423,13 +441,15 @@ interface LLMProvider {
 **Pattern**: Observer pattern using EventEmitter3
 
 **Usage**:
+
 ```typescript
-agent.on('agent:completed', (result) => {
-  console.log('Agent completed:', result);
+agent.on("agent:completed", (result) => {
+  console.log("Agent completed:", result);
 });
 ```
 
 **Benefits**:
+
 - Loose coupling between components
 - Easy to add monitoring and logging
 - Supports real-time updates via WebSocket
@@ -439,12 +459,14 @@ agent.on('agent:completed', (result) => {
 **Pattern**: LLM Provider abstraction
 
 **Usage**:
+
 ```typescript
-runtime.registerProvider('openai', new OpenAIProvider(apiKey));
-runtime.registerProvider('anthropic', new AnthropicProvider(apiKey));
+runtime.registerProvider("openai", new OpenAIProvider(apiKey));
+runtime.registerProvider("anthropic", new AnthropicProvider(apiKey));
 ```
 
 **Benefits**:
+
 - Easy to add new LLM providers
 - Swap providers without changing agent code
 - Testable with mock providers
@@ -454,13 +476,15 @@ runtime.registerProvider('anthropic', new AnthropicProvider(apiKey));
 **Pattern**: Data access abstraction
 
 **Usage**:
+
 ```typescript
 const store = new PostgresStore(config);
 await store.saveLogs(logs);
-const logs = await store.getLogs({ level: 'error' });
+const logs = await store.getLogs({ level: "error" });
 ```
 
 **Benefits**:
+
 - Decouples business logic from data access
 - Easy to switch storage backends
 - Testable with in-memory store
@@ -470,15 +494,19 @@ const logs = await store.getLogs({ level: 'error' });
 **Pattern**: Agent and workflow creation
 
 **Usage**:
+
 ```typescript
 const agent = createAgent({
-  name: 'researcher',
-  model: 'gpt-4',
-  logic: async (ctx) => { /* ... */ }
+  name: "researcher",
+  model: "gpt-4",
+  logic: async (ctx) => {
+    /* ... */
+  },
 });
 ```
 
 **Benefits**:
+
 - Consistent object creation
 - Encapsulates complex initialization
 - Type-safe configuration
@@ -489,39 +517,40 @@ const agent = createAgent({
 
 ### Backend
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Node.js | 20+ | Runtime environment |
-| TypeScript | 5.4 | Type safety |
-| Express | 4.19 | HTTP server |
-| ws | 8.16 | WebSocket server |
-| PostgreSQL | 15 | Primary database |
-| pg | 8.12 | PostgreSQL client |
-| Zod | 3.23 | Schema validation |
-| bcryptjs | 2.4 | Password hashing |
-| helmet | 7.1 | Security headers |
-| cors | 2.8 | CORS handling |
+| Technology | Version | Purpose             |
+| ---------- | ------- | ------------------- |
+| Node.js    | 20+     | Runtime environment |
+| TypeScript | 5.4     | Type safety         |
+| Express    | 4.19    | HTTP server         |
+| ws         | 8.16    | WebSocket server    |
+| PostgreSQL | 16      | Primary database    |
+| Prisma     | 6.19.0  | ORM and migrations  |
+| pg         | 8.12    | PostgreSQL client   |
+| Zod        | 3.23    | Schema validation   |
+| bcryptjs   | 2.4     | Password hashing    |
+| helmet     | 7.1     | Security headers    |
+| cors       | 2.8     | CORS handling       |
 
 ### Frontend
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Next.js | 14.2 | React framework |
-| React | 18.2 | UI library |
-| Tailwind CSS | 3.4 | Styling |
-| Radix UI | - | Accessible components |
-| Recharts | 2.12 | Data visualization |
-| Lucide React | - | Icons |
+| Technology   | Version | Purpose               |
+| ------------ | ------- | --------------------- |
+| Next.js      | 14.2    | React framework       |
+| React        | 18.2    | UI library            |
+| Tailwind CSS | 3.4     | Styling               |
+| Radix UI     | -       | Accessible components |
+| Recharts     | 2.12    | Data visualization    |
+| Lucide React | -       | Icons                 |
 
 ### Development
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| pnpm | 9.0 | Package manager |
-| Turborepo | 2.6 | Monorepo build system |
-| Jest | 29.7 | Testing framework |
-| tsx | 4.7 | TypeScript execution |
-| Docker | - | Containerization |
+| Technology | Version | Purpose               |
+| ---------- | ------- | --------------------- |
+| pnpm       | 9.0     | Package manager       |
+| Turborepo  | 2.6     | Monorepo build system |
+| Jest       | 30.2    | Testing framework     |
+| tsx        | 4.7     | TypeScript execution  |
+| Docker     | -       | Containerization      |
 
 ---
 
@@ -559,13 +588,13 @@ const agent = createAgent({
 
 ### Performance Targets
 
-| Metric | Current | Target (v0.3.0) |
-|--------|---------|-----------------|
-| API Latency (P95) | ~200ms | <100ms |
-| Concurrent Users | ~100 | 1000+ |
-| Workflow Throughput | ~10/min | 100/min |
-| Database Connections | 20 | 100 |
-| Uptime | 99% | 99.9% |
+| Metric               | Current | Target (v0.3.0) |
+| -------------------- | ------- | --------------- |
+| API Latency (P95)    | ~200ms  | <100ms          |
+| Concurrent Users     | ~100    | 1000+           |
+| Workflow Throughput  | ~10/min | 100/min         |
+| Database Connections | 20      | 100             |
+| Uptime               | 99%     | 99.9%           |
 
 ---
 
@@ -638,6 +667,6 @@ Cloud Provider (AWS/GCP/Azure)
 
 ---
 
-**Last Updated**: 2025-11-26  
+**Last Updated**: 2025-11-28  
 **Version**: 0.1.0  
 **Maintainer**: Aethermind Team

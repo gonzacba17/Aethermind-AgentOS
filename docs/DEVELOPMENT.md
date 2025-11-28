@@ -40,6 +40,7 @@ git checkout -b feature/your-feature-name
 ### 2. Make Changes
 
 Edit files in the appropriate package:
+
 - **API changes**: `apps/api/src/`
 - **Core logic**: `packages/core/src/`
 - **UI changes**: `packages/dashboard/src/`
@@ -68,6 +69,7 @@ git commit -m "feat(core): add new feature"
 ```
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
+
 - `feat:` New feature
 - `fix:` Bug fix
 - `docs:` Documentation
@@ -90,7 +92,7 @@ Then create a Pull Request on GitHub.
 Create `packages/core/src/providers/YourProvider.ts`:
 
 ```typescript
-import { LLMProvider, ChatMessage, ChatResponse, LLMConfig } from '../types';
+import { LLMProvider, ChatMessage, ChatResponse, LLMConfig } from "../types";
 
 export class YourProvider implements LLMProvider {
   private apiKey: string;
@@ -99,28 +101,31 @@ export class YourProvider implements LLMProvider {
     this.apiKey = apiKey;
   }
 
-  async chat(messages: ChatMessage[], config: LLMConfig): Promise<ChatResponse> {
+  async chat(
+    messages: ChatMessage[],
+    config: LLMConfig
+  ): Promise<ChatResponse> {
     // Implement API call
-    const response = await fetch('https://api.yourprovider.com/chat', {
-      method: 'POST',
+    const response = await fetch("https://api.yourprovider.com/chat", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify({ messages, ...config })
+      body: JSON.stringify({ messages, ...config }),
     });
 
     const data = await response.json();
-    
+
     return {
       content: data.content,
-      role: 'assistant',
-      finishReason: 'stop',
+      role: "assistant",
+      finishReason: "stop",
       usage: {
         promptTokens: data.usage.prompt_tokens,
         completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens
-      }
+        totalTokens: data.usage.total_tokens,
+      },
     };
   }
 
@@ -138,8 +143,8 @@ export class YourProvider implements LLMProvider {
 
   private getCostPerToken(model: string): number {
     const costs = {
-      'your-model-1': 0.00001,
-      'your-model-2': 0.00002,
+      "your-model-1": 0.00001,
+      "your-model-2": 0.00002,
     };
     return costs[model] || 0.00001;
   }
@@ -151,15 +156,15 @@ export class YourProvider implements LLMProvider {
 Add to `packages/core/src/providers/index.ts`:
 
 ```typescript
-export { YourProvider } from './YourProvider';
+export { YourProvider } from "./YourProvider";
 ```
 
 ### 3. Register in Runtime
 
 ```typescript
-import { YourProvider } from '@aethermind/core';
+import { YourProvider } from "@aethermind/core";
 
-runtime.registerProvider('yourprovider', new YourProvider(apiKey));
+runtime.registerProvider("yourprovider", new YourProvider(apiKey));
 ```
 
 ### 4. Add Tests
@@ -167,15 +172,16 @@ runtime.registerProvider('yourprovider', new YourProvider(apiKey));
 Create `packages/core/src/providers/__tests__/YourProvider.test.ts`:
 
 ```typescript
-import { YourProvider } from '../YourProvider';
+import { YourProvider } from "../YourProvider";
 
-describe('YourProvider', () => {
-  it('should send chat request', async () => {
-    const provider = new YourProvider('test-key');
-    const response = await provider.chat([
-      { role: 'user', content: 'Hello' }
-    ], {});
-    
+describe("YourProvider", () => {
+  it("should send chat request", async () => {
+    const provider = new YourProvider("test-key");
+    const response = await provider.chat(
+      [{ role: "user", content: "Hello" }],
+      {}
+    );
+
     expect(response.content).toBeDefined();
   });
 });
@@ -188,19 +194,19 @@ describe('YourProvider', () => {
 Add to `apps/api/src/routes/your-resource.ts`:
 
 ```typescript
-import { Router } from 'express';
-import { z } from 'zod';
+import { Router } from "express";
+import { z } from "zod";
 
 const router = Router();
 
 // Schema validation
 const CreateResourceSchema = z.object({
   name: z.string().min(1).max(255),
-  config: z.record(z.unknown()).optional()
+  config: z.record(z.unknown()).optional(),
 });
 
 // GET /api/resources
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const resources = await getResources();
     res.json({ resources });
@@ -210,14 +216,16 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/resources
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const validated = CreateResourceSchema.parse(req.body);
     const resource = await createResource(validated);
     res.status(201).json(resource);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: 'Validation error', details: error.errors });
+      res
+        .status(400)
+        .json({ error: "Validation error", details: error.errors });
     } else {
       res.status(500).json({ error: error.message });
     }
@@ -232,9 +240,9 @@ export default router;
 Add to `apps/api/src/index.ts`:
 
 ```typescript
-import yourResourceRoutes from './routes/your-resource';
+import yourResourceRoutes from "./routes/your-resource";
 
-app.use('/api/resources', authMiddleware, yourResourceRoutes);
+app.use("/api/resources", authMiddleware, yourResourceRoutes);
 ```
 
 ### 3. Add Tests
@@ -242,18 +250,18 @@ app.use('/api/resources', authMiddleware, yourResourceRoutes);
 Create `tests/api/your-resource.test.ts`:
 
 ```typescript
-import request from 'supertest';
-import app from '../../apps/api/src/index';
+import request from "supertest";
+import app from "../../apps/api/src/index";
 
-describe('Resources API', () => {
-  it('should create resource', async () => {
+describe("Resources API", () => {
+  it("should create resource", async () => {
     const response = await request(app)
-      .post('/api/resources')
-      .set('X-API-Key', process.env.TEST_API_KEY)
-      .send({ name: 'Test Resource' });
-    
+      .post("/api/resources")
+      .set("X-API-Key", process.env.TEST_API_KEY)
+      .send({ name: "Test Resource" });
+
     expect(response.status).toBe(201);
-    expect(response.body.name).toBe('Test Resource');
+    expect(response.body.name).toBe("Test Resource");
   });
 });
 ```
@@ -292,17 +300,17 @@ Create `.vscode/launch.json`:
 ### Logging
 
 ```typescript
-import { StructuredLogger } from '@aethermind/core';
+import { StructuredLogger } from "@aethermind/core";
 
 const logger = new StructuredLogger({
-  level: 'debug',
-  context: { component: 'MyComponent' }
+  level: "debug",
+  context: { component: "MyComponent" },
 });
 
-logger.debug('Debug message', { data: 'value' });
-logger.info('Info message');
-logger.warn('Warning message');
-logger.error('Error message', { error });
+logger.debug("Debug message", { data: "value" });
+logger.info("Info message");
+logger.warn("Warning message");
+logger.error("Error message", { error });
 ```
 
 ## Hot Reload
@@ -347,19 +355,19 @@ Test individual functions and classes:
 
 ```typescript
 // packages/core/src/__tests__/Agent.test.ts
-import { Agent } from '../agent/Agent';
+import { Agent } from "../agent/Agent";
 
-describe('Agent', () => {
-  it('should execute successfully', async () => {
+describe("Agent", () => {
+  it("should execute successfully", async () => {
     const agent = new Agent({
-      id: 'test-agent',
-      name: 'test',
-      model: 'gpt-4',
-      logic: async () => ({ result: 'success' })
+      id: "test-agent",
+      name: "test",
+      model: "gpt-4",
+      logic: async () => ({ result: "success" }),
     });
 
     const result = await agent.execute({});
-    expect(result.status).toBe('completed');
+    expect(result.status).toBe("completed");
   });
 });
 ```
@@ -370,14 +378,14 @@ Test component interactions:
 
 ```typescript
 // tests/integration/workflow.test.ts
-import { Orchestrator, WorkflowEngine } from '@aethermind/core';
+import { Orchestrator, WorkflowEngine } from "@aethermind/core";
 
-describe('Workflow Integration', () => {
-  it('should execute workflow end-to-end', async () => {
+describe("Workflow Integration", () => {
+  it("should execute workflow end-to-end", async () => {
     const orchestrator = new Orchestrator(runtime);
-    const result = await orchestrator.executeWorkflow('test-workflow', {});
-    
-    expect(result.status).toBe('completed');
+    const result = await orchestrator.executeWorkflow("test-workflow", {});
+
+    expect(result.status).toBe("completed");
   });
 });
 ```
@@ -388,10 +396,10 @@ Test complete user flows:
 
 ```typescript
 // tests/e2e/full-workflow.test.ts
-import request from 'supertest';
+import request from "supertest";
 
-describe('Full Workflow E2E', () => {
-  it('should complete research workflow', async () => {
+describe("Full Workflow E2E", () => {
+  it("should complete research workflow", async () => {
     // Create agents
     // Execute workflow
     // Verify results
@@ -488,6 +496,6 @@ pnpm typecheck              # Type check
 
 ---
 
-**Last Updated**: 2025-11-26  
+**Last Updated**: 2025-11-28  
 **Version**: 0.1.0  
 **Maintainer**: Aethermind Team

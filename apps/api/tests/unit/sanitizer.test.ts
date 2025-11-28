@@ -1,4 +1,4 @@
-import { sanitizeLog, sanitizeObject } from '../../../apps/api/src/utils/sanitizer';
+import { sanitizeLog, sanitizeObject } from '../../src/utils/sanitizer';
 
 describe('Sanitizer', () => {
   describe('sanitizeLog', () => {

@@ -1,5 +1,5 @@
 import type { LogEntry, Trace, CostInfo, ExecutionResult } from '@aethermind/core';
-import type { StoreInterface, PaginatedResult } from './PostgresStore.js';
+import type { StoreInterface, PaginatedResult } from './PostgresStore';
 
 export class InMemoryStore implements StoreInterface {
   private logs: LogEntry[] = [];

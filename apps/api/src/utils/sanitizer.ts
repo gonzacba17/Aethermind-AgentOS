@@ -62,8 +62,8 @@ export function sanitizeObject(obj: any): any {
     const sanitized: any = {};
     const sensitiveKeys = [
         'password', 'passwd', 'pwd', 'secret', 'token',
-        'apiKey', 'api_key', 'apikey', 'authorization',
-        'auth', 'credential', 'private_key', 'privateKey'
+        'apikey', 'api_key', 'authorization',
+        'auth', 'credential', 'private_key', 'privatekey'
     ];
 
     for (const [key, value] of Object.entries(obj)) {

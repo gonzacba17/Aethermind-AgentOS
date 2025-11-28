@@ -20,8 +20,21 @@ export class PrismaStore implements StoreInterface {
 
   constructor() {
     this.prisma = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+      log: process.env['NODE_ENV'] === 'development' 
+        ? [
+            { emit: 'event', level: 'query' },
+            { emit: 'stdout', level: 'error' },
+            { emit: 'stdout', level: 'warn' }
+          ] 
+        : ['error'],
     });
+
+    if (process.env['NODE_ENV'] === 'development') {
+      this.prisma.$on('query' as any, (e: any) => {
+        if (e.duration > 100) {
+          console.warn(`[Slow Query] ${e.duration}ms: ${e.query}`);\n        }
+      });
+    }
   }
 
   async connect(): Promise<boolean> {
@@ -56,7 +69,7 @@ export class PrismaStore implements StoreInterface {
           agentId: entry.agentId || null,
           level: entry.level,
           message: entry.message,
-          metadata: entry.metadata || null,
+          metadata: (entry.metadata || null) as any,
           timestamp: entry.timestamp,
         },
       });
@@ -92,11 +105,11 @@ export class PrismaStore implements StoreInterface {
       ]);
 
       return {
-        data: data.map(log => ({
+        data: data.map((log: any) => ({
           id: log.id,
           executionId: log.executionId || undefined,
           agentId: log.agentId || undefined,
-          level: log.level,
+          level: log.level as any,
           message: log.message,
           metadata: log.metadata as any,
           timestamp: log.timestamp || new Date(),
@@ -141,12 +154,12 @@ export class PrismaStore implements StoreInterface {
       await this.prisma.trace.upsert({
         where: { id: trace.id },
         update: {
-          treeData: trace.rootNode,
+          treeData: trace.rootNode as any,
         },
         create: {
           id: trace.id,
           executionId: trace.executionId,
-          treeData: trace.rootNode,
+          treeData: trace.rootNode as any,
           createdAt: trace.createdAt,
         },
       });
@@ -182,7 +195,7 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return traces.map(trace => ({
+      return traces.map((trace: any) => ({
         id: trace.id,
         executionId: trace.executionId || '',
         rootNode: trace.treeData as any,
@@ -239,7 +252,7 @@ export class PrismaStore implements StoreInterface {
       ]);
 
       return {
-        data: data.map(cost => ({
+        data: data.map((cost: any) => ({
           executionId: cost.executionId || '',
           model: cost.model,
           tokens: {
@@ -304,7 +317,7 @@ export class PrismaStore implements StoreInterface {
         where: { id: result.executionId },
         update: {
           status: result.status,
-          output: result.output,
+          output: result.output as any,
           error: result.error?.message || null,
           completedAt: result.completedAt,
           durationMs: result.duration,
@@ -313,8 +326,8 @@ export class PrismaStore implements StoreInterface {
           id: result.executionId,
           agentId: result.agentId,
           status: result.status,
-          input: result.output,
-          output: result.output,
+          input: result.output as any,
+          output: result.output as any,
           error: result.error?.message || null,
           startedAt: result.startedAt,
           completedAt: result.completedAt,
@@ -337,7 +350,7 @@ export class PrismaStore implements StoreInterface {
       return {
         executionId: execution.id,
         agentId: execution.agentId || '',
-        status: execution.status,
+        status: execution.status as any,
         output: execution.output as any,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
@@ -357,10 +370,10 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return executions.map(execution => ({
+      return executions.map((execution: any) => ({
         executionId: execution.id,
         agentId: execution.agentId || '',
-        status: execution.status,
+        status: execution.status as any,
         output: execution.output as any,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
@@ -381,10 +394,10 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return executions.map(execution => ({
+      return executions.map((execution: any) => ({
         executionId: execution.id,
         agentId: execution.agentId || '',
-        status: execution.status,
+        status: execution.status as any,
         output: execution.output as any,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),

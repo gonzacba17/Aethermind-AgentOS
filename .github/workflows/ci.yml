@@ -2,7 +2,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'feat/**', 'fix/**', 'chore/**']
   pull_request:
     branches: [main, develop]
 
@@ -55,9 +55,11 @@ jobs:
 
       - name: Run linter
         run: pnpm lint
+        continue-on-error: false
 
       - name: Run type check
         run: pnpm typecheck
+        continue-on-error: false
 
       - name: Generate Prisma client
         run: pnpm prisma:generate
@@ -85,7 +87,12 @@ jobs:
           files: ./coverage/coverage-final.json
           flags: unittests
           name: codecov-umbrella
-          fail_ci_if_error: true
+          fail_ci_if_error: false
+        continue-on-error: true
+
+      - name: Security audit
+        run: pnpm audit --audit-level=high
+        continue-on-error: true
 
       - name: Build
         run: pnpm build
@@ -148,6 +155,17 @@ jobs:
 
       - name: Run integration tests
         run: pnpm test:integration
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
           POSTGRES_HOST: localhost

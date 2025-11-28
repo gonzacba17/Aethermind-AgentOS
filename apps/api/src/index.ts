@@ -6,19 +6,19 @@ import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { createRuntime, createOrchestrator, createWorkflowEngine, createOpenAIProvider, createAnthropicProvider, createConfigWatcher, TaskQueueService } from '@aethermind/core';
-import { agentRoutes } from './routes/agents.js';
-import { executionRoutes } from './routes/executions.js';
-import { logRoutes } from './routes/logs.js';
-import { traceRoutes } from './routes/traces.js';
-import { costRoutes } from './routes/costs.js';
-import { workflowRoutes } from './routes/workflows.js';
-import { WebSocketManager } from './websocket/WebSocketManager.js';
-import { InMemoryStore } from './services/InMemoryStore.js';
-import { PrismaStore } from './services/PrismaStore.js';
-import { RedisCache } from './services/RedisCache.js';
-import type { StoreInterface } from './services/PostgresStore.js';
-import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth.js';
-import { sanitizeLog, sanitizeObject } from './utils/sanitizer.js';
+import { agentRoutes } from './routes/agents';
+import { executionRoutes } from './routes/executions';
+import { logRoutes } from './routes/logs';
+import { traceRoutes } from './routes/traces';
+import { costRoutes } from './routes/costs';
+import { workflowRoutes } from './routes/workflows';
+import { WebSocketManager } from './websocket/WebSocketManager';
+import { InMemoryStore } from './services/InMemoryStore';
+import { PrismaStore } from './services/PrismaStore';
+import { RedisCache } from './services/RedisCache';
+import type { StoreInterface } from './services/PostgresStore';
+import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth';
+import { sanitizeLog, sanitizeObject } from './utils/sanitizer';
 import {
   CORS_ORIGINS,
   RATE_LIMIT_WINDOW_MS,
@@ -28,7 +28,7 @@ import {
   REDIS_URL,
   QUEUE_CONCURRENCY,
   CONFIG_WATCHER_DEBOUNCE_MS,
-} from './config/constants.js';
+} from './config/constants';
 
 
 
@@ -189,19 +189,28 @@ async function startServer(): Promise<void> {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
         connectSrc: ["'self'", "ws:", "wss:"],
-        imgSrc: ["'self'", "data:", "https:"],
-        fontSrc: ["'self'", "data:"],
+        imgSrc: ["'self'", "data:"],
+        fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         formAction: ["'self'"],
         frameAncestors: ["'none'"],
-        upgradeInsecureRequests: [],
+        upgradeInsecureRequests: process.env['NODE_ENV'] === 'production' ? [] : undefined,
       },
     },
     crossOriginEmbedderPolicy: false,
+    strictTransportSecurity: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    noSniff: true,
+    xssFilter: true,
+    hidePoweredBy: true,
   }));
   app.use(cors(corsOptions));
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
@@ -244,11 +253,14 @@ async function startServer(): Promise<void> {
   app.use('/api/workflows', workflowRoutes);
 
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    console.error('Error:', err);
-
     const isProduction = process.env['NODE_ENV'] === 'production';
 
-    // Check if it's an AethermindError with code and suggestion
+    if (!isProduction) {
+      console.error('Error:', err);
+    } else {
+      console.error('Error:', err.message);
+    }
+
     const isAethermindError = 'code' in err && 'suggestion' in err;
 
     if (isAethermindError) {
@@ -258,14 +270,12 @@ async function startServer(): Promise<void> {
         code: aethermindErr.code,
         message: aethermindErr.message,
         suggestion: aethermindErr.suggestion,
-        ...(isProduction ? {} : { stack: err.stack }),
       });
     } else {
       const errorMessage = isProduction ? 'An internal error occurred' : err.message;
       res.status(500).json({
         error: 'Internal Server Error',
         message: errorMessage,
-        ...(isProduction ? {} : { stack: err.stack }),
       });
     }
   });

@@ -78,16 +78,16 @@ aethermind-agentos/
 ## 🎯 Usage Example
 
 ```typescript
-import { createAgent, startOrchestrator } from '@aethermind/sdk';
+import { createAgent, startOrchestrator } from "@aethermind/sdk";
 
 // Create an agent
 const researcher = createAgent({
-  name: 'researcher',
-  model: 'gpt-4',
-  systemPrompt: 'You are a research assistant.',
+  name: "researcher",
+  model: "gpt-4",
+  systemPrompt: "You are a research assistant.",
   logic: async (ctx) => {
     // Your agent logic here
-    return { findings: ['Finding 1', 'Finding 2'] };
+    return { findings: ["Finding 1", "Finding 2"] };
   },
 });
 
@@ -100,7 +100,7 @@ const orchestrator = startOrchestrator({
 // Execute a task
 const result = await orchestrator.execute({
   agentId: researcher.id,
-  input: { topic: 'AI market analysis' },
+  input: { topic: "AI market analysis" },
 });
 
 console.log(result);
@@ -108,16 +108,16 @@ console.log(result);
 
 ## 🛠️ Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm dev` | Start all services in development mode |
-| `pnpm build` | Build all packages for production |
-| `pnpm test` | Run unit tests |
-| `pnpm test:all` | Run all test suites (unit, integration, e2e) |
-| `pnpm validate` | Validate system setup |
-| `pnpm demo` | Run the full demo |
-| `pnpm docker:up` | Start Docker services |
-| `pnpm docker:down` | Stop Docker services |
+| Command            | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `pnpm dev`         | Start all services in development mode       |
+| `pnpm build`       | Build all packages for production            |
+| `pnpm test`        | Run unit tests                               |
+| `pnpm test:all`    | Run all test suites (unit, integration, e2e) |
+| `pnpm validate`    | Validate system setup                        |
+| `pnpm demo`        | Run the full demo                            |
+| `pnpm docker:up`   | Start Docker services                        |
+| `pnpm docker:down` | Stop Docker services                         |
 
 ## 📚 Documentation
 
@@ -177,6 +177,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Express](https://expressjs.com/) - API server framework
 - [Next.js](https://nextjs.org/) - Dashboard framework
 - [PostgreSQL](https://www.postgresql.org/) - Primary database
+- [Prisma](https://www.prisma.io/) - ORM and migrations (v6.19.0)
 - [Redis](https://redis.io/) - Caching and pub/sub
 - [Turborepo](https://turbo.build/) - Monorepo build system
 - [pnpm](https://pnpm.io/) - Fast, disk space efficient package manager

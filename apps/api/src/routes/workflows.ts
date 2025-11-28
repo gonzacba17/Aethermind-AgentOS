@@ -55,7 +55,8 @@ router.get('/:name', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const definition = CreateWorkflowSchema.parse(req.body);
-    req.workflowEngine.registerWorkflow(definition);
+    // Cast to WorkflowDefinition since Zod validates all required fields
+    req.workflowEngine.registerWorkflow(definition as import('@aethermind/core').WorkflowDefinition);
 
     if (req.cache) {
       await req.cache.del(`workflow:${definition.name}`);

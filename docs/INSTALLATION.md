@@ -29,6 +29,7 @@
 ### Required API Keys
 
 At least one LLM provider API key:
+
 - **OpenAI** - [Get API key](https://platform.openai.com/api-keys)
 - **Anthropic** - [Get API key](https://console.anthropic.com/)
 - **Google AI** - [Get API key](https://makersuite.google.com/app/apikey)
@@ -76,6 +77,7 @@ Open [http://localhost:3000](http://localhost:3000) for the dashboard.
 #### Node.js 20+
 
 **Windows:**
+
 ```powershell
 # Using winget
 winget install OpenJS.NodeJS.LTS
@@ -84,6 +86,7 @@ winget install OpenJS.NodeJS.LTS
 ```
 
 **macOS:**
+
 ```bash
 # Using Homebrew
 brew install node@20
@@ -92,6 +95,7 @@ brew install node@20
 ```
 
 **Linux (Ubuntu/Debian):**
+
 ```bash
 # Using NodeSource
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
@@ -99,6 +103,7 @@ sudo apt-get install -y nodejs
 ```
 
 **Verify installation:**
+
 ```bash
 node --version  # Should show v20.x.x or higher
 ```
@@ -119,6 +124,7 @@ pnpm --version  # Should show 9.x.x or higher
 ```
 
 **Alternative installation:**
+
 ```bash
 npm install -g pnpm@9
 ```
@@ -128,18 +134,21 @@ npm install -g pnpm@9
 #### Docker Desktop
 
 **Windows:**
+
 1. Download from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
 2. Run installer
 3. Start Docker Desktop
 4. Verify: `docker --version`
 
 **macOS:**
+
 1. Download from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
 2. Drag to Applications
 3. Start Docker Desktop
 4. Verify: `docker --version`
 
 **Linux:**
+
 ```bash
 # Ubuntu/Debian
 sudo apt-get update
@@ -188,6 +197,7 @@ pnpm install
 ```
 
 **Expected output:**
+
 ```
 Progress: resolved X, reused Y, downloaded Z, added W
 Done in Xs
@@ -264,6 +274,7 @@ pnpm generate-api-key
 ```
 
 **Output:**
+
 ```
 ===========================================
 Aethermind AgentOS - API Key Generator
@@ -284,6 +295,7 @@ IMPORTANT:
 ```
 
 **Add the hash to .env:**
+
 ```env
 API_KEY_HASH=$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
 ```
@@ -302,11 +314,13 @@ pnpm docker:up
 ```
 
 **Verify services are running:**
+
 ```bash
 docker ps
 ```
 
 **Expected output:**
+
 ```
 CONTAINER ID   IMAGE          STATUS         PORTS
 abc123...      postgres:15    Up 30 seconds  0.0.0.0:5432->5432/tcp
@@ -323,6 +337,7 @@ pnpm db:migrate
 ```
 
 **Expected output:**
+
 ```
 Prisma schema loaded from prisma/schema.prisma
 Datasource "db": PostgreSQL database "aethermind"
@@ -341,6 +356,7 @@ pnpm validate
 ```
 
 **This checks:**
+
 - ✅ Node.js version
 - ✅ pnpm version
 - ✅ Docker running
@@ -351,6 +367,7 @@ pnpm validate
 - ✅ LLM provider API keys
 
 **Expected output:**
+
 ```
 ✓ Node.js version: 20.10.0
 ✓ pnpm version: 9.0.0
@@ -373,11 +390,13 @@ pnpm demo
 ```
 
 **This will:**
+
 1. Create sample agents
 2. Execute a multi-agent workflow
 3. Display results and costs
 
 **Expected output:**
+
 ```
 🚀 Aethermind AgentOS Demo
 
@@ -401,6 +420,7 @@ Total time: 13.1s
 ### Step 10: Start Development Servers
 
 **Option 1: Start all services**
+
 ```bash
 pnpm dev
 ```
@@ -408,18 +428,21 @@ pnpm dev
 **Option 2: Start services individually**
 
 Terminal 1 - API Server:
+
 ```bash
 cd apps/api
 pnpm dev
 ```
 
 Terminal 2 - Dashboard:
+
 ```bash
 cd packages/dashboard
 pnpm dev
 ```
 
 **Access the application:**
+
 - **Dashboard**: [http://localhost:3000](http://localhost:3000)
 - **API**: [http://localhost:3001](http://localhost:3001)
 - **API Health**: [http://localhost:3001/health](http://localhost:3001/health)
@@ -430,25 +453,25 @@ pnpm dev
 
 ### Required Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `POSTGRES_PASSWORD` | PostgreSQL password | `your_secure_password` |
-| `API_KEY_HASH` | Bcrypt hash of API key | `$2b$10$...` |
-| At least one of: | | |
-| `OPENAI_API_KEY` | OpenAI API key | `sk-...` |
-| `ANTHROPIC_API_KEY` | Anthropic API key | `sk-ant-...` |
-| `GOOGLE_API_KEY` | Google AI API key | `AIza...` |
+| Variable            | Description            | Example                |
+| ------------------- | ---------------------- | ---------------------- |
+| `POSTGRES_PASSWORD` | PostgreSQL password    | `your_secure_password` |
+| `API_KEY_HASH`      | Bcrypt hash of API key | `$2b$10$...`           |
+| At least one of:    |                        |                        |
+| `OPENAI_API_KEY`    | OpenAI API key         | `sk-...`               |
+| `ANTHROPIC_API_KEY` | Anthropic API key      | `sk-ant-...`           |
+| `GOOGLE_API_KEY`    | Google AI API key      | `AIza...`              |
 
 ### Optional Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NODE_ENV` | `development` | Environment mode |
-| `PORT` | `3001` | API server port |
-| `DASHBOARD_PORT` | `3000` | Dashboard port |
-| `LOG_LEVEL` | `info` | Logging level |
-| `ENABLE_HOT_RELOAD` | `true` | Hot reload in dev |
-| `MAX_CONCURRENT_AGENTS` | `10` | Max concurrent executions |
+| Variable                | Default       | Description               |
+| ----------------------- | ------------- | ------------------------- |
+| `NODE_ENV`              | `development` | Environment mode          |
+| `PORT`                  | `3001`        | API server port           |
+| `DASHBOARD_PORT`        | `3000`        | Dashboard port            |
+| `LOG_LEVEL`             | `info`        | Logging level             |
+| `ENABLE_HOT_RELOAD`     | `true`        | Hot reload in dev         |
+| `MAX_CONCURRENT_AGENTS` | `10`          | Max concurrent executions |
 
 ---
 
@@ -457,6 +480,7 @@ pnpm dev
 ### PostgreSQL Configuration
 
 The Docker Compose file creates a PostgreSQL 15 instance with:
+
 - **Port**: 5432
 - **Database**: aethermind
 - **User**: aethermind (configurable)
@@ -490,6 +514,7 @@ curl http://localhost:3001/health
 ```
 
 **Expected response:**
+
 ```json
 {
   "status": "healthy",
@@ -509,6 +534,7 @@ curl -H "X-API-Key: your-api-key" \
 ```
 
 **Expected response:**
+
 ```json
 {
   "agents": []
@@ -524,6 +550,7 @@ curl -H "X-API-Key: your-api-key" \
 **Problem**: `docker: command not found`
 
 **Solution**:
+
 ```bash
 # Verify Docker is installed
 docker --version
@@ -540,18 +567,22 @@ sudo systemctl start docker
 **Problem**: `Error: connect ECONNREFUSED 127.0.0.1:5432`
 
 **Solutions**:
+
 1. **Check Docker is running**:
+
    ```bash
    docker ps | grep postgres
    ```
 
 2. **Restart Docker services**:
+
    ```bash
    pnpm docker:down
    pnpm docker:up
    ```
 
 3. **Check PostgreSQL logs**:
+
    ```bash
    docker logs postgres
    ```
@@ -568,7 +599,9 @@ sudo systemctl start docker
 **Problem**: `401 Unauthorized` or `403 Forbidden`
 
 **Solutions**:
+
 1. **Verify API key hash in .env**:
+
    ```bash
    # Regenerate API key
    pnpm generate-api-key
@@ -587,7 +620,9 @@ sudo systemctl start docker
 **Problem**: `Error: Invalid API key for openai`
 
 **Solutions**:
+
 1. **Verify API key is valid**:
+
    ```bash
    # Test OpenAI key
    curl https://api.openai.com/v1/models \
@@ -595,6 +630,7 @@ sudo systemctl start docker
    ```
 
 2. **Check API key format**:
+
    - OpenAI: `sk-...`
    - Anthropic: `sk-ant-...`
    - Google: `AIza...`
@@ -608,11 +644,13 @@ sudo systemctl start docker
 **Problem**: `Error: listen EADDRINUSE: address already in use :::3001`
 
 **Solutions**:
+
 1. **Find process using port**:
+
    ```bash
    # Windows
    netstat -ano | findstr :3001
-   
+
    # macOS/Linux
    lsof -i :3001
    ```
@@ -630,7 +668,9 @@ sudo systemctl start docker
 **Problem**: `ERR_PNPM_FETCH_404`
 
 **Solutions**:
+
 1. **Clear pnpm cache**:
+
    ```bash
    pnpm store prune
    pnpm install
@@ -649,6 +689,7 @@ sudo systemctl start docker
 ### Windows
 
 **PowerShell Execution Policy**:
+
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
@@ -657,6 +698,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Use `\` or `/` (both work in most cases)
 
 **Docker Desktop**:
+
 - Must be running before `pnpm docker:up`
 - Check system tray for Docker icon
 
@@ -665,12 +707,14 @@ Use `\` or `/` (both work in most cases)
 ### macOS
 
 **Rosetta 2 (Apple Silicon)**:
+
 ```bash
 # If using M1/M2/M3 Mac
 softwareupdate --install-rosetta
 ```
 
 **Docker Desktop**:
+
 - Use Apple Silicon version for M1/M2/M3
 - Use Intel version for Intel Macs
 
@@ -679,6 +723,7 @@ softwareupdate --install-rosetta
 ### Linux
 
 **Docker permissions**:
+
 ```bash
 # Add user to docker group
 sudo usermod -aG docker $USER
@@ -686,6 +731,7 @@ newgrp docker
 ```
 
 **PostgreSQL native installation**:
+
 ```bash
 sudo apt-get install postgresql-15
 sudo systemctl start postgresql
@@ -704,6 +750,6 @@ After successful installation:
 
 ---
 
-**Last Updated**: 2025-11-26  
+**Last Updated**: 2025-11-28  
 **Version**: 0.1.0  
 **Maintainer**: Aethermind Team

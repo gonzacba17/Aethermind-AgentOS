@@ -37,6 +37,8 @@ model Execution {
 
   @@index([agentId], map: "idx_executions_agent_id")
   @@index([status], map: "idx_executions_status")
+  @@index([startedAt], map: "idx_executions_started_at")
+  @@index([agentId, status], map: "idx_executions_agent_status")
   @@map("executions")
 }
 
@@ -52,8 +54,10 @@ model Log {
   execution   Execution? @relation(fields: [executionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([executionId], map: "idx_logs_execution_id")
+  @@index([agentId], map: "idx_logs_agent_id")
   @@index([timestamp], map: "idx_logs_timestamp")
   @@index([level], map: "idx_logs_level")
+  @@index([executionId, timestamp], map: "idx_logs_exec_time")
   @@map("logs")
 }
 
@@ -83,6 +87,8 @@ model Cost {
 
   @@index([executionId], map: "idx_costs_execution_id")
   @@index([model], map: "idx_costs_model")
+  @@index([createdAt], map: "idx_costs_created_at")
+  @@index([model, createdAt], map: "idx_costs_model_date")
   @@map("costs")
 }
 

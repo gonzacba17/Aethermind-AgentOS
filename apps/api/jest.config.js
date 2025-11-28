@@ -11,12 +11,16 @@ export default {
       'ts-jest',
       {
         useESM: true,
+        tsconfig: {
+          isolatedModules: true,
+        },
       },
     ],
   },
   testMatch: [
     '**/tests/unit/**/*.test.ts',
     '**/tests/unit/**/*.spec.ts',
+    '**/src/**/__tests__/**/*.test.ts',
   ],
   collectCoverageFrom: [
     'src/**/*.ts',

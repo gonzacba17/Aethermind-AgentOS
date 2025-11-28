@@ -1,4 +1,4 @@
-import Bull, { Queue, Job, JobOptions } from 'bull';
+import { Queue, Worker, QueueEvents, Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import EventEmitter from 'eventemitter3';
 
@@ -22,31 +22,43 @@ export interface TaskQueueMetrics {
 export interface TaskQueueOptions {
   redisUrl: string;
   concurrency?: number;
-  defaultJobOptions?: JobOptions;
+  defaultJobOptions?: {
+    attempts?: number;
+    backoff?: { type: string; delay: number };
+    removeOnComplete?: boolean | number;
+    removeOnFail?: boolean | number;
+  };
 }
 
 export class TaskQueueService {
   private queue: Queue<TaskQueueItem>;
+  private worker?: Worker<TaskQueueItem>;
+  private queueEvents: QueueEvents;
   private redis: Redis;
   private emitter: EventEmitter.EventEmitter;
+  private redisUrl: string;
 
   constructor(options: TaskQueueOptions, emitter?: EventEmitter.EventEmitter) {
+    this.redisUrl = options.redisUrl;
     this.redis = new Redis(options.redisUrl);
     this.emitter = emitter || new EventEmitter.EventEmitter();
 
-    this.queue = new Bull<TaskQueueItem>('aethermind-tasks', {
-      redis: options.redisUrl,
+    const connection = { url: options.redisUrl };
+
+    this.queue = new Queue<TaskQueueItem>('aethermind-tasks', {
+      connection,
       defaultJobOptions: options.defaultJobOptions || {
         attempts: 3,
         backoff: {
           type: 'exponential',
           delay: 2000
         },
-        removeOnComplete: 100, // Keep last 100 completed
-        removeOnFail: 500      // Keep last 500 failed
+        removeOnComplete: 100,
+        removeOnFail: 500
       }
     });
 
+    this.queueEvents = new QueueEvents('aethermind-tasks', { connection });
     this.setupEventHandlers();
   }
 
@@ -67,9 +79,29 @@ export class TaskQueueService {
    * Process tasks from the queue
    */
   process(concurrency: number, handler: (task: TaskQueueItem) => Promise<void>): void {
-    this.queue.process(concurrency, async (job: Job<TaskQueueItem>) => {
-      this.emitter.emit('task:processing', { taskId: job.data.id, agentId: job.data.agentId });
-      await handler(job.data);
+    const connection = { url: this.redisUrl };
+    this.worker = new Worker<TaskQueueItem>(
+      'aethermind-tasks',
+      async (job: Job<TaskQueueItem>) => {
+        this.emitter.emit('task:processing', { taskId: job.data.id, agentId: job.data.agentId });
+        await handler(job.data);
+      },
+      { connection, concurrency }
+    );
+
+    this.worker.on('completed', (job) => {
+      this.emitter.emit('task:completed', {
+        taskId: job.id,
+        agentId: job.data.agentId
+      });
+    });
+
+    this.worker.on('failed', (job, err) => {
+      this.emitter.emit('task:failed', {
+        taskId: job?.id,
+        agentId: job?.data.agentId,
+        error: err.message
+      });
     });
   }
 
@@ -149,26 +181,19 @@ export class TaskQueueService {
    * Setup event handlers for queue events
    */
   private setupEventHandlers(): void {
-    this.queue.on('completed', (job) => {
-      this.emitter.emit('task:completed', { 
-        taskId: job.id, 
-        agentId: job.data.agentId 
+    this.queueEvents.on('completed', ({ jobId }) => {
+      this.emitter.emit('task:completed', { taskId: jobId });
+    });
+
+    this.queueEvents.on('failed', ({ jobId, failedReason }) => {
+      this.emitter.emit('task:failed', {
+        taskId: jobId,
+        error: failedReason
       });
     });
 
-    this.queue.on('failed', (job, err) => {
-      this.emitter.emit('task:failed', { 
-        taskId: job?.id, 
-        agentId: job?.data.agentId,
-        error: err.message 
-      });
-    });
-
-    this.queue.on('stalled', (job) => {
-      this.emitter.emit('task:stalled', { 
-        taskId: job.id, 
-        agentId: job.data.agentId 
-      });
+    this.queueEvents.on('stalled', ({ jobId }) => {
+      this.emitter.emit('task:stalled', { taskId: jobId });
     });
 
     this.queue.on('error', (error) => {
@@ -180,6 +205,10 @@ export class TaskQueueService {
    * Close the queue and Redis connection
    */
   async close(): Promise<void> {
+    if (this.worker) {
+      await this.worker.close();
+    }
+    await this.queueEvents.close();
     await this.queue.close();
     await this.redis.quit();
     this.emitter.emit('queue:closed');
