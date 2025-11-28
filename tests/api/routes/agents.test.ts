@@ -314,6 +314,71 @@ describe('POST /api/agents', () => {
     });
   });
 
+  describe('Authentication', () => {
+    it('should reject request without API key', async () => {
+      const response = await request(API_URL)
+        .get('/api/agents')
+        .expect(401);
+
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error).toBe('Unauthorized');
+      expect(response.body.message).toContain('Missing API key');
+    });
+
+    it('should reject request with invalid API key', async () => {
+      const response = await request(API_URL)
+        .get('/api/agents')
+        .set('x-api-key', 'invalid-key-12345')
+        .expect(403);
+
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.error).toBe('Forbidden');
+      expect(response.body.message).toContain('Invalid API key');
+    });
+
+    it('should accept request with valid API key', async () => {
+      const validApiKey = process.env.API_KEY || 'test-api-key';
+      const response = await request(API_URL)
+        .get('/api/agents')
+        .set('x-api-key', validApiKey)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('data');
+    });
+
+    it('should protect POST endpoint with auth', async () => {
+      const response = await request(API_URL)
+        .post('/api/agents')
+        .send({
+          name: 'auth-test',
+          model: 'gpt-4',
+          provider: 'openai',
+        })
+        .expect(401);
+
+      expect(response.body.error).toBe('Unauthorized');
+    });
+
+    it('should protect DELETE endpoint with auth', async () => {
+      const fakeUuid = '00000000-0000-0000-0000-000000000000';
+      const response = await request(API_URL)
+        .delete(`/api/agents/${fakeUuid}`)
+        .expect(401);
+
+      expect(response.body.error).toBe('Unauthorized');
+    });
+
+    it('should protect execute endpoint with auth', async () => {
+      const fakeUuid = '00000000-0000-0000-0000-000000000000';
+      const response = await request(API_URL)
+        .post(`/api/agents/${fakeUuid}/execute`)
+        .send({ input: 'test' })
+        .expect(401);
+
+      expect(response.body.error).toBe('Unauthorized');
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should use default pagination values when not provided', async () => {
       const response = await request(API_URL)
