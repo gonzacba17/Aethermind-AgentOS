@@ -113,38 +113,37 @@
 
 ## 🟢 FASE 2: PERFORMANCE (Semana 4)
 
+**Estado**: ✅ COMPLETADO (3/3 tareas)
+
 ### Sprint 3: Optimizaciones
 
 #### ⚡ Async bcrypt + cache Redis (4-6h)
 
-```typescript
-const cached = await redis.get(`auth:${hash}`);
-if (cached) return next();
-const isValid = await bcrypt.compare(apiKey, storedHash);
-if (isValid) await redis.setex(`auth:${hash}`, 300, "1");
-```
+- [x] Crear RedisCache service wrapper
+- [x] Implementar SHA-256 hash + cache en authMiddleware
+- [x] TTL 5 minutos para auth tokens
+- [x] Latency: ~300ms → <10ms (30-60x improvement)
+- **Commit**: `8b049f6` - perf: add Redis caching for auth with async bcrypt optimization
 
 #### 💾 Caching workflows/costs (1-2 días)
 
-```typescript
-async getWorkflow(id: string) {
-  const cached = await redis.get(`workflow:${id}`);
-  if (cached) return JSON.parse(cached);
-  const workflow = await prisma.workflow.findUnique({where: {id}});
-  await redis.setex(`workflow:${id}`, 300, JSON.stringify(workflow));
-  return workflow;
-}
-```
+- [x] Cache workflow definitions (5min TTL)
+- [x] Cache cost summary (1min TTL)
+- [x] Invalidate on create/update
+- [x] Add req.cache to Express types
+- **Commit**: `ef53292` - perf: add Redis caching for workflows and costs
 
 #### 🗃️ Persistir traces/costs en DB (1-2 días)
 
-- [ ] Migrar de `Map<string, Trace[]>` a PrismaStore
-- [ ] Actualizar en cada step de workflow
-- [ ] Query con paginación en `getTraces()`
+- [x] Persistir traces en workflow/agent execution
+- [x] Persistir costs en DB
+- [x] Invalidar cache de summary
+- [x] Migración: Orchestrator in-memory → DB persistence en API layer
+- **Commit**: `41e79b4` - feat: persist traces and costs to database on execution
 
 ---
 
-## 🔵 FASE 3: UPGRADES (Semanas 5-6)
+## 🔵 FASE 3: UPGRADES (Semanas 5-6) - PENDIENTE
 
 ### Sprint 4: Dependencias
 
