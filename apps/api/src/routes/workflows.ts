@@ -110,6 +110,22 @@ router.post('/:name/execute', async (req, res) => {
   try {
     const result = await req.workflowEngine.execute(req.params['name']!, req.body.input);
 
+    const trace = req.orchestrator.getTrace(result.executionId);
+    if (trace) {
+      await req.store.addTrace(trace);
+    }
+
+    const costs = req.orchestrator.getCosts().filter(
+      (c) => c.executionId === result.executionId
+    );
+    for (const cost of costs) {
+      await req.store.addCost(cost);
+    }
+
+    if (req.cache) {
+      await req.cache.del('costs:summary');
+    }
+
     const resultsObject: Record<string, unknown> = {};
     for (const [key, value] of result.stepResults) {
       resultsObject[key] = value;

@@ -79,6 +79,23 @@ router.post('/:id/execute', validateParams(IdParamSchema), validateBody(ExecuteA
   try {
     const result = await req.orchestrator.executeTask(agent.id, req.body.input);
     await req.store.addExecution(result);
+
+    const trace = req.orchestrator.getTrace(result.executionId);
+    if (trace) {
+      await req.store.addTrace(trace);
+    }
+
+    const costs = req.orchestrator.getCosts().filter(
+      (c) => c.executionId === result.executionId
+    );
+    for (const cost of costs) {
+      await req.store.addCost(cost);
+    }
+
+    if (req.cache) {
+      await req.cache.del('costs:summary');
+    }
+
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
