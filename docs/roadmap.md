@@ -143,23 +143,46 @@
 
 ---
 
-## 🔵 FASE 3: UPGRADES (Semanas 5-6) - PENDIENTE
+## 🔵 FASE 3: UPGRADES (Semanas 5-6)
+
+**Estado**: ⚠️ PARCIALMENTE COMPLETADO (1/2 tareas)
 
 ### Sprint 4: Dependencias
 
-#### 📦 Upgrade Prisma 6 → 7 (3-5 días)
+#### 📦 Upgrade Prisma 6 → 7 - ❌ NO VIABLE
 
-- [ ] Review breaking changes
-- [ ] Actualizar schema (syntax changes)
-- [ ] Ejecutar `pnpm prisma:generate`
-- [ ] Suite tests completa
-- [ ] Rollback plan
+**Decisión:** NO actualizar a Prisma 7 en este momento.
 
-#### 🧪 Upgrade Jest 29 → 30 (1-2 días)
+**Bloqueantes identificados:**
+- ❌ Requiere Node.js 20.19+ (actual: 18.19.1)
+- ❌ Migración completa a ESM (proyecto usa CommonJS)
+- ❌ Requiere driver adapters (@prisma/adapter-pg)
+- ❌ Breaking changes masivos en PrismaClient instantiation
+- ❌ Refactoring extensivo en todos los archivos que usan Prisma
 
-- [ ] Review Jest 30 breaking changes
-- [ ] Actualizar ts-jest, configs
-- [ ] Validar todos los tests pasan
+**Alternativa implementada:**
+- ✅ Prisma ya está en **6.19.0** (última versión estable de la serie 6.x)
+- ✅ @prisma/client en 6.19.0
+- ✅ Sin cambios necesarios
+- **Decisión**: Mantener Prisma 6.x hasta que el proyecto migre a ESM + Node 20+
+
+#### 🧪 Upgrade Jest 29 → 30 - ✅ COMPLETADO
+
+- [x] Review Jest 30 breaking changes
+- [x] Actualizar jest: 29.7.0 → 30.2.0
+- [x] Actualizar @jest/globals: 29.7.0 → 30.2.0
+- [x] Actualizar @types/jest: 29.5.12 → 30.0.0
+- [x] Actualizar jest-environment-jsdom: 29.7.0 → 30.2.0
+- [x] Actualizar ts-jest: 29.1.2 → 29.2.5
+- **Commit**: `18e21ca` - chore: upgrade Jest 29 → 30 and related testing dependencies
+
+**Pasos manuales requeridos:**
+```bash
+pnpm install
+pnpm test
+# Si hay fallos de snapshots:
+pnpm test -- --updateSnapshot
+```
 
 ---
 
