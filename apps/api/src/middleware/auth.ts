@@ -1,16 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import type { RedisCache } from '../services/RedisCache.js';
 
 const API_KEY_HEADER = 'x-api-key';
+const AUTH_CACHE_TTL = 300;
 
 export interface AuthConfig {
   apiKeyHash?: string;
   enabled?: boolean;
+  cache?: RedisCache;
 }
 
 let authConfig: AuthConfig = {
   apiKeyHash: undefined,
   enabled: true,
+  cache: undefined,
 };
 
 export function configureAuth(config: AuthConfig): void {
@@ -50,6 +55,17 @@ export async function authMiddleware(
   }
 
   try {
+    const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
+    const cacheKey = `auth:${keyHash}`;
+
+    if (authConfig.cache) {
+      const cached = await authConfig.cache.get<string>(cacheKey);
+      if (cached === '1') {
+        next();
+        return;
+      }
+    }
+
     const isValid = await bcrypt.compare(apiKey, authConfig.apiKeyHash);
 
     if (!isValid) {
@@ -64,6 +80,10 @@ export async function authMiddleware(
         message: 'Invalid API key.',
       });
       return;
+    }
+
+    if (authConfig.cache) {
+      await authConfig.cache.set(cacheKey, '1', AUTH_CACHE_TTL);
     }
 
     next();

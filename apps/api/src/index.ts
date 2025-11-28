@@ -15,6 +15,7 @@ import { workflowRoutes } from './routes/workflows.js';
 import { WebSocketManager } from './websocket/WebSocketManager.js';
 import { InMemoryStore } from './services/InMemoryStore.js';
 import { PrismaStore } from './services/PrismaStore.js';
+import { RedisCache } from './services/RedisCache.js';
 import type { StoreInterface } from './services/PostgresStore.js';
 import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth.js';
 import { sanitizeLog, sanitizeObject } from './utils/sanitizer.js';
@@ -37,9 +38,12 @@ if (process.env['NODE_ENV'] === 'production' && !process.env['API_KEY_HASH']) {
   process.exit(1);
 }
 
+const authCache = new RedisCache(REDIS_URL, 'auth');
+
 configureAuth({
   apiKeyHash: process.env['API_KEY_HASH'],
   enabled: process.env['NODE_ENV'] === 'production' || !!process.env['API_KEY_HASH'],
+  cache: authCache,
 });
 
 const corsOptions: cors.CorsOptions = {
@@ -73,6 +77,17 @@ const wsManager = new WebSocketManager(wss, verifyApiKey);
 let store: StoreInterface;
 let prismaStore: PrismaStore | null = null;
 
+async function initializeCache(): Promise<void> {
+  if (authCache.isEnabled()) {
+    const connected = await authCache.connect();
+    if (connected) {
+      console.log('Redis cache connected for auth optimization');
+    } else {
+      console.warn('Redis cache disabled - auth will use bcrypt on every request');
+    }
+  }
+}
+
 async function initializeStore(): Promise<StoreInterface> {
   if (process.env['DATABASE_URL']) {
     try {
@@ -92,6 +107,7 @@ async function initializeStore(): Promise<StoreInterface> {
 }
 
 async function startServer(): Promise<void> {
+  await initializeCache();
   store = await initializeStore();
 
   if (process.env['OPENAI_API_KEY']) {
@@ -270,6 +286,7 @@ process.on('SIGINT', async () => {
   if (prismaStore) {
     await prismaStore.close();
   }
+  await authCache.close();
   server.close();
   process.exit(0);
 });
@@ -280,6 +297,7 @@ process.on('SIGTERM', async () => {
   if (prismaStore) {
     await prismaStore.close();
   }
+  await authCache.close();
   server.close();
   process.exit(0);
 });
