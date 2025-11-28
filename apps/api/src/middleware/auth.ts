@@ -36,6 +36,12 @@ export async function authMiddleware(
   const apiKey = req.header(API_KEY_HEADER);
 
   if (!apiKey) {
+    console.warn('auth_failure', {
+      reason: 'missing_api_key',
+      ip: req.ip,
+      path: req.path,
+      timestamp: new Date().toISOString(),
+    });
     res.status(401).json({
       error: 'Unauthorized',
       message: 'Missing API key. Include X-API-Key header.',
@@ -47,6 +53,12 @@ export async function authMiddleware(
     const isValid = await bcrypt.compare(apiKey, authConfig.apiKeyHash);
 
     if (!isValid) {
+      console.warn('auth_failure', {
+        reason: 'invalid_api_key',
+        ip: req.ip,
+        path: req.path,
+        timestamp: new Date().toISOString(),
+      });
       res.status(403).json({
         error: 'Forbidden',
         message: 'Invalid API key.',
@@ -56,7 +68,13 @@ export async function authMiddleware(
 
     next();
   } catch (error) {
-    console.error('Auth middleware error:', error);
+    console.error('auth_failure', {
+      reason: 'auth_error',
+      ip: req.ip,
+      path: req.path,
+      error: (error as Error).message,
+      timestamp: new Date().toISOString(),
+    });
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Authentication failed.',
