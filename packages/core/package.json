@@ -11,8 +11,10 @@
     "test": "echo 'No tests in core package' && exit 0"
   },
   "dependencies": {
+    "bullmq": "^5.41.7",
     "chokidar": "^3.6.0",
     "eventemitter3": "^5.0.1",
+    "ioredis": "^5.8.2",
     "uuid": "^9.0.1",
     "zod": "^3.25.76"
   },

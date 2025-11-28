@@ -148,42 +148,7 @@ async function startServer(): Promise<void> {
     wsManager.broadcast('workflow:failed', event);
   });
 
-  // Hot reload setup
-  const enableHotReload = process.env['ENABLE_HOT_RELOAD'] !== 'false' && process.env['NODE_ENV'] !== 'production';
-
-  if (enableHotReload) {
-    const configWatcher = createConfigWatcher({
-      watchPath: process.cwd() + '/config/agents',
-      patterns: ['**/*.json'],
-      debounceMs: CONFIG_WATCHER_DEBOUNCE_MS,
-    });
-
-    configWatcher.on('config:change', async (event) => {
-      console.log(`[Hot Reload] Config changed: ${event.path}`);
-      wsManager.broadcast('config:change', event);
-
-      // TODO: Implement actual agent reload logic
-      // This would require parsing the config file and calling runtime.reloadAgent()
-    });
-
-    configWatcher.on('error', (error) => {
-      console.error('[Hot Reload] Error:', error);
-    });
-
-    configWatcher.start();
-    console.log('[Hot Reload] Enabled - watching for config changes');
-
-    // Broadcast reload events
-    runtime.getEmitter().on('agent:reloaded', (event) => {
-      wsManager.broadcast('agent:reloaded', event);
-    });
-
-    runtime.getEmitter().on('agent:reload-failed', (event) => {
-      wsManager.broadcast('agent:reload-failed', event);
-    });
-  } else {
-    console.log('[Hot Reload] Disabled');
-  }
+  console.log('[Hot Reload] Feature deprecated - use API to update agents');
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -222,6 +187,10 @@ async function startServer(): Promise<void> {
       timestamp: new Date().toISOString(),
       storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
     });
+  });
+
+  app.get('/api/openapi', (_req, res) => {
+    res.sendFile('/docs/openapi.yaml', { root: process.cwd() });
   });
 
   app.use('/api', authMiddleware);

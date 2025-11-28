@@ -89,14 +89,14 @@ export class TaskQueueService {
       { connection, concurrency }
     );
 
-    this.worker.on('completed', (job) => {
+    this.worker.on('completed', (job: Job<TaskQueueItem>) => {
       this.emitter.emit('task:completed', {
         taskId: job.id,
         agentId: job.data.agentId
       });
     });
 
-    this.worker.on('failed', (job, err) => {
+    this.worker.on('failed', (job: Job<TaskQueueItem> | undefined, err: Error) => {
       this.emitter.emit('task:failed', {
         taskId: job?.id,
         agentId: job?.data.agentId,
@@ -181,22 +181,22 @@ export class TaskQueueService {
    * Setup event handlers for queue events
    */
   private setupEventHandlers(): void {
-    this.queueEvents.on('completed', ({ jobId }) => {
+    this.queueEvents.on('completed', ({ jobId }: { jobId: string }) => {
       this.emitter.emit('task:completed', { taskId: jobId });
     });
 
-    this.queueEvents.on('failed', ({ jobId, failedReason }) => {
+    this.queueEvents.on('failed', ({ jobId, failedReason }: { jobId: string; failedReason: string }) => {
       this.emitter.emit('task:failed', {
         taskId: jobId,
         error: failedReason
       });
     });
 
-    this.queueEvents.on('stalled', ({ jobId }) => {
+    this.queueEvents.on('stalled', ({ jobId }: { jobId: string }) => {
       this.emitter.emit('task:stalled', { taskId: jobId });
     });
 
-    this.queue.on('error', (error) => {
+    this.queue.on('error', (error: Error) => {
       this.emitter.emit('queue:error', { error: error.message });
     });
   }
