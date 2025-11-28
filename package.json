@@ -44,7 +44,7 @@
     "update:deps": "pnpm update --latest"
   },
   "dependencies": {
-    "@prisma/client": "^6.1.0",
+    "@prisma/client": "^6.19.0",
     "@types/bull": "^4.10.4",
     "@types/ioredis": "^5.0.0",
     "bcryptjs": "^2.4.3",

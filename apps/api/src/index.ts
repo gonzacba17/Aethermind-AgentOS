@@ -14,18 +14,12 @@ import { costRoutes } from './routes/costs.js';
 import { workflowRoutes } from './routes/workflows.js';
 import { WebSocketManager } from './websocket/WebSocketManager.js';
 import { InMemoryStore } from './services/InMemoryStore.js';
-import { PostgresStore, createPostgresStore, type StoreInterface } from './services/PostgresStore.js';
+import { PrismaStore } from './services/PrismaStore.js';
+import type { StoreInterface } from './services/PostgresStore.js';
 import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth.js';
 import { sanitizeLog, sanitizeObject } from './utils/sanitizer.js';
 
 
-const pgConfig = {
-  host: process.env['POSTGRES_HOST'] || 'localhost',
-  port: parseInt(process.env['POSTGRES_PORT'] || '5432', 10),
-  database: process.env['POSTGRES_DB'] || 'aethermind',
-  user: process.env['POSTGRES_USER'] || 'postgres',
-  password: process.env['POSTGRES_PASSWORD'] || 'postgres',
-};
 
 if (process.env['NODE_ENV'] === 'production' && !process.env['API_KEY_HASH']) {
   console.error('FATAL: API_KEY_HASH must be configured in production');
@@ -68,20 +62,20 @@ const workflowEngine = createWorkflowEngine(orchestrator);
 const wsManager = new WebSocketManager(wss, verifyApiKey);
 
 let store: StoreInterface;
-let postgresStore: PostgresStore | null = null;
+let prismaStore: PrismaStore | null = null;
 
 async function initializeStore(): Promise<StoreInterface> {
-  if (process.env['POSTGRES_PASSWORD'] && process.env['POSTGRES_HOST']) {
+  if (process.env['DATABASE_URL']) {
     try {
-      console.log('Attempting to connect to PostgreSQL...');
-      postgresStore = createPostgresStore(pgConfig);
-      const connected = await postgresStore.connect();
+      console.log('Attempting to connect to PostgreSQL via Prisma...');
+      prismaStore = new PrismaStore();
+      const connected = await prismaStore.connect();
       if (connected) {
-        console.log('Using PostgreSQL for data persistence');
-        return postgresStore;
+        console.log('Using Prisma for data persistence');
+        return prismaStore;
       }
     } catch (error) {
-      console.warn('Failed to connect to PostgreSQL, falling back to InMemoryStore:', error);
+      console.warn('Failed to connect via Prisma, falling back to InMemoryStore:', error);
     }
   }
   console.log('Using InMemoryStore (data will not persist across restarts)');
@@ -178,7 +172,7 @@ async function startServer(): Promise<void> {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      storage: postgresStore?.isConnected() ? 'postgresql' : 'memory',
+      storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
     });
   });
 
@@ -197,7 +191,7 @@ async function startServer(): Promise<void> {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      storage: postgresStore?.isConnected() ? 'postgresql' : 'memory',
+      storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
       authenticated: true,
     });
   });
@@ -242,7 +236,7 @@ async function startServer(): Promise<void> {
     console.log(`\nAethermind API server running on port ${PORT}`);
     console.log(`WebSocket server running on ws://localhost:${PORT}/ws`);
     console.log(`Health check: http://localhost:${PORT}/health`);
-    console.log(`Storage: ${postgresStore?.isConnected() ? 'PostgreSQL' : 'InMemory'}`);
+    console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
     console.log(`Auth: ${process.env['API_KEY_HASH'] ? 'Enabled' : 'Disabled (set API_KEY_HASH to enable)'}\n`);
   });
 }
@@ -250,8 +244,8 @@ async function startServer(): Promise<void> {
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
   await orchestrator.shutdown();
-  if (postgresStore) {
-    await postgresStore.close();
+  if (prismaStore) {
+    await prismaStore.close();
   }
   server.close();
   process.exit(0);
@@ -260,8 +254,8 @@ process.on('SIGINT', async () => {
 process.on('SIGTERM', async () => {
   console.log('\nShutting down...');
   await orchestrator.shutdown();
-  if (postgresStore) {
-    await postgresStore.close();
+  if (prismaStore) {
+    await prismaStore.close();
   }
   server.close();
   process.exit(0);
