@@ -57,74 +57,57 @@
 
 ## 🟡 FASE 1: SEGURIDAD + QUICK WINS (Semana 3)
 
+**Estado**: ✅ COMPLETADO (7/7 tareas)
+
 ### Sprint 2: Validación + Hardening
 
 #### ✅ Validación Zod en 4 rutas (1 día)
 
-```typescript
-// logs.ts, costs.ts, executions.ts, traces.ts
-const QuerySchema = z.object({
-  limit: z.coerce.number().min(1).max(1000).default(100),
-  offset: z.coerce.number().min(0).default(0),
-  // ... campos específicos
-});
-```
+- [x] logs.ts: LogFilterSchema
+- [x] costs.ts: CostFilterSchema
+- [x] executions.ts: IdParamSchema + PaginationSchema
+- [x] traces.ts: IdParamSchema + PaginationSchema
+- **Commit**: `ba5a8fd` - feat: add Zod validation to 4 API routes
 
-#### 🛡️ Habilitar CSP en Helmet (1h)
+#### ✅ Habilitar CSP en Helmet (1h)
 
-```typescript
-contentSecurityPolicy: {
-  directives: {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-    styleSrc: ["'self'", "'unsafe-inline'"],
-    connectSrc: ["'self'", "ws:", "wss:"]
-  }
-}
-```
+- [x] Configurar Content Security Policy
+- [x] Directivas: defaultSrc, scriptSrc, styleSrc, connectSrc, objectSrc, frameAncestors
+- **Commit**: `6b876a0` - feat: enable Content Security Policy in Helmet
 
-#### 📄 Enforcar paginación en rutas (1h)
+#### ✅ Enforcar paginación en rutas (1h)
 
-```typescript
-const MAX_LIMIT = 1000;
-const limit = Math.min(parseInt(req.query.limit) || 100, MAX_LIMIT);
-```
+- [x] executions.ts GET /: PaginationSchema
+- [x] traces.ts GET /: PaginationSchema
+- [x] Formato de respuesta paginada consistente
+- **Commit**: `711481b` - feat: enforce pagination in executions and traces routes
 
-#### 🔧 Extraer constantes mágicas (2h)
+#### ✅ Extraer constantes mágicas (2h)
 
-```typescript
-// config/constants.ts
-export const DB_POOL_MAX = parseInt(process.env.DB_POOL_MAX || "20");
-export const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || "30000");
-export const QUEUE_CONCURRENCY = parseInt(
-  process.env.QUEUE_CONCURRENCY || "10"
-);
-```
+- [x] Crear config/constants.ts
+- [x] Migrar todas las constantes de index.ts
+- [x] Variables de entorno con defaults
+- **Commit**: `07347ab` - refactor: extract magic numbers to config/constants.ts
 
-#### 📝 Logging de auth failures (30min)
+#### ✅ Logging de auth failures (30min)
 
-```typescript
-logger.warn("auth_failure", { ip: req.ip, timestamp: new Date() });
-```
+- [x] Logs estructurados en auth middleware
+- [x] Incluir IP, path, timestamp, reason
+- **Commit**: `eb01ef9` - feat: add structured logging for auth failures
 
-#### 🐳 Non-root user en Dockerfile (30min)
+#### ✅ Non-root user en Dockerfile (30min)
 
-```dockerfile
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
-USER nodejs
-```
+- [x] Crear usuario nodejs (1001)
+- [x] --chown en COPY operations
+- [x] USER nodejs en api y dashboard
+- **Commit**: `7a061e8` - security: run containers as non-root user (nodejs:1001)
 
-#### 🤖 Configurar Renovate bot (1h)
+#### ✅ Configurar Renovate bot (1h)
 
-```json
-{
-  "extends": ["config:base"],
-  "packageRules": [
-    { "matchUpdateTypes": ["major"], "automerge": false },
-    { "matchUpdateTypes": ["minor", "patch"], "automerge": true }
-  ]
-}
-```
+- [x] Crear renovate.json
+- [x] Automerge minor/patch
+- [x] Manual review para major
+- **Commit**: `94a3216` - chore: configure Renovate bot for dependency updates
 
 ---
 
