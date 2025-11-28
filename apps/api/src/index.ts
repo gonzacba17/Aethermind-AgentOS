@@ -18,6 +18,16 @@ import { PrismaStore } from './services/PrismaStore.js';
 import type { StoreInterface } from './services/PostgresStore.js';
 import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth.js';
 import { sanitizeLog, sanitizeObject } from './utils/sanitizer.js';
+import {
+  CORS_ORIGINS,
+  RATE_LIMIT_WINDOW_MS,
+  RATE_LIMIT_MAX_REQUESTS,
+  REQUEST_BODY_LIMIT,
+  DEFAULT_PORT,
+  REDIS_URL,
+  QUEUE_CONCURRENCY,
+  CONFIG_WATCHER_DEBOUNCE_MS,
+} from './config/constants.js';
 
 
 
@@ -33,15 +43,15 @@ configureAuth({
 });
 
 const corsOptions: cors.CorsOptions = {
-  origin: process.env['CORS_ORIGINS']?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+  origin: CORS_ORIGINS,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
 };
 
 const limiter = rateLimit({
-  windowMs: parseInt(process.env['RATE_LIMIT_WINDOW_MS'] || '900000', 10),
-  max: parseInt(process.env['RATE_LIMIT_MAX_REQUESTS'] || '100', 10),
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX_REQUESTS,
   message: { error: 'Too many requests', message: 'Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -54,8 +64,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const runtime = createRuntime();
 
 // Initialize TaskQueueService with Redis
-const redisUrl = process.env['REDIS_URL'] || 'redis://localhost:6379';
-const queueService = new TaskQueueService({ redisUrl, concurrency: 5 });
+const queueService = new TaskQueueService({ redisUrl: REDIS_URL, concurrency: QUEUE_CONCURRENCY });
 
 const orchestrator = createOrchestrator(runtime, queueService);
 const workflowEngine = createWorkflowEngine(orchestrator);
@@ -130,7 +139,7 @@ async function startServer(): Promise<void> {
     const configWatcher = createConfigWatcher({
       watchPath: process.cwd() + '/config/agents',
       patterns: ['**/*.json'],
-      debounceMs: 300,
+      debounceMs: CONFIG_WATCHER_DEBOUNCE_MS,
     });
 
     configWatcher.on('config:change', async (event) => {
@@ -161,11 +170,25 @@ async function startServer(): Promise<void> {
   }
 
   app.use(helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        connectSrc: ["'self'", "ws:", "wss:"],
+        imgSrc: ["'self'", "data:", "https:"],
+        fontSrc: ["'self'", "data:"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+        upgradeInsecureRequests: [],
+      },
+    },
     crossOriginEmbedderPolicy: false,
   }));
   app.use(cors(corsOptions));
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
   app.get('/health', (_req, res) => {
@@ -230,7 +253,7 @@ async function startServer(): Promise<void> {
     }
   });
 
-  const PORT = process.env['PORT'] || 3001;
+  const PORT = DEFAULT_PORT;
 
   server.listen(PORT, () => {
     console.log(`\nAethermind API server running on port ${PORT}`);
