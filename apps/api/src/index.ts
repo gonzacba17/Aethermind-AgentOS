@@ -223,6 +223,7 @@ async function startServer(): Promise<void> {
     req.workflowEngine = workflowEngine;
     req.store = store;
     req.wsManager = wsManager;
+    req.cache = authCache;
     next();
   });
 
@@ -315,6 +316,7 @@ declare global {
       workflowEngine: typeof workflowEngine;
       store: StoreInterface;
       wsManager: WebSocketManager;
+      cache: RedisCache;
     }
   }
 }

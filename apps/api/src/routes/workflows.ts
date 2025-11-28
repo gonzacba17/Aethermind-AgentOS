@@ -27,19 +27,40 @@ router.get('/', (req, res) => {
   })));
 });
 
-router.get('/:name', (req, res) => {
-  const workflow = req.workflowEngine.getWorkflow(req.params['name']!);
+router.get('/:name', async (req, res) => {
+  const workflowName = req.params['name']!;
+  const cacheKey = `workflow:${workflowName}`;
+
+  if (req.cache) {
+    const cached = await req.cache.get(cacheKey);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+  }
+
+  const workflow = req.workflowEngine.getWorkflow(workflowName);
   if (!workflow) {
     res.status(404).json({ error: 'Workflow not found' });
     return;
   }
+
+  if (req.cache) {
+    await req.cache.set(cacheKey, workflow, 300);
+  }
+
   res.json(workflow);
 });
 
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const definition = CreateWorkflowSchema.parse(req.body);
     req.workflowEngine.registerWorkflow(definition);
+
+    if (req.cache) {
+      await req.cache.del(`workflow:${definition.name}`);
+    }
+
     res.status(201).json({ name: definition.name, message: 'Workflow created' });
   } catch (error) {
     if (error instanceof z.ZodError) {

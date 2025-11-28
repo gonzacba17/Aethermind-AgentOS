@@ -33,6 +33,16 @@ router.get('/', validateQuery(CostFilterSchema), async (req, res) => {
 
 router.get('/summary', async (req, res) => {
   try {
+    const cacheKey = 'costs:summary';
+
+    if (req.cache) {
+      const cached = await req.cache.get(cacheKey);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
+    }
+
     const orchestratorCosts = req.orchestrator.getCosts();
     const storeCostsResult = await req.store.getCosts({});
 
@@ -49,12 +59,18 @@ router.get('/summary', async (req, res) => {
       byModel[cost.model]!.cost += cost.cost;
     }
 
-    res.json({
+    const summary = {
       total: allCosts.reduce((sum, c) => sum + c.cost, 0),
       totalTokens: allCosts.reduce((sum, c) => sum + c.tokens.totalTokens, 0),
       executionCount: allCosts.length,
       byModel,
-    });
+    };
+
+    if (req.cache) {
+      await req.cache.set(cacheKey, summary, 60);
+    }
+
+    res.json(summary);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
