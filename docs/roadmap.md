@@ -9,7 +9,7 @@
 ### Sprint 1: Baseline + Tests Core
 
 **Objetivo:** Coverage 12% → 40%  
-**Estado**: 🟡 En progreso (4/5 tareas completadas - 114 tests implementados)
+**Estado**: ✅ COMPLETADO (5/5 tareas - 146 tests implementados)
 
 #### 📊 Establecer baseline coverage (2h)
 
@@ -47,9 +47,11 @@
 
 #### 🛣️ routes/agents.test.ts (1 día)
 
-- [ ] Validación Zod (payloads válidos/inválidos)
-- [ ] Auth middleware (API key válido/inválido)
-- [ ] CRUD endpoints (GET, POST, PUT, DELETE)
+- [x] Validación Zod (payloads válidos/inválidos)
+- [x] Auth middleware (API key válido/inválido)
+- [x] CRUD endpoints (GET, POST, PUT, DELETE)
+- **32 tests implementados**: Validation (9), CRUD (8), Authentication (6), Edge cases (9)
+- **Commit**: `2d5471f` - test: complete agents routes test suite with auth middleware tests
 
 ---
 
