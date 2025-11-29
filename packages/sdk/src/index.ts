@@ -117,7 +117,13 @@ export function startOrchestrator(options: StartOrchestratorOptions): Aethermind
 
   // Create TaskQueueService
   const redisUrl = options.redisUrl || process.env['REDIS_URL'] || 'redis://localhost:6379';
-  const queueService = new TaskQueueService({ redisUrl, concurrency: 5 });
+  const parsedUrl = new URL(redisUrl);
+  const queueService = new TaskQueueService('aethermind-tasks', {
+    redis: {
+      host: parsedUrl.hostname,
+      port: parseInt(parsedUrl.port) || 6379,
+    }
+  });
 
   const orchestrator = createOrchestrator(runtime, queueService, options.config);
   globalOrchestrator = orchestrator;

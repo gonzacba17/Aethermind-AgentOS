@@ -32,7 +32,8 @@ export class PrismaStore implements StoreInterface {
     if (process.env['NODE_ENV'] === 'development') {
       this.prisma.$on('query' as any, (e: any) => {
         if (e.duration > 100) {
-          console.warn(`[Slow Query] ${e.duration}ms: ${e.query}`);\n        }
+          console.warn(`[Slow Query] ${e.duration}ms: ${e.query}`);
+        }
       });
     }
   }

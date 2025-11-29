@@ -68,7 +68,13 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 const runtime = createRuntime();
 
 // Initialize TaskQueueService with Redis
-const queueService = new TaskQueueService({ redisUrl: REDIS_URL, concurrency: QUEUE_CONCURRENCY });
+const redisUrl = new URL(REDIS_URL);
+const queueService = new TaskQueueService('aethermind-tasks', {
+  redis: {
+    host: redisUrl.hostname,
+    port: parseInt(redisUrl.port) || 6379,
+  }
+});
 
 const orchestrator = createOrchestrator(runtime, queueService);
 const workflowEngine = createWorkflowEngine(orchestrator);
