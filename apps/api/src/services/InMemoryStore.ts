@@ -1,12 +1,44 @@
 import type { LogEntry, Trace, CostInfo, ExecutionResult } from '@aethermind/core';
-import type { StoreInterface, PaginatedResult } from './PostgresStore';
+import type { StoreInterface, PaginatedResult, AgentRecord } from './PostgresStore';
 
 export class InMemoryStore implements StoreInterface {
+  private agents: Map<string, AgentRecord> = new Map();
   private logs: LogEntry[] = [];
   private traces: Map<string, Trace> = new Map();
   private costs: CostInfo[] = [];
   private executions: Map<string, ExecutionResult> = new Map();
   private maxLogs = 10000;
+
+  addAgent(agent: AgentRecord): void {
+    this.agents.set(agent.id, agent);
+  }
+
+  getAgents(options: {
+    userId?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): PaginatedResult<AgentRecord> {
+    const offset = options.offset || 0;
+    const limit = options.limit || 100;
+
+    let filtered = Array.from(this.agents.values());
+    if (options.userId) {
+      filtered = filtered.filter(a => a.userId === options.userId);
+    }
+
+    const total = filtered.length;
+    const data = filtered.slice(offset, offset + limit);
+
+    return { data, total, offset, limit, hasMore: offset + limit < total };
+  }
+
+  getAgent(id: string): AgentRecord | undefined {
+    return this.agents.get(id);
+  }
+
+  deleteAgent(id: string): boolean {
+    return this.agents.delete(id);
+  }
 
   addLog(entry: LogEntry): void {
     this.logs.push(entry);
@@ -115,7 +147,7 @@ export class InMemoryStore implements StoreInterface {
     return byModel;
   }
 
-  addExecution(result: ExecutionResult): void {
+  addExecution(result: ExecutionResult & { userId: string }): void {
     this.executions.set(result.executionId, result);
   }
 

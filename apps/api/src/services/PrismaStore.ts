@@ -1,6 +1,6 @@
-﻿import { PrismaClient } from '@prisma/client';
-import type { LogEntry, Trace, CostInfo, ExecutionResult } from '@aethermind/core';
-import type { StoreInterface, PaginatedResult } from './PostgresStore';
+﻿import { PrismaClient, type Prisma } from '@prisma/client';
+import type { LogEntry, Trace, CostInfo, ExecutionResult, LogLevel, AgentStatus, TraceNode } from '@aethermind/core';
+import type { StoreInterface, PaginatedResult, AgentRecord } from './PostgresStore';
 
 /**
  * PrismaStore - Type-safe data access using Prisma Client
@@ -30,7 +30,7 @@ export class PrismaStore implements StoreInterface {
     });
 
     if (process.env['NODE_ENV'] === 'development') {
-      this.prisma.$on('query' as any, (e: any) => {
+      this.prisma.$on('query', (e: { duration: number; query: string }) => {
         if (e.duration > 100) {
           console.warn(`[Slow Query] ${e.duration}ms: ${e.query}`);
         }
@@ -60,6 +60,100 @@ export class PrismaStore implements StoreInterface {
     this.connected = false;
   }
 
+  async addAgent(agent: AgentRecord): Promise<void> {
+    try {
+      await this.prisma.agent.create({
+        data: {
+          id: agent.id,
+          userId: agent.userId,
+          name: agent.name,
+          model: agent.model,
+          config: agent.config as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to add agent:', error);
+    }
+  }
+
+  async getAgents(options: {
+    userId?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<PaginatedResult<AgentRecord>> {
+    try {
+      const where: { userId?: string } = {};
+      if (options.userId) where.userId = options.userId;
+
+      const limit = Math.min(options.limit || 100, 1000);
+      const offset = options.offset || 0;
+
+      const [data, total] = await Promise.all([
+        this.prisma.agent.findMany({
+          where,
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        this.prisma.agent.count({ where }),
+      ]);
+
+      return {
+        data: data.map(agent => ({
+          id: agent.id,
+          userId: agent.userId,
+          name: agent.name,
+          model: agent.model,
+          config: agent.config,
+          createdAt: agent.createdAt || undefined,
+          updatedAt: agent.updatedAt || undefined,
+        })),
+        total,
+        offset,
+        limit,
+        hasMore: offset + limit < total,
+      };
+    } catch (error) {
+      console.error('Failed to get agents:', error);
+      return {
+        data: [],
+        total: 0,
+        offset: options.offset || 0,
+        limit: options.limit || 100,
+        hasMore: false,
+      };
+    }
+  }
+
+  async getAgent(id: string): Promise<AgentRecord | undefined> {
+    try {
+      const agent = await this.prisma.agent.findUnique({ where: { id } });
+      if (!agent) return undefined;
+      return {
+        id: agent.id,
+        userId: agent.userId,
+        name: agent.name,
+        model: agent.model,
+        config: agent.config,
+        createdAt: agent.createdAt || undefined,
+        updatedAt: agent.updatedAt || undefined,
+      };
+    } catch (error) {
+      console.error('Failed to get agent:', error);
+      return undefined;
+    }
+  }
+
+  async deleteAgent(id: string): Promise<boolean> {
+    try {
+      await this.prisma.agent.delete({ where: { id } });
+      return true;
+    } catch (error) {
+      console.error('Failed to delete agent:', error);
+      return false;
+    }
+  }
+
   // Logs
   async addLog(entry: LogEntry): Promise<void> {
     try {
@@ -70,7 +164,7 @@ export class PrismaStore implements StoreInterface {
           agentId: entry.agentId || null,
           level: entry.level,
           message: entry.message,
-          metadata: (entry.metadata || null) as any,
+          metadata: (entry.metadata ?? null) as Prisma.InputJsonValue,
           timestamp: entry.timestamp,
         },
       });
@@ -87,7 +181,7 @@ export class PrismaStore implements StoreInterface {
     offset?: number;
   } = {}): Promise<PaginatedResult<LogEntry>> {
     try {
-      const where: any = {};
+      const where: { level?: string; agentId?: string; executionId?: string } = {};
       if (options.level) where.level = options.level;
       if (options.agentId) where.agentId = options.agentId;
       if (options.executionId) where.executionId = options.executionId;
@@ -106,13 +200,13 @@ export class PrismaStore implements StoreInterface {
       ]);
 
       return {
-        data: data.map((log: any) => ({
+        data: data.map(log => ({
           id: log.id,
           executionId: log.executionId || undefined,
           agentId: log.agentId || undefined,
-          level: log.level as any,
+          level: log.level as LogLevel,
           message: log.message,
-          metadata: log.metadata as any,
+          metadata: log.metadata as Record<string, unknown> | undefined,
           timestamp: log.timestamp || new Date(),
         })),
         total,
@@ -155,12 +249,12 @@ export class PrismaStore implements StoreInterface {
       await this.prisma.trace.upsert({
         where: { id: trace.id },
         update: {
-          treeData: trace.rootNode as any,
+          treeData: trace.rootNode as unknown as Prisma.InputJsonValue,
         },
         create: {
           id: trace.id,
           executionId: trace.executionId,
-          treeData: trace.rootNode as any,
+          treeData: trace.rootNode as unknown as Prisma.InputJsonValue,
           createdAt: trace.createdAt,
         },
       });
@@ -180,7 +274,7 @@ export class PrismaStore implements StoreInterface {
       return {
         id: trace.id,
         executionId: trace.executionId || '',
-        rootNode: trace.treeData as any,
+        rootNode: trace.treeData as unknown as TraceNode,
         createdAt: trace.createdAt || new Date(),
       };
     } catch (error) {
@@ -196,10 +290,10 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return traces.map((trace: any) => ({
+      return traces.map(trace => ({
         id: trace.id,
         executionId: trace.executionId || '',
-        rootNode: trace.treeData as any,
+        rootNode: trace.treeData as unknown as TraceNode,
         createdAt: trace.createdAt || new Date(),
       }));
     } catch (error) {
@@ -235,7 +329,7 @@ export class PrismaStore implements StoreInterface {
     offset?: number;
   } = {}): Promise<PaginatedResult<CostInfo>> {
     try {
-      const where: any = {};
+      const where: { executionId?: string; model?: string } = {};
       if (options.executionId) where.executionId = options.executionId;
       if (options.model) where.model = options.model;
 
@@ -253,7 +347,7 @@ export class PrismaStore implements StoreInterface {
       ]);
 
       return {
-        data: data.map((cost: any) => ({
+        data: data.map(cost => ({
           executionId: cost.executionId || '',
           model: cost.model,
           tokens: {
@@ -312,23 +406,24 @@ export class PrismaStore implements StoreInterface {
   }
 
   // Executions
-  async addExecution(result: ExecutionResult): Promise<void> {
+  async addExecution(result: ExecutionResult & { userId: string }): Promise<void> {
     try {
       await this.prisma.execution.upsert({
         where: { id: result.executionId },
         update: {
           status: result.status,
-          output: result.output as any,
+          output: result.output as Prisma.InputJsonValue,
           error: result.error?.message || null,
           completedAt: result.completedAt,
           durationMs: result.duration,
         },
         create: {
           id: result.executionId,
+          userId: result.userId,
           agentId: result.agentId,
           status: result.status,
-          input: result.output as any,
-          output: result.output as any,
+          input: result.output as Prisma.InputJsonValue,
+          output: result.output as Prisma.InputJsonValue,
           error: result.error?.message || null,
           startedAt: result.startedAt,
           completedAt: result.completedAt,
@@ -351,8 +446,8 @@ export class PrismaStore implements StoreInterface {
       return {
         executionId: execution.id,
         agentId: execution.agentId || '',
-        status: execution.status as any,
-        output: execution.output as any,
+        status: execution.status as AgentStatus,
+        output: execution.output,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
         completedAt: execution.completedAt || undefined,
@@ -371,11 +466,11 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return executions.map((execution: any) => ({
+      return executions.map(execution => ({
         executionId: execution.id,
         agentId: execution.agentId || '',
-        status: execution.status as any,
-        output: execution.output as any,
+        status: execution.status as AgentStatus,
+        output: execution.output,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
         completedAt: execution.completedAt || undefined,
@@ -395,11 +490,11 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return executions.map((execution: any) => ({
+      return executions.map(execution => ({
         executionId: execution.id,
         agentId: execution.agentId || '',
-        status: execution.status as any,
-        output: execution.output as any,
+        status: execution.status as AgentStatus,
+        output: execution.output,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
         completedAt: execution.completedAt || undefined,

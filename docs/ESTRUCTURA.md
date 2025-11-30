@@ -254,7 +254,7 @@ aethermind-agentos/
 - **Lenguaje**: YAML
 - **Propósito**: Orquestación de servicios Docker
 - **Servicios Definidos**:
-  - PostgreSQL 15 (puerto 5432)
+  - PostgreSQL 16 (puerto 5432)
   - Redis 7 (puerto 6379)
 - **Volúmenes**: Persistencia de datos
 - **Criticidad**: 🔴 CRÍTICO

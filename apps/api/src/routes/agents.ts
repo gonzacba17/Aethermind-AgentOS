@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import type { Router as ExpressRouter } from 'express';
 import { validateBody, validateQuery, validateParams } from '../middleware/validator.js';
+import { jwtAuthMiddleware, AuthRequest } from '../middleware/jwt-auth.js';
+import { usageLimiter, incrementUsage } from '../middleware/usage-limiter.js';
 import {
   CreateAgentSchema,
   ExecuteAgentSchema,
@@ -10,26 +12,19 @@ import {
 
 const router: ExpressRouter = Router();
 
-router.get('/', validateQuery(PaginationSchema), (req, res) => {
-  const agents = req.runtime.getAllAgents();
+router.use(jwtAuthMiddleware as any);
+
+router.get('/', validateQuery(PaginationSchema), async (req: AuthRequest, res) => {
   const { offset, limit } = req.query as any;
   
-  const agentList = agents.map((agent) => ({
-    id: agent.id,
-    name: agent.getName(),
-    model: agent.getModel(),
-    status: agent.getStatus(),
-    config: agent.config,
-  }));
-
-  const paginatedAgents = agentList.slice(offset, offset + limit);
+  const agents = await req.store.getAgents({ userId: req.userId!, offset, limit });
   
   res.json({
-    data: paginatedAgents,
-    total: agentList.length,
+    data: agents.data,
+    total: agents.total,
     offset,
     limit,
-    hasMore: offset + limit < agentList.length,
+    hasMore: offset + limit < agents.total,
   });
 });
 
@@ -49,13 +44,21 @@ router.get('/:id', validateParams(IdParamSchema), (req, res) => {
   });
 });
 
-router.post('/', validateBody(CreateAgentSchema), (req, res) => {
+router.post('/', validateBody(CreateAgentSchema), async (req: AuthRequest, res) => {
   try {
     const config = req.body;
 
     const agent = req.runtime.createAgent(config, async (ctx) => {
       ctx.logger.info('Agent executed via API');
       return { input: ctx.input, processed: true };
+    });
+
+    await req.store.addAgent({
+      id: agent.id,
+      userId: req.userId!,
+      name: agent.getName(),
+      model: agent.getModel(),
+      config: agent.config,
     });
 
     res.status(201).json({
@@ -69,7 +72,7 @@ router.post('/', validateBody(CreateAgentSchema), (req, res) => {
   }
 });
 
-router.post('/:id/execute', validateParams(IdParamSchema), validateBody(ExecuteAgentSchema), async (req, res) => {
+router.post('/:id/execute', usageLimiter as any, validateParams(IdParamSchema), validateBody(ExecuteAgentSchema), async (req: AuthRequest, res) => {
   const agent = req.runtime.getAgent(req.params['id']!);
   if (!agent) {
     res.status(404).json({ error: 'Agent not found' });
@@ -78,7 +81,7 @@ router.post('/:id/execute', validateParams(IdParamSchema), validateBody(ExecuteA
 
   try {
     const result = await req.orchestrator.executeTask(agent.id, req.body.input);
-    await req.store.addExecution(result);
+    await req.store.addExecution({ ...result, userId: req.userId! });
 
     const trace = req.orchestrator.getTrace(result.executionId);
     if (trace) {
@@ -91,6 +94,8 @@ router.post('/:id/execute', validateParams(IdParamSchema), validateBody(ExecuteA
     for (const cost of costs) {
       await req.store.addCost(cost);
     }
+
+    await incrementUsage(req.userId!);
 
     if (req.cache) {
       await req.cache.del('costs:summary');

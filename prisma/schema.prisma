@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "windows"]
 }
 
 datasource db {
@@ -7,21 +8,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id               String      @id @default(cuid())
+  email            String      @unique @db.VarChar(255)
+  passwordHash     String      @map("password_hash") @db.VarChar(255)
+  apiKey           String      @unique @map("api_key") @db.VarChar(255)
+  plan             String      @default("free") @db.VarChar(50)
+  usageLimit       Int         @default(100) @map("usage_limit")
+  usageCount       Int         @default(0) @map("usage_count")
+  stripeCustomerId String?     @unique @map("stripe_customer_id") @db.VarChar(255)
+  stripeSubscriptionId String? @map("stripe_subscription_id") @db.VarChar(255)
+  emailVerified    Boolean     @default(false) @map("email_verified")
+  verificationToken String?    @map("verification_token") @db.VarChar(255)
+  resetToken       String?     @map("reset_token") @db.VarChar(255)
+  resetTokenExpiry DateTime?   @map("reset_token_expiry") @db.Timestamptz(6)
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  agents           Agent[]
+  workflows        Workflow[]
+  executions       Execution[]
+
+  @@index([email], map: "idx_users_email")
+  @@index([apiKey], map: "idx_users_api_key")
+  @@index([plan], map: "idx_users_plan")
+  @@map("users")
+}
+
 model Agent {
   id         String      @id @db.Uuid
+  userId     String      @map("user_id")
   name       String      @db.VarChar(255)
   model      String      @db.VarChar(255)
   config     Json        @default("{}")
   createdAt  DateTime?   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime?   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   executions Execution[]
   logs       Log[]
 
+  @@index([userId], map: "idx_agents_user_id")
   @@map("agents")
 }
 
 model Execution {
   id          String    @id @db.Uuid
+  userId      String    @map("user_id")
   agentId     String?   @map("agent_id") @db.Uuid
   status      String    @db.VarChar(50)
   input       Json?
@@ -31,10 +62,12 @@ model Execution {
   completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
   durationMs  Int?      @map("duration_ms")
   costs       Cost[]
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   agent       Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   logs        Log[]
   traces      Trace[]
 
+  @@index([userId], map: "idx_executions_user_id")
   @@index([agentId], map: "idx_executions_agent_id")
   @@index([status], map: "idx_executions_status")
   @@index([startedAt], map: "idx_executions_started_at")
@@ -58,6 +91,8 @@ model Log {
   @@index([timestamp], map: "idx_logs_timestamp")
   @@index([level], map: "idx_logs_level")
   @@index([executionId, timestamp], map: "idx_logs_exec_time")
+  @@index([executionId, timestamp(sort: Desc), level], map: "idx_logs_composite")
+  @@index([agentId, timestamp(sort: Desc)], map: "idx_logs_agent_timestamp")
   @@map("logs")
 }
 
@@ -94,11 +129,15 @@ model Cost {
 
 model Workflow {
   id          String    @id @db.Uuid
-  name        String    @unique @db.VarChar(255)
+  userId      String    @map("user_id")
+  name        String    @db.VarChar(255)
   description String?
   definition  Json
   createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, name], map: "idx_workflows_user_name")
+  @@index([userId], map: "idx_workflows_user_id")
   @@map("workflows")
 }

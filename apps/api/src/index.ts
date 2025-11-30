@@ -12,6 +12,7 @@ import { logRoutes } from './routes/logs';
 import { traceRoutes } from './routes/traces';
 import { costRoutes } from './routes/costs';
 import { workflowRoutes } from './routes/workflows';
+import authRoutes from './routes/auth';
 import { WebSocketManager } from './websocket/WebSocketManager';
 import { InMemoryStore } from './services/InMemoryStore';
 import { PrismaStore } from './services/PrismaStore';
@@ -169,8 +170,8 @@ async function startServer(): Promise<void> {
         baseUri: ["'self'"],
         formAction: ["'self'"],
         frameAncestors: ["'none'"],
-        upgradeInsecureRequests: process.env['NODE_ENV'] === 'production' ? [] : undefined,
       },
+      useDefaults: false,
     },
     crossOriginEmbedderPolicy: false,
     strictTransportSecurity: {
@@ -198,6 +199,8 @@ async function startServer(): Promise<void> {
   app.get('/api/openapi', (_req, res) => {
     res.sendFile('/docs/openapi.yaml', { root: process.cwd() });
   });
+
+  app.use('/api/auth', authRoutes);
 
   app.use('/api', authMiddleware);
 

@@ -479,7 +479,7 @@ pnpm dev
 
 ### PostgreSQL Configuration
 
-The Docker Compose file creates a PostgreSQL 15 instance with:
+The Docker Compose file creates a PostgreSQL 16 instance with:
 
 - **Port**: 5432
 - **Database**: aethermind
@@ -492,7 +492,7 @@ The Docker Compose file creates a PostgreSQL 15 instance with:
 If not using Docker:
 
 ```bash
-# Install PostgreSQL 15+
+# Install PostgreSQL 16+
 # Create database
 createdb aethermind
 

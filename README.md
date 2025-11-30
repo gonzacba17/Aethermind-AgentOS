@@ -18,7 +18,7 @@ Aethermind AgentOS is an enterprise-grade platform for orchestrating multiple AI
 - 🎯 **Developer-Friendly** - Simple SDK with full TypeScript support
 - 📈 **Production-Ready** - PostgreSQL persistence, WebSocket updates, API authentication
 - 🔄 **Workflow Engine** - Define complex multi-step agent workflows with conditions
-- ⚡ **Hot Reload** - Automatic configuration reload during development
+- ⚡ **Task Queue** - BullMQ with Redis for reliable job processing
 
 ## 🚀 Quick Start
 

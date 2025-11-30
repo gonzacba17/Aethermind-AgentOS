@@ -1,0 +1,167 @@
+# Ejemplo de integración del script validate-and-run.ts en CI/CD
+# Archivo: .github/workflows/validate-full.yml
+
+name: Validación Completa
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  validate-full:
+    name: Validación y Tests Completos
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: aethermind_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword123
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Ejecutar validación completa
+        run: pnpm validate:all
+        env:
+          DATABASE_URL: postgresql://postgres:testpassword123@localhost:5432/aethermind_test
+          REDIS_URL: redis://localhost:6379
+          NODE_ENV: test
+          CI: true
+
+      - name: Upload logs como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-logs
+          path: logs/
+          retention-days: 7
+
+      - name: Verificar reportes generados
+        if: always()
+        run: |
+          ls -la logs/
+          cat logs/validation-report-*.md || echo "No se generó reporte"
+
+      - name: Comentar PR con resultados (opcional)
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reports = fs.readdirSync('logs').filter(f => f.startsWith('validation-report-'));
+            
+            if (reports.length > 0) {
+              const report = fs.readFileSync(`logs/${reports[0]}`, 'utf8');
+              
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 📊 Reporte de Validación\n\n${report}`
+              });
+            }
+
+# ===================================
+# EJEMPLO 2: Validación solo pre-checks (más rápido)
+# ===================================
+
+# name: Validación Rápida
+# 
+# on:
+#   pull_request:
+#     branches: [main, develop]
+# 
+# jobs:
+#   pre-checks:
+#     runs-on: ubuntu-latest
+#     timeout-minutes: 5
+#     
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: pnpm/action-setup@v4
+#         with:
+#           version: 9
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+#           cache: 'pnpm'
+#       
+#       - run: pnpm install --frozen-lockfile
+#       - run: pnpm typecheck
+#       - run: pnpm build
+#       - run: pnpm test
+
+# ===================================
+# EJEMPLO 3: Validación en schedule (nightly)
+# ===================================
+
+# name: Validación Nocturna
+# 
+# on:
+#   schedule:
+#     - cron: '0 2 * * *'  # Todos los días a las 2 AM UTC
+# 
+# jobs:
+#   nightly-validation:
+#     runs-on: ubuntu-latest
+#     
+#     steps:
+#       - uses: actions/checkout@v4
+#       - uses: pnpm/action-setup@v4
+#         with:
+#           version: 9
+#       - uses: actions/setup-node@v4
+#         with:
+#           node-version: '20'
+#       
+#       - run: pnpm install --frozen-lockfile
+#       - run: pnpm validate:all
+#       
+#       - name: Notificar en Slack si falla
+#         if: failure()
+#         uses: slackapi/slack-github-action@v1
+#         with:
+#           webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+#           payload: |
+#             {
+#               "text": "❌ Validación nocturna falló en ${{ github.repository }}"
+#             }

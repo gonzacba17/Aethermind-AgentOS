@@ -15,7 +15,27 @@ export interface PaginatedResult<T> {
   hasMore: boolean;
 }
 
+export interface AgentRecord {
+  id: string;
+  userId: string;
+  name: string;
+  model: string;
+  config: any;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export interface StoreInterface {
+  // Agents
+  addAgent(agent: AgentRecord): void | Promise<void>;
+  getAgents(options?: {
+    userId?: string;
+    limit?: number;
+    offset?: number;
+  }): PaginatedResult<AgentRecord> | Promise<PaginatedResult<AgentRecord>>;
+  getAgent(id: string): AgentRecord | undefined | Promise<AgentRecord | undefined>;
+  deleteAgent(id: string): boolean | Promise<boolean>;
+
   // Logs
   addLog(entry: LogEntry): void | Promise<void>;
   getLogs(options?: {
@@ -45,7 +65,7 @@ export interface StoreInterface {
   getCostByModel(): Record<string, number> | Promise<Record<string, number>>;
 
   // Executions
-  addExecution(result: ExecutionResult): void | Promise<void>;
+  addExecution(result: ExecutionResult & { userId: string }): void | Promise<void>;
   getExecution(executionId: string): ExecutionResult | undefined | Promise<ExecutionResult | undefined>;
   getAllExecutions(): ExecutionResult[] | Promise<ExecutionResult[]>;
   getExecutionsByAgent(agentId: string): ExecutionResult[] | Promise<ExecutionResult[]>;
