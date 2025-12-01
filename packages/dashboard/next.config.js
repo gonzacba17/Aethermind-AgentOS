@@ -9,6 +9,8 @@ const nextConfig = {
       },
     ];
   },
+  // Enable standalone output for optimized deployment
+  output: 'standalone',
   // Disable API routes in production
   experimental: {
     serverActions: {

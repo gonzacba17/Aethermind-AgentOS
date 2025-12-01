@@ -1,0 +1,68 @@
+# Dockerfile optimizado para despliegue del API en Railway
+# Basado en el Dockerfile multi-stage existente, enfocado solo en la API
+
+FROM node:20-alpine AS base
+RUN npm install -g pnpm@9
+
+# Instalar dependencias
+FROM base AS deps
+WORKDIR /app
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/core/package.json ./packages/core/
+COPY packages/sdk/package.json ./packages/sdk/
+COPY apps/api/package.json ./apps/api/
+RUN pnpm install --offline --frozen-lockfile
+
+# Build de la aplicación
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/core/node_modules ./packages/core/node_modules
+COPY --from=deps /app/packages/sdk/node_modules ./packages/sdk/node_modules
+COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
+COPY . .
+
+# Generar Prisma Client
+RUN pnpm prisma generate
+
+# Build del API con todas sus dependencias workspace
+RUN pnpm turbo run build --filter=@aethermind/api...
+
+# Imagen final de producción
+FROM base AS production
+WORKDIR /app
+
+# Instalar dumb-init para manejo correcto de señales
+RUN apk add --no-cache dumb-init
+
+# Crear usuario no-root para seguridad
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
+# Copiar archivos compilados y dependencias
+COPY --from=builder --chown=nodejs:nodejs /app/packages/core/dist ./packages/core/dist
+COPY --from=builder --chown=nodejs:nodejs /app/packages/core/package.json ./packages/core/
+COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/dist ./packages/sdk/dist
+COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/package.json ./packages/sdk/
+COPY --from=builder --chown=nodejs:nodejs /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=nodejs:nodejs /app/apps/api/package.json ./apps/api/
+COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=deps --chown=nodejs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
+
+# Cambiar a usuario no-root
+USER nodejs
+
+# Directorio de trabajo para el API
+WORKDIR /app/apps/api
+
+# Exponer puerto (Railway usa PORT env variable)
+EXPOSE 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3001) + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Comando de inicio con dumb-init
+CMD ["dumb-init", "node", "dist/index.js"]

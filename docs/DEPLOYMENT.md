@@ -1,308 +1,473 @@
-# Deployment Guide
+# Guía de Despliegue - AethermindOS
 
-## Prerequisites
+Esta guía te llevará paso a paso por el proceso de despliegue de AethermindOS en Railway (backend) y Vercel (frontend).
 
-- Docker & Docker Compose
-- PostgreSQL 16+
-- Redis 7+
-- Node.js 20+ (for local development)
+## 📋 Requisitos Previos
 
-## Environment Variables
+- [ ] Cuenta en [Railway](https://railway.app)
+- [ ] Cuenta en [Vercel](https://vercel.com)
+- [ ] Repositorio en GitHub con tu código
+- [ ] Dominio configurado (opcional pero recomendado)
+- [ ] Node.js 18+ y pnpm 9+ instalados localmente
+
+## 🏗️ Arquitectura de Despliegue
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     tudominio.com                        │
+│                   (Vercel - Frontend)                    │
+│              packages/dashboard (Next.js)                │
+└────────────────────┬────────────────────────────────────┘
+                     │
+                     │ API Calls
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│                  app.tudominio.com                       │
+│                  (Railway - Backend)                     │
+│          apps/api (Express + WebSockets)                 │
+│                                                           │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  PostgreSQL  │  │    Redis     │  │   API Server │  │
+│  │   (Railway)  │  │  (Railway)   │  │   (Docker)   │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 🚀 Parte 1: Despliegue del Backend en Railway
+
+### Paso 1: Preparar el Repositorio
+
+1. **Asegúrate de que todos los archivos estén en tu repositorio:**
+   ```bash
+   git add railway.json Dockerfile.railway .env.production.example
+   git commit -m "Add Railway deployment configuration"
+   git push origin main
+   ```
+
+### Paso 2: Crear Proyecto en Railway
+
+1. Ve a [Railway Dashboard](https://railway.app/dashboard)
+2. Click en **"New Project"**
+3. Selecciona **"Deploy from GitHub repo"**
+4. Autoriza Railway a acceder a tu repositorio
+5. Selecciona el repositorio `Aethermind-AgentOS`
+
+### Paso 3: Agregar PostgreSQL
+
+1. En tu proyecto de Railway, click en **"+ New"**
+2. Selecciona **"Database"** → **"Add PostgreSQL"**
+3. Railway creará automáticamente la base de datos y generará `DATABASE_URL`
+4. Anota el nombre del servicio (ej: `postgres`)
+
+### Paso 4: Agregar Redis
+
+1. Click en **"+ New"** nuevamente
+2. Selecciona **"Database"** → **"Add Redis"**
+3. Railway generará automáticamente `REDIS_URL`
+4. Anota el nombre del servicio (ej: `redis`)
+
+### Paso 5: Configurar el Servicio API
+
+1. Click en el servicio de tu aplicación (el que tiene tu código)
+2. Ve a **"Settings"**
+3. En **"Build"**, verifica que detecte `Dockerfile.railway`
+4. En **"Deploy"**, configura:
+   - **Start Command**: `node apps/api/dist/index.js` (ya está en railway.json)
+   - **Health Check Path**: `/health`
+
+### Paso 6: Configurar Variables de Entorno
+
+1. En el servicio API, ve a la pestaña **"Variables"**
+2. Click en **"Raw Editor"** y pega las siguientes variables:
 
 ```bash
-# Required
-DATABASE_URL=postgresql://user:pass@host:5432/aethermind
-REDIS_URL=redis://host:6379
-API_KEY_HASH=<generated_hash>
-
-# LLM Providers (at least one required)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Optional
+# Node Environment
 NODE_ENV=production
 PORT=3001
-CORS_ORIGINS=https://app.example.com
+
+# Database (Railway auto-genera DATABASE_URL, pero verifica que esté)
+# DATABASE_URL se genera automáticamente al conectar PostgreSQL
+
+# Redis (Railway auto-genera REDIS_URL al conectar Redis)
+# REDIS_URL se genera automáticamente
+
+# LLM Providers (reemplaza con tus keys reales)
+OPENAI_API_KEY=sk-your-openai-key-here
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key-here
+
+# Security - CRÍTICO
+# Genera JWT_SECRET con: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+JWT_SECRET=tu-jwt-secret-de-minimo-32-caracteres-aqui
+
+# Genera API_KEY_HASH localmente con: pnpm run generate-api-key
+# Luego copia el hash generado aquí
+API_KEY_HASH=tu-api-key-hash-generado
+
+# CORS - Agrega tu dominio de Vercel
+CORS_ORIGINS=https://tudominio.com,https://www.tudominio.com
+ALLOWED_ORIGINS=https://tudominio.com,https://www.tudominio.com
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
 ```
 
-## Docker Deployment
+### Paso 7: Generar Secretos de Seguridad
 
-### Build Image
+**En tu máquina local:**
+
+1. **Generar JWT_SECRET:**
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+
+   Copia el resultado y pégalo en Railway como `JWT_SECRET`
+
+2. **Generar API_KEY_HASH:**
+   ```bash
+   pnpm run generate-api-key
+   ```
+   Esto generará:
+   - Un API Key (guárdalo en un lugar seguro, lo necesitarás para hacer requests)
+   - Un API Key Hash (cópialo y pégalo en Railway como `API_KEY_HASH`)
+
+### Paso 8: Ejecutar Migraciones de Prisma
+
+1. En Railway, ve al servicio API
+2. Click en **"Deployments"**
+3. Una vez que el deploy esté completo, abre la **"Terminal"** (ícono de terminal en la esquina)
+4. Ejecuta:
+   ```bash
+   cd /app
+   pnpm prisma migrate deploy
+   ```
+
+### Paso 9: Configurar Dominio Personalizado (Opcional)
+
+1. En el servicio API, ve a **"Settings"** → **"Domains"**
+2. Click en **"Generate Domain"** (Railway te dará un dominio gratuito como `xxx.railway.app`)
+3. O click en **"Custom Domain"** para usar tu propio dominio:
+   - Ingresa: `app.tudominio.com`
+   - Configura el registro CNAME en tu proveedor de DNS:
+     ```
+     CNAME  app  xxx.railway.app
+     ```
+
+### Paso 10: Verificar el Despliegue
+
+1. Espera a que el deploy termine (indicador verde)
+2. Abre la URL de tu API (ej: `https://app.tudominio.com` o `https://xxx.railway.app`)
+3. Verifica el health check:
+   ```bash
+   curl https://app.tudominio.com/health
+   ```
+   Deberías ver:
+   ```json
+   {
+     "status": "ok",
+     "timestamp": "2025-12-01T...",
+     "storage": "prisma"
+   }
+   ```
+
+---
+
+## 🎨 Parte 2: Despliegue del Frontend en Vercel
+
+### Paso 1: Preparar Vercel
+
+1. Ve a [Vercel Dashboard](https://vercel.com/dashboard)
+2. Click en **"Add New..."** → **"Project"**
+3. Importa tu repositorio de GitHub
+4. Selecciona el repositorio `Aethermind-AgentOS`
+
+### Paso 2: Configurar el Proyecto
+
+1. **Framework Preset**: Next.js (debe detectarse automáticamente)
+2. **Root Directory**: Deja en blanco (usará la raíz)
+3. **Build Command**:
+   ```bash
+   pnpm turbo run build --filter=@aethermind/dashboard
+   ```
+4. **Output Directory**:
+   ```
+   packages/dashboard/.next
+   ```
+5. **Install Command**:
+   ```bash
+   pnpm install --frozen-lockfile
+   ```
+
+### Paso 3: Configurar Variables de Entorno
+
+1. En la sección **"Environment Variables"**, agrega:
 
 ```bash
-docker build -t aethermind-api:latest --target api .
+# URL del API en Railway
+NEXT_PUBLIC_API_URL=https://app.tudominio.com
+
+# O si usas el dominio gratuito de Railway:
+# NEXT_PUBLIC_API_URL=https://xxx.railway.app
 ```
 
-### Run Container
+> **Nota**: Las variables que empiezan con `NEXT_PUBLIC_` son accesibles en el cliente.
+
+### Paso 4: Deploy
+
+1. Click en **"Deploy"**
+2. Vercel comenzará el build y deploy automáticamente
+3. Espera a que termine (usualmente 2-3 minutos)
+
+### Paso 5: Configurar Dominio Personalizado
+
+1. Una vez deployado, ve a **"Settings"** → **"Domains"**
+2. Agrega tu dominio:
+   - `tudominio.com`
+   - `www.tudominio.com`
+3. Configura los registros DNS en tu proveedor:
+   ```
+   A      @      76.76.21.21
+   CNAME  www    cname.vercel-dns.com
+   ```
+
+### Paso 6: Verificar el Despliegue
+
+1. Abre tu dominio: `https://tudominio.com`
+2. Verifica que la landing page cargue correctamente
+3. Abre la consola del navegador (F12) y verifica que no haya errores
+4. Si tu dashboard hace llamadas al API, verifica que funcionen
+
+---
+
+## 🔄 Actualizaciones y Re-deploys
+
+### Railway (Backend)
+
+Railway hace **auto-deploy** en cada push a `main`:
 
 ```bash
-docker run -d \
-  --name aethermind-api \
-  -p 3001:3001 \
-  -e DATABASE_URL="postgresql://user:pass@postgres:5432/aethermind" \
-  -e REDIS_URL="redis://redis:6379" \
-  -e API_KEY_HASH="$API_KEY_HASH" \
-  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
-  --restart unless-stopped \
-  aethermind-api:latest
+git add .
+git commit -m "Update API"
+git push origin main
 ```
 
-### Docker Compose
+Para hacer deploy manual:
 
-```yaml
-version: '3.8'
+1. Ve a Railway Dashboard → Tu proyecto
+2. Click en el servicio API
+3. Click en **"Deployments"** → **"Deploy"**
 
-services:
-  api:
-    image: aethermind-api:latest
-    ports:
-      - "3001:3001"
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/aethermind
-      REDIS_URL: redis://redis:6379
-      API_KEY_HASH: ${API_KEY_HASH}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      NODE_ENV: production
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
+### Vercel (Frontend)
 
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: aethermind
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-
-volumes:
-  postgres_data:
-  redis_data:
-```
-
-## Database Migrations
+Vercel también hace **auto-deploy** en cada push:
 
 ```bash
-# Development
-pnpm prisma migrate dev
-
-# Production
-pnpm prisma migrate deploy
+git add .
+git commit -m "Update frontend"
+git push origin main
 ```
 
-## Rollback Strategy
+Para hacer deploy manual:
 
-### 1. Identify Last Stable Version
+1. Ve a Vercel Dashboard → Tu proyecto
+2. Click en **"Deployments"**
+3. Click en los tres puntos del último deployment → **"Redeploy"**
+
+---
+
+## 🔧 Troubleshooting
+
+### Error: "JWT_SECRET must be set and at least 32 characters"
+
+**Causa**: No configuraste `JWT_SECRET` o es muy corto.
+
+**Solución**:
 
 ```bash
-docker images aethermind-api --format "{{.Tag}} {{.CreatedAt}}" | head -5
+# Genera un nuevo secret
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# Cópialo y agrégalo en Railway → Variables → JWT_SECRET
 ```
 
-### 2. Tag Current Deployment
+### Error: "API_KEY_HASH must be configured in production"
+
+**Causa**: No configuraste `API_KEY_HASH`.
+
+**Solución**:
 
 ```bash
-docker tag aethermind-api:latest aethermind-api:$(date +%Y%m%d-%H%M%S)
-docker push aethermind-api:$(date +%Y%m%d-%H%M%S)
+# En tu máquina local
+pnpm run generate-api-key
+
+# Copia el hash generado y agrégalo en Railway → Variables → API_KEY_HASH
 ```
 
-### 3. Perform Rollback
+### Error: "Cannot connect to database"
 
-```bash
-# Stop current containers
-docker-compose down
+**Causa**: Prisma no puede conectarse a PostgreSQL.
 
-# Update image tag in docker-compose.yml
-sed -i 's/aethermind-api:latest/aethermind-api:20250115-143000/' docker-compose.yml
+**Solución**:
 
-# Start with previous version
-docker-compose up -d
-```
+1. Verifica que `DATABASE_URL` esté configurada en Railway
+2. Verifica que el servicio PostgreSQL esté corriendo
+3. Ejecuta las migraciones:
+   ```bash
+   pnpm prisma migrate deploy
+   ```
 
-### 4. Health Check Verification
+### Error: "Redis connection failed"
 
-```bash
-# Check container health
-docker ps --filter "name=aethermind-api" --format "table {{.Names}}\t{{.Status}}"
+**Causa**: No se puede conectar a Redis.
 
-# Verify API endpoint
-curl -f http://localhost:3001/health || echo "Health check failed"
+**Solución**:
 
-# Check logs
-docker-compose logs -f --tail=100 api
-```
+1. Verifica que `REDIS_URL` esté configurada
+2. Verifica que el servicio Redis esté corriendo en Railway
+3. El API debería funcionar sin Redis (con advertencias), pero con rendimiento reducido
 
-### 5. Database Rollback (if needed)
+### Frontend no puede conectarse al API
 
-```bash
-# Restore from backup
-psql -U postgres -d aethermind < backups/aethermind_20250115_143000.sql
+**Causa**: CORS o URL incorrecta.
 
-# Or revert specific migration
-pnpm prisma migrate resolve --rolled-back "20250115143000_migration_name"
-```
+**Solución**:
 
-## Monitoring
+1. Verifica que `NEXT_PUBLIC_API_URL` en Vercel apunte a tu API de Railway
+2. Verifica que `CORS_ORIGINS` en Railway incluya tu dominio de Vercel:
+   ```bash
+   CORS_ORIGINS=https://tudominio.com,https://www.tudominio.com
+   ```
+3. Re-deploya ambos servicios después de cambiar variables de entorno
 
-### Health Checks
+### Build falla en Railway
 
-```bash
-# Basic health
-curl http://localhost:3001/health
+**Causa**: Dependencias faltantes o error en el build.
 
-# Authenticated health (with more details)
-curl -H "X-API-Key: your-key" http://localhost:3001/api/health
-```
+**Solución**:
 
-### Logs
+1. Revisa los logs en Railway → Deployments → Click en el deployment fallido
+2. Verifica que `pnpm-lock.yaml` esté actualizado:
+   ```bash
+   pnpm install
+   git add pnpm-lock.yaml
+   git commit -m "Update lockfile"
+   git push
+   ```
 
-```bash
-# Application logs
-docker logs -f aethermind-api
+### Build falla en Vercel
 
-# With timestamps
-docker logs -f --timestamps aethermind-api
+**Causa**: Error en el build de Next.js o configuración incorrecta.
 
-# Last 100 lines
-docker logs --tail 100 aethermind-api
-```
+**Solución**:
 
-### Metrics
+1. Revisa los logs en Vercel → Deployments → Click en el deployment fallido
+2. Verifica que el build funcione localmente:
+   ```bash
+   cd packages/dashboard
+   pnpm build
+   ```
+3. Verifica que `vercel.json` tenga la configuración correcta
 
-```bash
-# Container stats
-docker stats aethermind-api
+---
 
-# Database connections
-docker exec postgres psql -U postgres -d aethermind -c "SELECT count(*) FROM pg_stat_activity;"
+## 📊 Monitoreo
 
-# Redis memory
-docker exec redis redis-cli INFO memory | grep used_memory_human
-```
+### Railway
 
-## Backup Strategy
+1. **Logs**: Railway → Tu servicio → Logs
+2. **Métricas**: Railway → Tu servicio → Metrics (CPU, memoria, requests)
+3. **Health Check**: Automático en `/health`
 
-### Automated Daily Backups
+### Vercel
 
-```bash
-#!/bin/bash
-# backup.sh
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="/backups"
+1. **Analytics**: Vercel → Tu proyecto → Analytics
+2. **Logs**: Vercel → Tu proyecto → Deployments → Click en deployment → Logs
+3. **Performance**: Vercel → Tu proyecto → Speed Insights (requiere plan Pro)
 
-# Database backup
-docker exec postgres pg_dump -U postgres aethermind > "$BACKUP_DIR/db_$TIMESTAMP.sql"
+---
 
-# Compress and retain last 7 days
-gzip "$BACKUP_DIR/db_$TIMESTAMP.sql"
-find "$BACKUP_DIR" -name "db_*.sql.gz" -mtime +7 -delete
-```
+## 🔐 Seguridad Post-Despliegue
 
-### Cron Schedule
+### Checklist de Seguridad
 
-```cron
-0 2 * * * /path/to/backup.sh
-```
+- [ ] `JWT_SECRET` configurado (mínimo 32 caracteres)
+- [ ] `API_KEY_HASH` configurado
+- [ ] `CORS_ORIGINS` configurado solo con tus dominios
+- [ ] Variables de entorno sensibles NO están en el código
+- [ ] HTTPS habilitado (automático en Railway y Vercel)
+- [ ] Rate limiting configurado
+- [ ] Logs de autenticación fallida activados
 
-## Scaling
+### Rotar Secretos
 
-### Horizontal Scaling
+**Cada 90 días, rota tus secretos:**
 
-```bash
-# Scale API instances
-docker-compose up -d --scale api=3
+1. **JWT_SECRET**:
 
-# Add load balancer (nginx/traefik)
-```
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
 
-### Vertical Scaling
+   Actualiza en Railway → Variables
 
-```yaml
-services:
-  api:
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 4G
-        reservations:
-          cpus: '1'
-          memory: 2G
-```
+2. **API_KEY_HASH**:
+   ```bash
+   pnpm run generate-api-key
+   ```
+   Actualiza en Railway → Variables
 
-## Troubleshooting
+---
 
-### API won't start
+## 📞 Soporte
 
-```bash
-# Check environment variables
-docker exec aethermind-api env | grep -E "DATABASE_URL|REDIS_URL"
+Si encuentras problemas:
 
-# Verify database connectivity
-docker exec aethermind-api node -e "require('@prisma/client').PrismaClient.$connect()"
+1. Revisa los logs en Railway y Vercel
+2. Verifica que todas las variables de entorno estén configuradas
+3. Consulta la documentación:
+   - [Railway Docs](https://docs.railway.app)
+   - [Vercel Docs](https://vercel.com/docs)
+   - [Next.js Deployment](https://nextjs.org/docs/deployment)
 
-# Check Redis
-docker exec redis redis-cli PING
-```
+---
 
-### Slow queries
+## ✅ Checklist Final
 
-```bash
-# Enable query logging (development)
-DATABASE_URL="postgresql://...?log=query" pnpm dev
+### Railway (Backend)
 
-# Check Prisma slow query logs
-docker logs aethermind-api | grep "Slow Query"
-```
+- [ ] Proyecto creado en Railway
+- [ ] PostgreSQL agregado y conectado
+- [ ] Redis agregado y conectado
+- [ ] Variables de entorno configuradas
+- [ ] `JWT_SECRET` generado y configurado
+- [ ] `API_KEY_HASH` generado y configurado
+- [ ] Migraciones de Prisma ejecutadas
+- [ ] Dominio personalizado configurado (opcional)
+- [ ] Health check respondiendo correctamente
 
-### High memory usage
+### Vercel (Frontend)
 
-```bash
-# Node.js heap snapshot
-docker exec aethermind-api node --expose-gc --inspect dist/index.js
+- [ ] Proyecto importado en Vercel
+- [ ] Build command configurado
+- [ ] Output directory configurado
+- [ ] `NEXT_PUBLIC_API_URL` configurado
+- [ ] Dominio personalizado configurado (opcional)
+- [ ] Landing page cargando correctamente
+- [ ] Llamadas al API funcionando
 
-# Restart with memory limit
-docker run --memory=2g aethermind-api:latest
-```
+### General
 
-## Security Checklist
+- [ ] Auto-deploy configurado en ambos servicios
+- [ ] CORS configurado correctamente
+- [ ] Monitoreo configurado
+- [ ] Backups de base de datos configurados (Railway automático)
+- [ ] Documentación actualizada
 
-- [ ] API_KEY_HASH configured in production
-- [ ] DATABASE_URL uses strong password
-- [ ] Redis password enabled (if exposed)
-- [ ] CORS_ORIGINS restricted to allowed domains
-- [ ] HTTPS/TLS terminated at load balancer
-- [ ] Container runs as non-root user
-- [ ] Sensitive env vars not in docker-compose.yml
-- [ ] Regular security audits: `pnpm audit`
+---
 
-## Production Checklist
+## 📚 Documentación Adicional (Docker Local)
 
-- [ ] Environment variables configured
-- [ ] Database migrated to latest schema
-- [ ] Backups automated and tested
-- [ ] Health checks responding
-- [ ] Logs centralized (e.g., CloudWatch, Datadog)
-- [ ] Monitoring alerts configured
-- [ ] Rollback procedure documented and tested
-- [ ] Load testing completed
-- [ ] Security audit passed
+Para despliegue local con Docker, consulta las secciones originales de este archivo sobre Docker Compose, backups y troubleshooting.
+
+¡Felicidades! 🎉 Tu AethermindOS está ahora desplegado en producción.

@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm turbo run build --filter=dashboard",
+  "buildCommand": "pnpm turbo run build --filter=@aethermind/dashboard",
   "installCommand": "pnpm install --frozen-lockfile",
   "outputDirectory": "packages/dashboard/.next",
   "framework": "nextjs",
@@ -9,3 +9,4 @@
     }
   }
 }
+
