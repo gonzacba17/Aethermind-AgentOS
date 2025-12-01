@@ -10,3 +10,6 @@ dist
 *.tsbuildinfo
 coverage
 .nyc_output
+
+.vercel
+.env*.local

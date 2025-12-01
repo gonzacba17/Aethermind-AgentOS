@@ -1,0 +1,13 @@
+apps/api/
+docker-compose.yml
+prisma/
+packages/core/
+packages/sdk/
+packages/vscode-extension/
+examples/
+scripts/
+tests/
+*.test.ts
+*.test.js
+*.spec.ts
+*.spec.js

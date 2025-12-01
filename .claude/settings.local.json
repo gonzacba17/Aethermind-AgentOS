@@ -59,7 +59,8 @@
       "Bash(timeout 120 pnpm validate:all)",
       "Bash(timeout 30 pnpm:*)",
       "Bash(bash:*)",
-      "Bash(docker start:*)"
+      "Bash(docker start:*)",
+      "Bash(npm --version)"
     ],
     "deny": []
   }

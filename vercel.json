@@ -1,0 +1,11 @@
+{
+  "buildCommand": "pnpm turbo run build --filter=dashboard",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": "packages/dashboard/.next",
+  "framework": "nextjs",
+  "functions": {
+    "apps/api/**": {
+      "excludeFiles": "**/*"
+    }
+  }
+}
