@@ -60,7 +60,9 @@
       "Bash(timeout 30 pnpm:*)",
       "Bash(bash:*)",
       "Bash(docker start:*)",
-      "Bash(npm --version)"
+      "Bash(npm --version)",
+      "Bash(diff:*)",
+      "Bash(git stash:*)"
     ],
     "deny": []
   }
