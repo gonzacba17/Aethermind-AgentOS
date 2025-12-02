@@ -13,7 +13,7 @@ COPY package.json pnpm-workspace.yaml ./
 COPY packages/core/package.json ./packages/core/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY apps/api/package.json ./apps/api/
-RUN pnpm install --offline --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Build de la aplicación
 FROM base AS builder
