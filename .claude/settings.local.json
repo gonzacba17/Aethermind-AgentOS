@@ -62,7 +62,8 @@
       "Bash(docker start:*)",
       "Bash(npm --version)",
       "Bash(diff:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(tree:*)"
     ],
     "deny": []
   }
