@@ -24,6 +24,9 @@ COPY --from=deps /app/packages/sdk/node_modules ./packages/sdk/node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY . .
 
+# Instalar tipos faltantes antes del build
+RUN pnpm add -D @types/jsonwebtoken --filter=@aethermind/api
+
 # Generar Prisma Client
 RUN pnpm prisma generate
 

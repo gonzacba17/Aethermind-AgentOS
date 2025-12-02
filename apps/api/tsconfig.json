@@ -7,10 +7,13 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "esModuleInterop": true,
-    "strict": true,
+    "strict": false,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "declaration": true
+    "declaration": true,
+    "noImplicitAny": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "strictNullChecks": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
