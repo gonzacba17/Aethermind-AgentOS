@@ -3,12 +3,14 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true,
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "target": "ES2020",
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
-    "strict": false,
+    "strict": true,
+    "resolveJsonModule": true,
     "noPropertyAccessFromIndexSignature": false
   },
   "include": ["src/**/*"],
