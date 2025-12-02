@@ -54,8 +54,8 @@ COPY --from=deps --chown=nodejs:nodejs /app/apps/api/node_modules ./apps/api/nod
 # Cambiar a usuario no-root
 USER nodejs
 
-# Directorio de trabajo para el API
-WORKDIR /app/apps/api
+# Mantener directorio de trabajo en la raíz del proyecto
+WORKDIR /app
 
 # Exponer puerto (Railway usa PORT env variable)
 EXPOSE 3001
@@ -65,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3001) + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
 # Comando de inicio con dumb-init
-CMD ["dumb-init", "node", "dist/index.js"]
+CMD ["dumb-init", "node", "apps/api/dist/index.js"]
