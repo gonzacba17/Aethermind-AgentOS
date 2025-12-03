@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd packages/dashboard && pnpm run build",
+  "buildCommand": "pnpm turbo run build --filter=@aethermind/dashboard",
   "outputDirectory": "packages/dashboard/.next",
   "installCommand": "pnpm install"
 }
