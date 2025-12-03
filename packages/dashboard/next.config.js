@@ -9,9 +9,8 @@ const nextConfig = {
       },
     ];
   },
-  // Enable standalone output for optimized deployment
   output: 'standalone',
-  // Disable API routes in production
+  distDir: '.next',
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',

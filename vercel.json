@@ -1,5 +1,15 @@
 {
-  "buildCommand": "pnpm turbo run build --filter=@aethermind/dashboard",
-  "outputDirectory": "packages/dashboard/.next",
-  "installCommand": "pnpm install"
+  "version": 2,
+  "builds": [
+    {
+      "src": "packages/dashboard/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "packages/dashboard/$1"
+    }
+  ]
 }
