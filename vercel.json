@@ -2,7 +2,5 @@
   "version": 2,
   "buildCommand": "pnpm turbo run build --filter=@aethermind/dashboard",
   "outputDirectory": "packages/dashboard/.next",
-  "installCommand": "pnpm install --frozen-lockfile",
-  "framework": null,
-  "devCommand": "pnpm turbo run dev --filter=@aethermind/dashboard"
+  "installCommand": "pnpm install --frozen-lockfile"
 }
