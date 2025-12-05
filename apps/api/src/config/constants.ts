@@ -16,7 +16,10 @@ export const DEFAULT_PORT = parseInt(process.env['PORT'] || '3001', 10);
 
 export const CORS_ORIGINS = process.env['CORS_ORIGINS']?.split(',') || [
   'http://localhost:3000',
-  'http://localhost:3001'
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'https://aethermind-page.vercel.app',
+  'https://aethermind-agent-os-dashboard.vercel.app'
 ];
 
 export const REDIS_URL = process.env['REDIS_URL'] || 'redis://localhost:6379';

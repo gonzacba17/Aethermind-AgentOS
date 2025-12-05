@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Pause, Play, Trash2 } from 'lucide-react';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import type { LogEntry } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDate, getWebSocketUrl } from '@/lib/utils';
 
 interface LogViewerProps {
   initialLogs?: LogEntry[];
@@ -34,9 +34,7 @@ export function LogViewer({ initialLogs = [], maxLogs = 200 }: LogViewerProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [filter, setFilter] = useState<LogEntry['level'] | 'all'>('all');
   const containerRef = useRef<HTMLDivElement>(null);
-  const wsUrl = typeof window !== 'undefined' 
-    ? `ws://${window.location.hostname}:3001/ws` 
-    : '';
+  const wsUrl = getWebSocketUrl();
 
   const { subscribe, isConnected } = useWebSocket(wsUrl);
 
