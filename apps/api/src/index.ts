@@ -68,16 +68,27 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 const runtime = createRuntime();
 
-// Initialize TaskQueueService with Redis
-const redisUrl = new URL(REDIS_URL);
-const queueService = new TaskQueueService('aethermind-tasks', {
-  redis: {
-    host: redisUrl.hostname,
-    port: parseInt(redisUrl.port) || 6379,
-  }
-});
+let queueService: TaskQueueService | null = null;
 
-const orchestrator = createOrchestrator(runtime, queueService);
+if (REDIS_URL) {
+  try {
+    const redisUrl = new URL(REDIS_URL);
+    queueService = new TaskQueueService('aethermind-tasks', {
+      redis: {
+        host: redisUrl.hostname,
+        port: parseInt(redisUrl.port) || 6379,
+      }
+    });
+    console.log('✅ TaskQueueService initialized with Redis');
+  } catch (error) {
+    console.warn('⚠️ Failed to initialize TaskQueueService with Redis:', (error as Error).message);
+    console.warn('⚠️ Queue functionality will be disabled');
+  }
+} else {
+  console.log('ℹ️ REDIS_URL not configured - Queue functionality disabled');
+}
+
+const orchestrator = createOrchestrator(runtime, queueService!);
 const workflowEngine = createWorkflowEngine(orchestrator);
 const wsManager = new WebSocketManager(wss, verifyApiKey);
 
@@ -86,12 +97,18 @@ let prismaStore: PrismaStore | null = null;
 
 async function initializeCache(): Promise<void> {
   if (authCache.isEnabled()) {
-    const connected = await authCache.connect();
-    if (connected) {
-      console.log('Redis cache connected for auth optimization');
-    } else {
-      console.warn('Redis cache disabled - auth will use bcrypt on every request');
+    try {
+      const connected = await authCache.connect();
+      if (connected) {
+        console.log('✅ Redis cache connected for auth optimization');
+      } else {
+        console.warn('⚠️ Redis cache disabled - auth will use bcrypt on every request');
+      }
+    } catch (error) {
+      console.warn('⚠️ Redis cache connection failed - auth will use bcrypt on every request');
     }
+  } else {
+    console.log('ℹ️ Redis cache not configured - auth will use bcrypt on every request');
   }
 }
 
@@ -193,6 +210,8 @@ async function startServer(): Promise<void> {
       status: 'ok',
       timestamp: new Date().toISOString(),
       storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
+      redis: authCache.isConnected() ? 'connected' : 'disconnected',
+      queue: queueService ? 'enabled' : 'disabled',
     });
   });
 
@@ -219,6 +238,8 @@ async function startServer(): Promise<void> {
       status: 'ok',
       timestamp: new Date().toISOString(),
       storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
+      redis: authCache.isConnected() ? 'connected' : 'disconnected',
+      queue: queueService ? 'enabled' : 'disabled',
       authenticated: true,
     });
   });
@@ -261,32 +282,50 @@ async function startServer(): Promise<void> {
   const PORT = DEFAULT_PORT;
 
   server.listen(PORT, () => {
-    console.log(`\nAethermind API server running on port ${PORT}`);
-    console.log(`WebSocket server running on ws://localhost:${PORT}/ws`);
+    console.log(`\n✅ Aethermind API server running on port ${PORT}`);
+    console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
     console.log(`Health check: http://localhost:${PORT}/health`);
     console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
+    console.log(`Redis: ${authCache.isConnected() ? 'Connected' : 'Disconnected'}`);
+    console.log(`Queue: ${queueService ? 'Enabled' : 'Disabled'}`);
     console.log(`Auth: ${process.env['API_KEY_HASH'] ? 'Enabled' : 'Disabled (set API_KEY_HASH to enable)'}\n`);
   });
 }
 
 process.on('SIGINT', async () => {
   console.log('\nShutting down...');
-  await orchestrator.shutdown();
+  try {
+    await orchestrator.shutdown();
+  } catch (error) {
+    console.warn('⚠️ Error during orchestrator shutdown:', (error as Error).message);
+  }
   if (prismaStore) {
     await prismaStore.close();
   }
-  await authCache.close();
+  try {
+    await authCache.close();
+  } catch (error) {
+    console.warn('⚠️ Error closing auth cache:', (error as Error).message);
+  }
   server.close();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('\nShutting down...');
-  await orchestrator.shutdown();
+  try {
+    await orchestrator.shutdown();
+  } catch (error) {
+    console.warn('⚠️ Error during orchestrator shutdown:', (error as Error).message);
+  }
   if (prismaStore) {
     await prismaStore.close();
   }
-  await authCache.close();
+  try {
+    await authCache.close();
+  } catch (error) {
+    console.warn('⚠️ Error closing auth cache:', (error as Error).message);
+  }
   server.close();
   process.exit(0);
 });

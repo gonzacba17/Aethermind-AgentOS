@@ -28,14 +28,14 @@ export class Orchestrator {
   private emitter: EventEmitter.EventEmitter;
   private logger: StructuredLogger;
   private workflows: Map<string, WorkflowDefinition> = new Map();
-  private taskQueueService: TaskQueueService;
+  private taskQueueService: TaskQueueService | null;
   private pendingTasks: Map<string, PendingTask> = new Map();
   private traces: Map<string, Trace> = new Map();
   private costs: CostInfo[] = [];
 
   constructor(
     runtime: AgentRuntime,
-    queueService: TaskQueueService,
+    queueService: TaskQueueService | null,
     config: Partial<OrchestratorConfig> = {}
   ) {
     this.runtime = runtime;
@@ -44,7 +44,9 @@ export class Orchestrator {
     this.logger = new StructuredLogger({}, this.emitter);
     this.taskQueueService = queueService;
     this.setupEventListeners();
-    this.setupQueueProcessing();
+    if (this.taskQueueService) {
+      this.setupQueueProcessing();
+    }
   }
 
   private setupEventListeners(): void {
@@ -67,6 +69,19 @@ export class Orchestrator {
   }
 
   async executeTask(agentId: string, input: unknown, priority = 0): Promise<ExecutionResult> {
+    if (!this.taskQueueService) {
+      this.logger.warn('Task queue not available, executing task synchronously');
+      const task: TaskQueueItem = {
+        id: uuid(),
+        type: 'agent-execution',
+        data: { agentId, input },
+        priority,
+        timestamp: Date.now(),
+      };
+      await this.processTask(task);
+      return { success: true, output: 'Task executed synchronously without queue' };
+    }
+
     return new Promise(async (resolve, reject) => {
       const taskId = uuid();
       const task: TaskQueueItem = {
@@ -77,7 +92,6 @@ export class Orchestrator {
         timestamp: Date.now(),
       };
 
-      // Store promise handlers
       this.pendingTasks.set(taskId, { resolve, reject });
 
       try {
@@ -91,6 +105,8 @@ export class Orchestrator {
   }
 
   private setupQueueProcessing(): void {
+    if (!this.taskQueueService) return;
+    
     this.taskQueueService.onProcess(async (job) => {
       await this.processTask(job.data);
     });
@@ -319,24 +335,47 @@ export class Orchestrator {
   }
 
   async getQueueLength(): Promise<number> {
-    const stats = await this.taskQueueService.getStats();
-    return stats.waiting + stats.active;
+    if (!this.taskQueueService) {
+      this.logger.warn('Task queue not available');
+      return 0;
+    }
+    try {
+      const stats = await this.taskQueueService.getStats();
+      return stats.waiting + stats.active;
+    } catch (error) {
+      this.logger.warn('Failed to get queue length:', error);
+      return 0;
+    }
   }
 
   async getQueueMetrics(): Promise<TaskQueueStats> {
-    return await this.taskQueueService.getStats();
+    if (!this.taskQueueService) {
+      return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+    }
+    try {
+      return await this.taskQueueService.getStats();
+    } catch (error) {
+      this.logger.warn('Failed to get queue metrics:', error);
+      return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+    }
   }
 
   async shutdown(): Promise<void> {
     this.logger.info('Shutting down orchestrator...');
-    await this.taskQueueService.close();
+    if (this.taskQueueService) {
+      try {
+        await this.taskQueueService.close();
+      } catch (error) {
+        this.logger.warn('Error closing task queue:', error);
+      }
+    }
     this.pendingTasks.clear();
   }
 }
 
 export function createOrchestrator(
   runtime: AgentRuntime,
-  queueService: TaskQueueService,
+  queueService: TaskQueueService | null,
   config?: Partial<OrchestratorConfig>
 ): Orchestrator {
   return new Orchestrator(runtime, queueService, config);

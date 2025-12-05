@@ -9,6 +9,7 @@ export class RedisCache {
   private redis: Redis | null = null;
   private prefix: string;
   private enabled: boolean;
+  private isAvailable: boolean = false;
 
   constructor(redisUrl?: string, prefix: string = 'cache') {
     this.prefix = prefix;
@@ -20,19 +21,40 @@ export class RedisCache {
           maxRetriesPerRequest: 3,
           enableOfflineQueue: false,
           lazyConnect: true,
-        });
-
-        this.redis.on('error', (err) => {
-          console.error('Redis cache error:', err);
+          retryStrategy(times) {
+            if (times > 3) {
+              console.warn(`⚠️ Redis connection failed after 3 retries (${prefix})`);
+              return null;
+            }
+            return Math.min(times * 100, 2000);
+          },
+          reconnectOnError(err) {
+            console.warn(`⚠️ Redis reconnect error (${prefix}):`, err.message);
+            return false;
+          }
         });
 
         this.redis.on('connect', () => {
-          console.log('Redis cache connected');
+          console.log(`✅ Redis connected successfully (${prefix})`);
+          this.isAvailable = true;
+        });
+
+        this.redis.on('error', (err) => {
+          console.warn(`⚠️ Redis error (${prefix}):`, err.message);
+          this.isAvailable = false;
+        });
+
+        this.redis.on('close', () => {
+          console.warn(`⚠️ Redis connection closed (${prefix})`);
+          this.isAvailable = false;
         });
       } catch (error) {
-        console.warn('Failed to initialize Redis cache:', error);
+        console.warn(`⚠️ Redis initialization failed (${prefix}), running without cache`);
         this.enabled = false;
+        this.redis = null;
       }
+    } else {
+      console.log(`ℹ️ REDIS_URL not configured for ${prefix}, running without Redis (cache disabled)`);
     }
   }
 
@@ -41,10 +63,12 @@ export class RedisCache {
 
     try {
       await this.redis.connect();
+      this.isAvailable = true;
       return true;
     } catch (error) {
-      console.warn('Redis cache connection failed:', error);
+      console.warn(`⚠️ Redis cache connection failed (${this.prefix}):`, error);
       this.enabled = false;
+      this.isAvailable = false;
       return false;
     }
   }
@@ -54,7 +78,7 @@ export class RedisCache {
   }
 
   async get<T = string>(key: string): Promise<T | null> {
-    if (!this.enabled || !this.redis) return null;
+    if (!this.enabled || !this.redis || !this.isAvailable) return null;
 
     try {
       const value = await this.redis.get(this.getKey(key));
@@ -66,13 +90,14 @@ export class RedisCache {
         return value as T;
       }
     } catch (error) {
-      console.error('Redis get error:', error);
+      console.warn(`⚠️ Redis get error (${this.prefix}), continuing without cache:`, (error as Error).message);
+      this.isAvailable = false;
       return null;
     }
   }
 
   async set(key: string, value: unknown, ttl?: number): Promise<boolean> {
-    if (!this.enabled || !this.redis) return false;
+    if (!this.enabled || !this.redis || !this.isAvailable) return false;
 
     try {
       const serialized = typeof value === 'string' ? value : JSON.stringify(value);
@@ -85,37 +110,40 @@ export class RedisCache {
       
       return true;
     } catch (error) {
-      console.error('Redis set error:', error);
+      console.warn(`⚠️ Redis set error (${this.prefix}), continuing without cache:`, (error as Error).message);
+      this.isAvailable = false;
       return false;
     }
   }
 
   async del(key: string): Promise<boolean> {
-    if (!this.enabled || !this.redis) return false;
+    if (!this.enabled || !this.redis || !this.isAvailable) return false;
 
     try {
       await this.redis.del(this.getKey(key));
       return true;
     } catch (error) {
-      console.error('Redis del error:', error);
+      console.warn(`⚠️ Redis del error (${this.prefix}), continuing without cache:`, (error as Error).message);
+      this.isAvailable = false;
       return false;
     }
   }
 
   async has(key: string): Promise<boolean> {
-    if (!this.enabled || !this.redis) return false;
+    if (!this.enabled || !this.redis || !this.isAvailable) return false;
 
     try {
       const exists = await this.redis.exists(this.getKey(key));
       return exists === 1;
     } catch (error) {
-      console.error('Redis exists error:', error);
+      console.warn(`⚠️ Redis exists error (${this.prefix}), continuing without cache:`, (error as Error).message);
+      this.isAvailable = false;
       return false;
     }
   }
 
   async invalidatePattern(pattern: string): Promise<number> {
-    if (!this.enabled || !this.redis) return 0;
+    if (!this.enabled || !this.redis || !this.isAvailable) return 0;
 
     try {
       const keys = await this.redis.keys(this.getKey(pattern));
@@ -124,18 +152,27 @@ export class RedisCache {
       await this.redis.del(...keys);
       return keys.length;
     } catch (error) {
-      console.error('Redis invalidatePattern error:', error);
+      console.warn(`⚠️ Redis invalidatePattern error (${this.prefix}), continuing without cache:`, (error as Error).message);
+      this.isAvailable = false;
       return 0;
     }
   }
 
   async close(): Promise<void> {
     if (this.redis) {
-      await this.redis.quit();
+      try {
+        await this.redis.quit();
+      } catch (error) {
+        console.warn(`⚠️ Error closing Redis connection (${this.prefix}):`, (error as Error).message);
+      }
     }
   }
 
   isEnabled(): boolean {
     return this.enabled;
+  }
+
+  isConnected(): boolean {
+    return this.isAvailable;
   }
 }
