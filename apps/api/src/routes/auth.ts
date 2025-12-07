@@ -2,18 +2,23 @@ import { Router, Request, Response } from 'express';
 import type { Router as ExpressRouter } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import rateLimit from 'express-rate-limit';
+import { prisma } from '../lib/prisma';
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many authentication attempts, please try again after 15 minutes',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
 
 const router: ExpressRouter = Router();
-const prisma = new PrismaClient();
 
-// Validate JWT_SECRET in production
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET must be set and at least 32 characters in production');
-  }
-  console.warn('⚠️  Using default JWT_SECRET - NOT SAFE FOR PRODUCTION');
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-super-secret-jwt-key-change-in-production' || process.env.JWT_SECRET.length < 32) {
+  throw new Error('SECURITY: JWT_SECRET must be set and be at least 32 characters in production');
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production-min-32-chars';
@@ -39,7 +44,7 @@ interface ResetPasswordBody {
   password: string;
 }
 
-router.post('/signup', async (req: Request, res: Response) => {
+router.post('/signup', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body as SignupBody;
 
@@ -92,7 +97,7 @@ router.post('/signup', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body as LoginBody;
 
@@ -163,7 +168,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/reset-request', async (req: Request, res: Response) => {
+router.post('/reset-request', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email } = req.body as ResetRequestBody;
 
@@ -194,7 +199,7 @@ router.post('/reset-request', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/reset-password', async (req: Request, res: Response) => {
+router.post('/reset-password', authLimiter, async (req: Request, res: Response) => {
   try {
     const { token, password } = req.body as ResetPasswordBody;
 

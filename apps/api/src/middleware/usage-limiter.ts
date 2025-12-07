@@ -1,8 +1,6 @@
 import { Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from './jwt-auth.js';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 const PLAN_LIMITS = {
   free: 100,

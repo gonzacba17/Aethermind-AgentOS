@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import { initSentry, Sentry } from './lib/sentry';
+
+initSentry();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -63,6 +67,10 @@ const limiter = rateLimit({
 });
 
 const app = express();
+
+app.use(Sentry.Handlers.requestHandler());
+app.use(Sentry.Handlers.tracingHandler());
+
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
@@ -88,7 +96,7 @@ if (REDIS_URL) {
   console.log('ℹ️ REDIS_URL not configured - Queue functionality disabled');
 }
 
-const orchestrator = createOrchestrator(runtime, queueService!);
+const orchestrator = createOrchestrator(runtime, queueService ?? null);
 const workflowEngine = createWorkflowEngine(orchestrator);
 const wsManager = new WebSocketManager(wss, verifyApiKey);
 
@@ -205,16 +213,6 @@ async function startServer(): Promise<void> {
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
-  app.get('/health', (_req, res) => {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
-      redis: authCache.isConnected() ? 'connected' : 'disconnected',
-      queue: queueService ? 'enabled' : 'disabled',
-    });
-  });
-
   app.get('/api/openapi', (_req, res) => {
     res.sendFile('/docs/openapi.yaml', { root: process.cwd() });
   });
@@ -251,6 +249,8 @@ async function startServer(): Promise<void> {
   app.use('/api/costs', costRoutes);
   app.use('/api/workflows', workflowRoutes);
 
+  app.use(Sentry.Handlers.errorHandler());
+
   app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const isProduction = process.env['NODE_ENV'] === 'production';
 
@@ -284,7 +284,7 @@ async function startServer(): Promise<void> {
   server.listen(PORT, () => {
     console.log(`\n✅ Aethermind API server running on port ${PORT}`);
     console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
-    console.log(`Health check: http://localhost:${PORT}/health`);
+    console.log(`Health check: http://localhost:${PORT}/api/health`);
     console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
     console.log(`Redis: ${authCache.isConnected() ? 'Connected' : 'Disconnected'}`);
     console.log(`Queue: ${queueService ? 'Enabled' : 'Disabled'}`);

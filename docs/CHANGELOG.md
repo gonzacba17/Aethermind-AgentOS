@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**P0 Critical Improvements (2025-12-07)**
+
+- GitHub Actions CI/CD pipeline with automated tests
+- Sentry integration for error tracking and monitoring
+- Rate limiting on authentication endpoints (5 attempts per 15 minutes)
+- PrismaClient singleton pattern to prevent connection pool exhaustion
+- Sentry DSN configuration in environment files
+
+### Changed
+
+**P0 Critical Improvements (2025-12-07)**
+
+- JWT_SECRET now throws error if weak or missing in production
+- Frozen lockfile enforced in Railway deployments
+- Consolidated health check endpoints (removed duplicate /health)
+- PrismaClient refactored to singleton pattern in `apps/api/src/lib/prisma.ts`
+
+### Fixed
+
+**P0 Critical Improvements (2025-12-07)**
+
+- Fixed non-null assertion in orchestrator initialization (changed to `?? null`)
+- Fixed multiple PrismaClient instances causing memory leaks
+- Fixed potential brute force vulnerability in auth endpoints
+
+### Security
+
+**P0 Critical Improvements (2025-12-07)**
+
+- Enhanced JWT secret validation (minimum 32 characters, throws error in production)
+- Added rate limiting to prevent brute force attacks on auth routes
+- Improved error tracking with Sentry integration
+- Singleton pattern for PrismaClient prevents connection pool exhaustion
+
+---
+
 ### Added (Sprints 1-4)
 
 **Testing Infrastructure (Sprint 1)**

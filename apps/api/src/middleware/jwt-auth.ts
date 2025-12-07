@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma';
 
 // Validate JWT_SECRET in production
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {

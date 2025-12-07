@@ -63,7 +63,8 @@
       "Bash(npm --version)",
       "Bash(diff:*)",
       "Bash(git stash:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(touch:*)"
     ],
     "deny": []
   }
