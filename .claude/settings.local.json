@@ -64,7 +64,9 @@
       "Bash(diff:*)",
       "Bash(git stash:*)",
       "Bash(tree:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(dos2unix:*)",
+      "Bash(curl:*)"
     ],
     "deny": []
   }

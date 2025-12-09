@@ -20,7 +20,7 @@ import authRoutes from './routes/auth';
 import { WebSocketManager } from './websocket/WebSocketManager';
 import { InMemoryStore } from './services/InMemoryStore';
 import { PrismaStore } from './services/PrismaStore';
-import { RedisCache } from './services/RedisCache';
+import redisCache from './services/RedisCache';
 import type { StoreInterface } from './services/PostgresStore';
 import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth';
 import { sanitizeLog, sanitizeObject } from './utils/sanitizer';
@@ -43,7 +43,7 @@ if (process.env['NODE_ENV'] === 'production' && !process.env['API_KEY_HASH']) {
   process.exit(1);
 }
 
-const authCache = new RedisCache(REDIS_URL, 'auth');
+const authCache = redisCache;
 
 configureAuth({
   apiKeyHash: process.env['API_KEY_HASH'],
@@ -104,17 +104,8 @@ let store: StoreInterface;
 let prismaStore: PrismaStore | null = null;
 
 async function initializeCache(): Promise<void> {
-  if (authCache.isEnabled()) {
-    try {
-      const connected = await authCache.connect();
-      if (connected) {
-        console.log('✅ Redis cache connected for auth optimization');
-      } else {
-        console.warn('⚠️ Redis cache disabled - auth will use bcrypt on every request');
-      }
-    } catch (error) {
-      console.warn('⚠️ Redis cache connection failed - auth will use bcrypt on every request');
-    }
+  if (authCache.isConnected()) {
+    console.log('✅ Redis cache connected for auth optimization');
   } else {
     console.log('ℹ️ Redis cache not configured - auth will use bcrypt on every request');
   }
