@@ -79,7 +79,15 @@ export class Orchestrator {
         timestamp: Date.now(),
       };
       await this.processTask(task);
-      return { success: true, output: 'Task executed synchronously without queue' };
+      return {
+        executionId: task.id,
+        agentId,
+        status: 'completed',
+        output: 'Task executed synchronously without queue',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        duration: 0,
+      };
     }
 
     return new Promise(async (resolve, reject) => {
@@ -95,7 +103,7 @@ export class Orchestrator {
       this.pendingTasks.set(taskId, { resolve, reject });
 
       try {
-        await this.taskQueueService.addTask(task, { jobId: taskId, priority });
+        await this.taskQueueService!.addTask(task, { jobId: taskId, priority });
         this.logger.debug(`Task queued: ${taskId}`, { agentId, priority });
       } catch (error) {
         this.pendingTasks.delete(taskId);
@@ -343,7 +351,7 @@ export class Orchestrator {
       const stats = await this.taskQueueService.getStats();
       return stats.waiting + stats.active;
     } catch (error) {
-      this.logger.warn('Failed to get queue length:', error);
+      this.logger.warn('Failed to get queue length:', error instanceof Error ? { error: error.message } : { error });
       return 0;
     }
   }
@@ -355,7 +363,7 @@ export class Orchestrator {
     try {
       return await this.taskQueueService.getStats();
     } catch (error) {
-      this.logger.warn('Failed to get queue metrics:', error);
+      this.logger.warn('Failed to get queue metrics:', error instanceof Error ? { error: error.message } : { error });
       return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
     }
   }
@@ -366,7 +374,7 @@ export class Orchestrator {
       try {
         await this.taskQueueService.close();
       } catch (error) {
-        this.logger.warn('Error closing task queue:', error);
+        this.logger.warn('Error closing task queue:', error instanceof Error ? { error: error.message } : { error });
       }
     }
     this.pendingTasks.clear();

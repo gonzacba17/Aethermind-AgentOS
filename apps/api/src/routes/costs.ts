@@ -67,7 +67,7 @@ router.get('/summary', async (req, res) => {
     };
 
     if (req.cache) {
-      await req.cache.set(cacheKey, summary, 60);
+      await req.cache.set(cacheKey, JSON.stringify(summary), 60);
     }
 
     res.json(summary);

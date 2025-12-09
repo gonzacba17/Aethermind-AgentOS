@@ -59,7 +59,7 @@ export async function authMiddleware(
     const cacheKey = `auth:${keyHash}`;
 
     if (authConfig.cache) {
-      const cached = await authConfig.cache.get<string>(cacheKey);
+      const cached = await authConfig.cache.get(cacheKey);
       if (cached === '1') {
         next();
         return;

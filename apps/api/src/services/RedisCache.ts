@@ -107,9 +107,20 @@ class RedisCache {
   isConnected(): boolean {
     return isAvailable;
   }
+
+  async close(): Promise<void> {
+    if (redis) {
+      try {
+        await redis.quit();
+        console.log('✅ Redis connection closed gracefully');
+      } catch (error) {
+        console.warn('⚠️ Error closing Redis connection:', error);
+      }
+    }
+  }
 }
 
 const cache = new RedisCache();
 
 export default cache;
-export { redis, isAvailable };
+export { RedisCache, redis, isAvailable };

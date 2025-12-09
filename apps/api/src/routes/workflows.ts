@@ -46,7 +46,7 @@ router.get('/:name', async (req, res) => {
   }
 
   if (req.cache) {
-    await req.cache.set(cacheKey, workflow, 300);
+    await req.cache.set(cacheKey, JSON.stringify(workflow), 300);
   }
 
   res.json(workflow);

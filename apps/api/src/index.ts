@@ -20,7 +20,7 @@ import authRoutes from './routes/auth';
 import { WebSocketManager } from './websocket/WebSocketManager';
 import { InMemoryStore } from './services/InMemoryStore';
 import { PrismaStore } from './services/PrismaStore';
-import redisCache from './services/RedisCache';
+import redisCache, { RedisCache } from './services/RedisCache';
 import type { StoreInterface } from './services/PostgresStore';
 import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth';
 import { sanitizeLog, sanitizeObject } from './utils/sanitizer';
