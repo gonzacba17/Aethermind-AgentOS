@@ -81,23 +81,9 @@ const runtime = createRuntime();
 
 let queueService: TaskQueueService | null = null;
 
-if (REDIS_URL) {
-  try {
-    const redisUrl = new URL(REDIS_URL);
-    queueService = new TaskQueueService('aethermind-tasks', {
-      redis: {
-        host: redisUrl.hostname,
-        port: parseInt(redisUrl.port) || 6379,
-      }
-    });
-    console.log('✅ TaskQueueService initialized with Redis');
-  } catch (error) {
-    console.warn('⚠️ Failed to initialize TaskQueueService with Redis:', (error as Error).message);
-    console.warn('⚠️ Queue functionality will be disabled');
-  }
-} else {
-  console.log('ℹ️ REDIS_URL not configured - Queue functionality disabled');
-}
+// Redis/Queue is completely disabled for now
+console.log('ℹ️ Redis/Queue functionality is disabled - using in-memory processing');
+queueService = null;
 
 const orchestrator = createOrchestrator(runtime, queueService ?? null);
 const workflowEngine = createWorkflowEngine(orchestrator);
