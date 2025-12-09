@@ -178,7 +178,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Next.js](https://nextjs.org/) - Dashboard framework
 - [PostgreSQL](https://www.postgresql.org/) - Primary database
 - [Prisma](https://www.prisma.io/) - ORM and migrations (v6.19.0)
-- [Redis](https://redis.io/) - Caching and pub/sub
+- [Redis](https://redis.io/) - Caching and pub/sub (optional, with graceful fallback)
 - [Turborepo](https://turbo.build/) - Monorepo build system
 - [pnpm](https://pnpm.io/) - Fast, disk space efficient package manager
 

@@ -45,6 +45,9 @@ if (process.env['NODE_ENV'] === 'production' && !process.env['API_KEY_HASH']) {
 
 const authCache = redisCache;
 
+console.log(`\n🔧 Initializing Aethermind API...`);
+console.log(`Cache status: ${authCache.isAvailable() ? '✅ Redis connected' : '⚠️  Redis unavailable (using fallback)'}`);
+
 configureAuth({
   apiKeyHash: process.env['API_KEY_HASH'],
   enabled: process.env['NODE_ENV'] === 'production' || !!process.env['API_KEY_HASH'],
