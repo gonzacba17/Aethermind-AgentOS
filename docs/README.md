@@ -165,22 +165,28 @@ Open http://localhost:3000 in your browser.
 
 ## 📚 Documentation
 
-### Available Documentation
+### Core Documentation
 
+- **[Installation Guide](INSTALLATION.md)** - Detailed installation instructions
+- **[API Documentation](API.md)** - REST API reference
+- **[Architecture](ARCHITECTURE.md)** - Technical architecture overview
+- **[Development Guide](DEVELOPMENT.md)** - Contributing and development setup
+- **[Deployment Guide](DEPLOYMENT.md)** - Production deployment instructions
 - **[Project Structure](ESTRUCTURA.md)** - Complete architecture overview and codebase organization
-- **[Changelog](CHANGELOG.md)** - Version history and release notes
-- **[Development History](CHANGELOG_DEV_HISTORY.md)** - Detailed sprint-by-sprint development log
+
+### Operational
+
+- **[Technical Audit](AUDITORIA_TECNICA.md)** - Security, performance, and code quality assessment
+- **[Security Policy](SECURITY.md)** - Security best practices and vulnerability reporting
+- **[Testing Guide](TESTING.md)** - Test suite documentation
+- **[FAQ](FAQ.md)** - Frequently asked questions
+
+### Planning & History
+
 - **[Roadmap](roadmap.md)** - Strategic roadmap and future plans (2025+)
-- **[Technical Audit](auditoria_tecnica.md)** - Comprehensive technical audit findings
-
-### Additional Documentation (Coming Soon)
-
-- **Testing Guide** - How to run and write tests
-- **Validation Checklist** - Complete feature checklist for QA
-- **Beta Testing Guide** - Guide for beta testers
-- **Debugging Guide** - Debugging with source maps and VSCode
-- **Error Codes Reference** - Complete error codes documentation
-- **Quick Start Guide** - Fastest path to your first agent
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
+- **[Planned Features](planned-features/)** - Features in development or planned
+- **[Technical Changes Archive](archive/technical-changes/)** - Historical technical decisions
 
 ## 🛠️ Developer Tools
 

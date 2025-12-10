@@ -121,14 +121,25 @@ console.log(result);
 
 ## 📚 Documentation
 
+### Core Documentation
 - **[User Guide](docs/README.md)** - Complete user documentation
 - **[Installation Guide](docs/INSTALLATION.md)** - Detailed installation instructions
 - **[API Documentation](docs/API.md)** - REST API reference
 - **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture overview
 - **[Development Guide](docs/DEVELOPMENT.md)** - Contributing and development setup
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
-- **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
+
+### Operational
+- **[Technical Audit](docs/AUDITORIA_TECNICA.md)** - Security, performance, and code quality assessment
+- **[Security Policy](docs/SECURITY.md)** - Security best practices and vulnerability reporting
+- **[Testing Guide](docs/TESTING.md)** - Test suite documentation
+- **[FAQ](docs/FAQ.md)** - Frequently asked questions
+
+### Planning & History
 - **[Roadmap](docs/roadmap.md)** - Future plans and features
+- **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
+- **[Planned Features](docs/planned-features/)** - Features in development or planned
+- **[Technical Changes Archive](docs/archive/technical-changes/)** - Historical technical decisions
 
 ## 🧪 Testing
 

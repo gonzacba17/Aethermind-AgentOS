@@ -1,5 +1,9 @@
 # JWT Authentication
 
+> ⚠️ **PARTIALLY IMPLEMENTED** - Basic API Key authentication is currently working.  
+> JWT authentication endpoints are documented here but not fully implemented yet.  
+> Current status: API Key auth via `X-API-Key` header is the recommended method.
+
 AethermindOS now supports JWT-based authentication in addition to API Keys.
 
 ## Overview

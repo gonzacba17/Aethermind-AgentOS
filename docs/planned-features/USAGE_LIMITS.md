@@ -1,5 +1,8 @@
 # Usage Limits
 
+> ⚠️ **PLANNED FEATURE** - Not yet implemented. This feature is planned for Q1 2026.  
+> See [../roadmap.md](../roadmap.md) for implementation timeline.
+
 AethermindOS enforces execution limits based on subscription plans.
 
 ## Plans
