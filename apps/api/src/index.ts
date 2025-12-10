@@ -197,6 +197,17 @@ async function startServer(): Promise<void> {
     res.sendFile('/docs/openapi.yaml', { root: process.cwd() });
   });
 
+  // Public health check endpoint (no authentication required)
+  app.get('/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
+      redis: authCache.isConnected() ? 'connected' : 'disconnected',
+      queue: queueService ? 'enabled' : 'disabled',
+    });
+  });
+
   app.use('/api/auth', authRoutes);
 
   app.use('/api', authMiddleware);
@@ -209,17 +220,6 @@ async function startServer(): Promise<void> {
     req.wsManager = wsManager;
     req.cache = authCache;
     next();
-  });
-
-  app.get('/api/health', (_req, res) => {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
-      redis: authCache.isConnected() ? 'connected' : 'disconnected',
-      queue: queueService ? 'enabled' : 'disabled',
-      authenticated: true,
-    });
   });
 
   app.use('/api/agents', agentRoutes);
@@ -264,7 +264,7 @@ async function startServer(): Promise<void> {
   server.listen(PORT, () => {
     console.log(`\n✅ Aethermind API server running on port ${PORT}`);
     console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
-    console.log(`Health check: http://localhost:${PORT}/api/health`);
+    console.log(`Health check: http://localhost:${PORT}/health (public)`);
     console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
     console.log(`Redis: ${authCache.isConnected() ? 'Connected' : 'Disconnected'}`);
     console.log(`Queue: ${queueService ? 'Enabled' : 'Disabled'}`);
