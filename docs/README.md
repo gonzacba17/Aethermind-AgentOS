@@ -521,11 +521,7 @@ docker exec -i postgres psql -U postgres -c "SELECT 1"
 
 ## 🗺️ Related Documentation
 
-- **[Changelog](CHANGELOG.md)** - Release history and version notes
-- **[Development History](CHANGELOG_DEV_HISTORY.md)** - Detailed sprint logs (v0.2.0-0.6.0)
-- **[Roadmap](roadmap.md)** - Strategic roadmap and future features (2025+)
-- **[Project Structure](ESTRUCTURA.md)** - Complete architecture and codebase overview
-- **[Technical Audit](auditoria_tecnica.md)** - Security and quality assessment
+See the [📚 Documentation](#-documentation) section above for the complete documentation index organized by category (Core, Operational, Planning & History).
 
 ## 🤝 Contributing
 
