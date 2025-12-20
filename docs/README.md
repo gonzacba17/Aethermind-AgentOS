@@ -174,6 +174,12 @@ Open http://localhost:3000 in your browser.
 - **[Deployment Guide](DEPLOYMENT.md)** - Production deployment instructions
 - **[Project Structure](ESTRUCTURA.md)** - Complete architecture overview and codebase organization
 
+### Subdirectory Index
+
+- **[Audits](audits/)** - Production and technical audit reports
+- **[Planned Features](planned-features/)** - Features in development or planned
+- **[Technical Changes Archive](archive/technical-changes/)** - Historical technical decisions
+
 ### Operational
 
 - **[Technical Audit](AUDITORIA_TECNICA.md)** - Security, performance, and code quality assessment

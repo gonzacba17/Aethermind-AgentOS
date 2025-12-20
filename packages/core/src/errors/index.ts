@@ -6,3 +6,5 @@ export {
     AgentError,
     AuthError,
 } from './AethermindError.js';
+
+export { BudgetExceededError } from './BudgetExceededError.js';

@@ -1,0 +1,14 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 60% # Current coverage threshold
+        threshold: 2% # Allow 2% decrease before failing
+    patch:
+      default:
+        target: 70% # New code should have 70%+ coverage
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false

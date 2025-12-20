@@ -25,29 +25,26 @@ export const ExecuteAgentSchema = z.object({
   stream: z.boolean().optional(),
 });
 
+// Workflow step schema
+export const WorkflowStepSchema = z.object({
+  id: z.string().min(1, 'Step ID is required'),
+  agent: z.string().min(1, 'Agent name is required'),
+  input: z.unknown().optional(),
+  dependsOn: z.array(z.string()).optional(),
+  next: z.union([z.string(), z.array(z.string())]).optional(),
+  parallel: z.boolean().optional(),
+});
+
 export const CreateWorkflowSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255, 'Name must be less than 255 characters'),
   description: z.string().optional(),
-  steps: z.array(
-    z.object({
-      id: z.string().min(1, 'Step ID is required'),
-      agent: z.string().min(1, 'Agent name is required'),
-      input: z.unknown().optional(),
-      dependsOn: z.array(z.string()).optional(),
-    })
-  ).min(1, 'At least one step is required'),
+  steps: z.array(WorkflowStepSchema).min(1, 'At least one step is required'),
   config: z.record(z.unknown()).optional(),
+  entryPoint: z.string().optional(),
 });
 
 export const UpdateWorkflowSchema = CreateWorkflowSchema.partial().extend({
-  steps: z.array(
-    z.object({
-      id: z.string().min(1),
-      agent: z.string().min(1),
-      input: z.unknown().optional(),
-      dependsOn: z.array(z.string()).optional(),
-    })
-  ).optional(),
+  steps: z.array(WorkflowStepSchema).optional(),
 });
 
 export const LogFilterSchema = z.object({

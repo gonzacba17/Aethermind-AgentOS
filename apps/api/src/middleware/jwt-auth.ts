@@ -15,7 +15,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-producti
 
 export interface AuthRequest extends Request {
   userId?: string;
-  user?: {
+  user: {
     id: string;
     email: string;
     plan: string;

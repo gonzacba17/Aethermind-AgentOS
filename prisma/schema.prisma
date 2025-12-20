@@ -11,7 +11,10 @@ datasource db {
 model User {
   id               String      @id @default(cuid())
   email            String      @unique @db.VarChar(255)
-  passwordHash     String      @map("password_hash") @db.VarChar(255)
+  passwordHash     String?     @map("password_hash") @db.VarChar(255)
+  name             String?     @db.VarChar(255)
+  googleId         String?     @unique @map("google_id") @db.VarChar(255)
+  githubId         String?     @unique @map("github_id") @db.VarChar(255)
   apiKey           String      @unique @map("api_key") @db.VarChar(255)
   plan             String      @default("free") @db.VarChar(50)
   usageLimit       Int         @default(100) @map("usage_limit")
@@ -27,10 +30,13 @@ model User {
   agents           Agent[]
   workflows        Workflow[]
   executions       Execution[]
+  budgets          Budget[]
 
   @@index([email], map: "idx_users_email")
   @@index([apiKey], map: "idx_users_api_key")
   @@index([plan], map: "idx_users_plan")
+  @@index([googleId], map: "idx_users_google_id")
+  @@index([githubId], map: "idx_users_github_id")
   @@map("users")
 }
 
@@ -140,4 +146,44 @@ model Workflow {
   @@unique([userId, name], map: "idx_workflows_user_name")
   @@index([userId], map: "idx_workflows_user_id")
   @@map("workflows")
+}
+
+model Budget {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id")
+  name          String    @db.VarChar(255)
+  limitAmount   Decimal   @map("limit_amount") @db.Decimal(10, 2)
+  period        String    @db.VarChar(20)
+  scope         String    @db.VarChar(50)
+  scopeId       String?   @map("scope_id") @db.VarChar(255)
+  currentSpend  Decimal   @default(0) @map("current_spend") @db.Decimal(10, 6)
+  hardLimit     Boolean   @default(true) @map("hard_limit")
+  alertAt       Int       @default(80) @map("alert_at")
+  alert80Sent   Boolean   @default(false) @map("alert_80_sent")
+  alert100Sent  Boolean   @default(false) @map("alert_100_sent")
+  status        String    @default("active") @db.VarChar(20)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_budgets_user_id")
+  @@index([status], map: "idx_budgets_status")
+  @@index([scope, scopeId], map: "idx_budgets_scope")
+  @@map("budgets")
+}
+
+model AlertLog {
+  id          String    @id @default(uuid()) @db.Uuid
+  budgetId    String    @map("budget_id") @db.Uuid
+  alertType   String    @map("alert_type") @db.VarChar(50)
+  channel     String    @db.VarChar(50)
+  recipient   String    @db.VarChar(255)
+  message     String
+  sentAt      DateTime  @default(now()) @map("sent_at") @db.Timestamptz(6)
+  success     Boolean   @default(true)
+  error       String?
+
+  @@index([budgetId], map: "idx_alert_logs_budget_id")
+  @@index([sentAt], map: "idx_alert_logs_sent_at")
+  @@map("alert_logs")
 }

@@ -1,38 +1,38 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Bot, BarChart3, FileText, GitBranch, Zap, Shield } from 'lucide-react';
+import { DollarSign, Bell, TrendingUp, Users, Bot, BarChart3 } from 'lucide-react';
 
 const features = [
   {
-    icon: Bot,
-    title: 'Multi-Agent Orchestration',
-    description: 'Create and orchestrate multiple AI agents working together on complex tasks.',
+    icon: DollarSign,
+    title: 'Budget Enforcement',
+    description: 'Set hard limits per team, agent, or workflow. Executions blocked automatically when exceeded.',
+  },
+  {
+    icon: Bell,
+    title: 'Smart Alerts',
+    description: 'Email and Slack notifications at 80% and 100% of budget. Never be surprised by costs.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Cost Forecasting',
+    description: 'Predict end-of-month spend based on usage patterns. Plan budgets with confidence.',
+  },
+  {
+    icon: Users,
+    title: 'Team Tracking',
+    description: 'Assign costs to departments. Know exactly which teams consume the most tokens.',
   },
   {
     icon: BarChart3,
     title: 'Real-time Monitoring',
-    description: 'Monitor your agents in real-time with live logs and performance metrics.',
+    description: 'Monitor your AI agents in real-time with live cost tracking and performance metrics.',
   },
   {
-    icon: GitBranch,
-    title: 'Decision Tracing',
-    description: 'Visualize agent decision trees and understand how your agents think.',
-  },
-  {
-    icon: FileText,
-    title: 'Structured Logging',
-    description: 'Comprehensive logging system with filtering and search capabilities.',
-  },
-  {
-    icon: Zap,
-    title: 'Workflow Engine',
-    description: 'Define complex workflows with DAG-based execution and conditional branching.',
-  },
-  {
-    icon: Shield,
-    title: 'Cost Tracking',
-    description: 'Track and analyze costs per agent, model, and execution.',
+    icon: Bot,
+    title: 'Multi-Agent Orchestration',
+    description: 'Create and orchestrate multiple AI agents working together on complex tasks.',
   },
 ];
 
@@ -42,20 +42,22 @@ export default function HomePage() {
       <section className="py-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl font-bold mb-6">
-            Aethermind AgentOS
+            Stop Overspending on AI
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            The Kubernetes for AI Agents. Build, orchestrate, monitor, and scale multi-agent AI systems with ease.
+            Control your LLM costs with automatic budget limits, real-time alerts, 
+            and predictive analytics. Built for enterprises using OpenAI, Anthropic, 
+            and other AI providers in production.
           </p>
           <div className="flex gap-4 justify-center">
-            <Link href="/dashboard">
+            <Link href="/dashboard/costs">
               <Button size="lg">
-                Open Dashboard
+                See Cost Dashboard
               </Button>
             </Link>
-            <Link href="/dashboard/agents">
+            <Link href="/dashboard">
               <Button size="lg" variant="outline">
-                View Agents
+                View Demo
               </Button>
             </Link>
           </div>

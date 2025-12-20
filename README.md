@@ -1,24 +1,25 @@
 # Aethermind AgentOS
 
-> A powerful platform for building, orchestrating, and monitoring multi-agent AI systems
+> **FinOps Platform for AI** - Control and prevent excessive LLM costs before they happen
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange)](https://github.com/aethermind/agentos/releases)
 
-Aethermind AgentOS is an enterprise-grade platform for orchestrating multiple AI agents working together. Built with TypeScript and designed for production use, it provides real-time monitoring, cost tracking, and a developer-friendly SDK.
+**Stop overspending on OpenAI, Anthropic, and other LLMs.**  
+Aethermind gives enterprises real-time cost control, automatic budget enforcement, and predictive analytics for AI workloads.
 
 ## ✨ Key Features
 
-- 🤖 **Multi-Agent Orchestration** - Coordinate multiple AI agents in complex workflows
-- 📊 **Real-time Monitoring** - Live dashboard with logs, traces, and execution visualization
-- 💰 **Cost Transparency** - Track and estimate LLM API costs before execution
+- 💰 **Budget Enforcement** - Set hard limits per team, agent, or workflow - executions blocked automatically
+- 🚨 **Smart Alerts** - Email and Slack notifications before you exceed budgets
+- 📊 **Cost Forecasting** - Predict end-of-month spend with historical analysis
+- 👥 **Team-Level Tracking** - Assign costs to departments and cost centers
+- 🤖 **Multi-Agent Orchestration** - Coordinate AI agents with full cost visibility
+- 📈 **Real-time Monitoring** - Live dashboard with logs, traces, and execution visualization
+- 💸 **Cost Transparency** - Track and estimate LLM API costs before execution
 - 🔌 **Multiple LLM Support** - OpenAI, Anthropic, Google, and local models (Ollama)
-- 🎯 **Developer-Friendly** - Simple SDK with full TypeScript support
-- 📈 **Production-Ready** - PostgreSQL persistence, WebSocket updates, API authentication
-- 🔄 **Workflow Engine** - Define complex multi-step agent workflows with conditions
-- ⚡ **Task Queue** - BullMQ with Redis for reliable job processing
 
 ## 🚀 Quick Start
 
@@ -122,6 +123,7 @@ console.log(result);
 ## 📚 Documentation
 
 ### Core Documentation
+
 - **[User Guide](docs/README.md)** - Complete user documentation
 - **[Installation Guide](docs/INSTALLATION.md)** - Detailed installation instructions
 - **[API Documentation](docs/API.md)** - REST API reference
@@ -130,18 +132,22 @@ console.log(result);
 - **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment instructions
 
 ### Operational
+
 - **[Technical Audit](docs/AUDITORIA_TECNICA.md)** - Security, performance, and code quality assessment
 - **[Security Policy](docs/SECURITY.md)** - Security best practices and vulnerability reporting
 - **[Testing Guide](docs/TESTING.md)** - Test suite documentation
 - **[FAQ](docs/FAQ.md)** - Frequently asked questions
 
 ### Planning & History
+
 - **[Roadmap](docs/roadmap.md)** - Future plans and features
 - **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
 - **[Planned Features](docs/planned-features/)** - Features in development or planned
 - **[Technical Changes Archive](docs/archive/technical-changes/)** - Historical technical decisions
 
 ## 🧪 Testing
+
+**Test Coverage**: ~60% | **Test Suites**: 14 files | **Test Cases**: 254+
 
 ```bash
 # Run unit tests
@@ -154,8 +160,24 @@ pnpm test:integration
 pnpm test:e2e
 
 # Run all tests with coverage
-pnpm test:all
+pnpm test:coverage
+
+# View coverage report
+start coverage/lcov-report/index.html  # Windows
+open coverage/lcov-report/index.html   # macOS
 ```
+
+### Test Coverage by Component
+
+| Component  | Coverage | Test Files                                        |
+| ---------- | -------- | ------------------------------------------------- |
+| Routes API | ~70%     | routes-workflows, routes-costs, routes-traces     |
+| Providers  | ~75%     | AnthropicProvider, OllamaProvider, OpenAIProvider |
+| Services   | ~50%     | CostEstimationService, stores, cache              |
+| Validation | ~90%     | schemas                                           |
+| Middleware | ~80%     | auth, validator, sanitizer                        |
+
+See [Testing Guide](docs/TESTING.md) for detailed information.
 
 ## 🔐 Security
 

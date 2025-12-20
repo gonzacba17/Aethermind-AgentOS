@@ -20,11 +20,23 @@ const CreateWorkflowSchema = z.object({
 });
 
 router.get('/', (req, res) => {
-  const workflows = req.workflowEngine.listWorkflows();
-  res.json(workflows.map((name) => ({
-    name,
-    definition: req.workflowEngine.getWorkflow(name),
-  })));
+  const limit = parseInt(req.query.limit as string) || 50;
+  const offset = parseInt(req.query.offset as string) || 0;
+  
+  const allWorkflows = req.workflowEngine.listWorkflows();
+  const total = allWorkflows.length;
+  const workflows = allWorkflows.slice(offset, offset + limit);
+  
+  res.json({
+    data: workflows.map((name) => ({
+      name,
+      definition: req.workflowEngine.getWorkflow(name),
+    })),
+    total,
+    limit,
+    offset,
+    hasMore: offset + limit < total,
+  });
 });
 
 router.get('/:name', async (req, res) => {
@@ -52,9 +64,60 @@ router.get('/:name', async (req, res) => {
   res.json(workflow);
 });
 
+// Check for duplicate workflow names
 router.post('/', async (req, res) => {
   try {
     const definition = CreateWorkflowSchema.parse(req.body);
+    
+    // Check if workflow already exists
+    const existing = req.workflowEngine.getWorkflow(definition.name);
+    if (existing) {
+      res.status(409).json({ error: 'Workflow already exists' });
+      return;
+    }
+    
+    // Validate step references and detect circular dependencies
+    const stepIds = new Set(definition.steps.map(s => s.id));
+    
+    // Check entry point exists
+    if (!stepIds.has(definition.entryPoint)) {
+      res.status(400).json({ error: 'Validation error', details: 'Invalid entry point' });
+      return;
+    }
+    
+    // Check all step references are valid
+    for (const step of definition.steps) {
+      if (step.next) {
+        const nextSteps = Array.isArray(step.next) ? step.next : [step.next];
+        for (const nextId of nextSteps) {
+          if (!stepIds.has(nextId)) {
+            res.status(400).json({ error: 'Validation error', details: `Invalid step reference: ${nextId}` });
+            return;
+          }
+        }
+      }
+    }
+    
+    // Detect circular dependencies
+    const detectCircular = (stepId: string, visited: Set<string>): boolean => {
+      if (visited.has(stepId)) return true;
+      visited.add(stepId);
+      
+      const step = definition.steps.find(s => s.id === stepId);
+      if (!step?.next) return false;
+      
+      const nextSteps = Array.isArray(step.next) ? step.next : [step.next];
+      for (const nextId of nextSteps) {
+        if (detectCircular(nextId, new Set(visited))) return true;
+      }
+      return false;
+    };
+    
+    if (detectCircular(definition.entryPoint, new Set())) {
+      res.status(400).json({ error: 'Validation error', details: 'Workflow contains circular dependencies' });
+      return;
+    }
+    
     // Cast to WorkflowDefinition since Zod validates all required fields
     req.workflowEngine.registerWorkflow(definition as import('@aethermind/core').WorkflowDefinition);
 
@@ -69,6 +132,64 @@ router.post('/', async (req, res) => {
       return;
     }
     throw error;
+  }
+});
+
+router.put('/:name', async (req, res) => {
+  const workflowName = req.params['name']!;
+  const workflow = req.workflowEngine.getWorkflow(workflowName);
+  
+  if (!workflow) {
+    res.status(404).json({ error: 'Workflow not found' });
+    return;
+  }
+  
+  try {
+    const updates = CreateWorkflowSchema.partial().parse(req.body);
+    
+    // Validate if steps are being updated
+    if (updates.steps) {
+      if (updates.steps.length === 0) {
+        res.status(400).json({ error: 'Validation error', details: 'Workflow must have at least one step' });
+        return;
+      }
+    }
+    
+    req.workflowEngine.updateWorkflow(workflowName, updates);
+    
+    if (req.cache) {
+      await req.cache.del(`workflow:${workflowName}`);
+    }
+    
+    res.json({ name: workflowName, message: 'Workflow updated' });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: 'Validation error', details: error.errors });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.delete('/:name', async (req, res) => {
+  const workflowName = req.params['name']!;
+  const workflow = req.workflowEngine.getWorkflow(workflowName);
+  
+  if (!workflow) {
+    res.status(404).json({ error: 'Workflow not found' });
+    return;
+  }
+  
+  try {
+    req.workflowEngine.deleteWorkflow(workflowName);
+    
+    if (req.cache) {
+      await req.cache.del(`workflow:${workflowName}`);
+    }
+    
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
   }
 });
 

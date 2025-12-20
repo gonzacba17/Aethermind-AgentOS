@@ -46,6 +46,29 @@ export class WorkflowEngine {
     this.logger.info(`Workflow registered: ${definition.name}`);
   }
 
+  updateWorkflow(name: string, definition: Partial<WorkflowDefinition>): void {
+    const existing = this.workflowDefinitions.get(name);
+    if (!existing) {
+      throw new Error(`Workflow not found: ${name}`);
+    }
+
+    const updated = { ...existing, ...definition, name }; // Preserve name
+    this.validateWorkflow(updated);
+    this.workflowDefinitions.set(name, updated);
+    this.orchestrator.registerWorkflow(updated); // Re-register with orchestrator
+    this.logger.info(`Workflow updated: ${name}`);
+  }
+
+  deleteWorkflow(name: string): void {
+    const existing = this.workflowDefinitions.get(name);
+    if (!existing) {
+      throw new Error(`Workflow not found: ${name}`);
+    }
+
+    this.workflowDefinitions.delete(name);
+    this.logger.info(`Workflow deleted: ${name}`);
+  }
+
   private validateWorkflow(definition: WorkflowDefinition): void {
     if (!definition.name) {
       throw new Error('Workflow must have a name');

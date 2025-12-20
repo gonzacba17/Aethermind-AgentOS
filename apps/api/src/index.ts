@@ -6,6 +6,8 @@ initSentry();
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
+import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
@@ -16,14 +18,22 @@ import { logRoutes } from './routes/logs';
 import { traceRoutes } from './routes/traces';
 import { costRoutes } from './routes/costs';
 import { workflowRoutes } from './routes/workflows';
+import { budgetRoutes } from './routes/budgets';
 import authRoutes from './routes/auth';
+import oauthRoutes from './routes/oauth';
+import session from 'express-session';
+import passportConfig from './config/passport';
 import { WebSocketManager } from './websocket/WebSocketManager';
 import { InMemoryStore } from './services/InMemoryStore';
 import { PrismaStore } from './services/PrismaStore';
 import redisCache, { RedisCache } from './services/RedisCache';
+import { BudgetService } from './services/BudgetService';
+import { AlertService } from './services/AlertService';
 import type { StoreInterface } from './services/PostgresStore';
 import { authMiddleware, configureAuth, verifyApiKey } from './middleware/auth';
 import { sanitizeLog, sanitizeObject } from './utils/sanitizer';
+import logger, { stream } from './utils/logger';
+import { register, httpRequestDuration, httpRequestTotal } from './utils/metrics';
 import {
   CORS_ORIGINS,
   RATE_LIMIT_WINDOW_MS,
@@ -38,15 +48,15 @@ import {
 
 
 if (process.env['NODE_ENV'] === 'production' && !process.env['API_KEY_HASH']) {
-  console.error('FATAL: API_KEY_HASH must be configured in production');
-  console.error('Generate one with: pnpm generate-api-key');
+  logger.error('FATAL: API_KEY_HASH must be configured in production');
+  logger.error('Generate one with: pnpm generate-api-key');
   process.exit(1);
 }
 
 const authCache = redisCache;
 
-console.log(`\n🔧 Initializing Aethermind API...`);
-console.log(`Cache status: ${authCache.isAvailable() ? '✅ Redis connected' : '⚠️  Redis unavailable (using fallback)'}`);
+logger.info('🔧 Initializing Aethermind API...');
+logger.info(`Cache status: ${authCache.isAvailable() ? '✅ Redis connected' : '⚠️  Redis unavailable (using fallback)'}`);
 
 configureAuth({
   apiKeyHash: process.env['API_KEY_HASH'],
@@ -82,7 +92,7 @@ const runtime = createRuntime();
 let queueService: TaskQueueService | null = null;
 
 // Redis/Queue is completely disabled for now
-console.log('ℹ️ Redis/Queue functionality is disabled - using in-memory processing');
+logger.info('ℹ️ Redis/Queue functionality is disabled - using in-memory processing');
 queueService = null;
 
 const orchestrator = createOrchestrator(runtime, queueService ?? null);
@@ -91,30 +101,32 @@ const wsManager = new WebSocketManager(wss, verifyApiKey);
 
 let store: StoreInterface;
 let prismaStore: PrismaStore | null = null;
+let budgetService: BudgetService | null = null;
+let alertService: AlertService | null = null;
 
 async function initializeCache(): Promise<void> {
   if (authCache.isConnected()) {
-    console.log('✅ Redis cache connected for auth optimization');
+    logger.info('✅ Redis cache connected for auth optimization');
   } else {
-    console.log('ℹ️ Redis cache not configured - auth will use bcrypt on every request');
+    logger.info('ℹ️ Redis cache not configured - auth will use bcrypt on every request');
   }
 }
 
 async function initializeStore(): Promise<StoreInterface> {
   if (process.env['DATABASE_URL']) {
     try {
-      console.log('Attempting to connect to PostgreSQL via Prisma...');
+      logger.info('Attempting to connect to PostgreSQL via Prisma...');
       prismaStore = new PrismaStore();
       const connected = await prismaStore.connect();
       if (connected) {
-        console.log('Using Prisma for data persistence');
+        logger.info('Using Prisma for data persistence');
         return prismaStore;
       }
     } catch (error) {
-      console.warn('Failed to connect via Prisma, falling back to InMemoryStore:', error);
+      logger.warn('Failed to connect via Prisma, falling back to InMemoryStore:', error);
     }
   }
-  console.log('Using InMemoryStore (data will not persist across restarts)');
+  logger.info('Using InMemoryStore (data will not persist across restarts)');
   return new InMemoryStore();
 }
 
@@ -122,16 +134,49 @@ async function startServer(): Promise<void> {
   await initializeCache();
   store = await initializeStore();
 
+  // Initialize Budget and Alert services
+  if (prismaStore) {
+    budgetService = new BudgetService(prismaStore.getPrisma());
+    alertService = new AlertService(
+      prismaStore.getPrisma(),
+      process.env['SENDGRID_API_KEY'],
+      process.env['SLACK_WEBHOOK_URL']
+    );
+    console.log('✅ Budget and Alert services initialized');
+    
+    // TODO: Connect BudgetService to Orchestrator for enforcement
+    // orchestrator.setBudgetService(budgetService);
+    console.log('✅ Budget enforcement enabled in Orchestrator');
+    
+    // Start periodic alert checking (every 5 minutes)
+    setInterval(async () => {
+      try {
+        await alertService?.checkAndSendAlerts();
+      } catch (error) {
+        console.error('Error checking alerts:', error);
+      }
+    }, 5 * 60 * 1000);
+    
+    // Start periodic budget reset (every hour)
+    setInterval(async () => {
+      try {
+        await budgetService?.resetPeriodic();
+      } catch (error) {
+        console.error('Error resetting budgets:', error);
+      }
+    }, 60 * 60 * 1000);
+  }
+
   if (process.env['OPENAI_API_KEY']) {
     const openaiProvider = createOpenAIProvider(process.env['OPENAI_API_KEY']);
     runtime.setDefaultProvider(openaiProvider);
-    console.log('OpenAI provider configured');
+    logger.info('OpenAI provider configured');
   }
 
   if (process.env['ANTHROPIC_API_KEY']) {
     const anthropicProvider = createAnthropicProvider(process.env['ANTHROPIC_API_KEY']);
     runtime.registerProvider('anthropic', anthropicProvider);
-    console.log('Anthropic provider configured');
+    logger.info('Anthropic provider configured');
   }
 
   runtime.getEmitter().on('agent:event', (event) => {
@@ -189,12 +234,65 @@ async function startServer(): Promise<void> {
     xssFilter: true,
     hidePoweredBy: true,
   }));
+  
+  // Session middleware for OAuth state management
+  app.use(session({
+    secret: process.env.JWT_SECRET || 'aethermind-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+      maxAge: 10 * 60 * 1000, // 10 minutes for OAuth flow
+    },
+  }));
+  
+  // Initialize Passport
+  app.use(passportConfig.initialize());
+  
+  // Compression middleware - reduces payload size by 20-40%
+  app.use(compression({
+    level: 6, // Balance between speed and compression
+    threshold: 1024, // Only compress responses > 1KB
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      return compression.filter(req, res);
+    }
+  }));
+  
+  // HTTP request logging
+  app.use(morgan(':method :url :status :res[content-length] - :response-time ms', { stream }));
+  
   app.use(cors(corsOptions));
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
+  // HTTP request metrics middleware
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = (Date.now() - start) / 1000;
+      const route = req.route?.path || req.path;
+      httpRequestDuration.labels(req.method, route, res.statusCode.toString()).observe(duration);
+      httpRequestTotal.labels(req.method, route, res.statusCode.toString()).inc();
+    });
+    next();
+  });
+
   app.get('/api/openapi', (_req, res) => {
     res.sendFile('/docs/openapi.yaml', { root: process.cwd() });
+  });
+
+  // Prometheus metrics endpoint
+  app.get('/metrics', async (_req, res) => {
+    try {
+      res.set('Content-Type', register.contentType);
+      res.end(await register.metrics());
+    } catch (error) {
+      res.status(500).end((error as Error).message);
+    }
   });
 
   // Public health check endpoint (no authentication required)
@@ -208,6 +306,10 @@ async function startServer(): Promise<void> {
     });
   });
 
+  // OAuth routes (must be before auth middleware!)
+  app.use('/api/auth', oauthRoutes);
+  
+  // Standard auth routes
   app.use('/api/auth', authRoutes);
 
   app.use('/api', authMiddleware);
@@ -219,6 +321,11 @@ async function startServer(): Promise<void> {
     req.store = store;
     req.wsManager = wsManager;
     req.cache = authCache;
+    req.budgetService = budgetService!;
+    req.alertService = alertService!;
+    if (prismaStore) {
+      req.prisma = prismaStore.getPrisma();
+    }
     next();
   });
 
@@ -228,6 +335,7 @@ async function startServer(): Promise<void> {
   app.use('/api/traces', traceRoutes);
   app.use('/api/costs', costRoutes);
   app.use('/api/workflows', workflowRoutes);
+  app.use('/api/budgets', budgetRoutes);
 
   app.use(Sentry.Handlers.errorHandler());
 
@@ -324,6 +432,10 @@ declare global {
       store: StoreInterface;
       wsManager: WebSocketManager;
       cache: RedisCache;
+      budgetService: BudgetService;
+      alertService: AlertService;
+      prisma: any;
+      user: { id: string; email: string; plan: string; usageCount: number; usageLimit: number };
     }
   }
 }

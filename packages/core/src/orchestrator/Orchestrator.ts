@@ -15,6 +15,7 @@ import { Agent } from '../agent/Agent.js';
 import { AgentRuntime } from '../agent/AgentRuntime.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
 import { TaskQueueService, TaskQueueItem, TaskQueueStats } from '../queue/TaskQueueService.js';
+import { BudgetExceededError } from '../errors/BudgetExceededError.js';
 
 // Map to track pending promises for tasks
 interface PendingTask {
@@ -32,6 +33,7 @@ export class Orchestrator {
   private pendingTasks: Map<string, PendingTask> = new Map();
   private traces: Map<string, Trace> = new Map();
   private costs: CostInfo[] = [];
+  private budgetService: any | null = null;
 
   constructor(
     runtime: AgentRuntime,
@@ -66,6 +68,11 @@ export class Orchestrator {
 
   getWorkflow(name: string): WorkflowDefinition | undefined {
     return this.workflows.get(name);
+  }
+
+  setBudgetService(budgetService: any): void {
+    this.budgetService = budgetService;
+    this.logger.info('Budget service configured for orchestrator');
   }
 
   async executeTask(agentId: string, input: unknown, priority = 0): Promise<ExecutionResult> {
@@ -146,11 +153,57 @@ export class Orchestrator {
 
   async executeWorkflow(
     workflowName: string,
-    input: unknown
+    input: unknown,
+    options?: { userId?: string }
   ): Promise<{ executionId: string; results: Map<string, ExecutionResult> }> {
     const workflow = this.workflows.get(workflowName);
     if (!workflow) {
       throw new Error(`Workflow not found: ${workflowName}`);
+    }
+
+    // Budget validation BEFORE execution
+    if (this.budgetService && options?.userId) {
+      this.logger.info('Validating budget before workflow execution', { 
+        workflowName, 
+        userId: options.userId 
+      });
+
+      // Estimate workflow cost (simplified - $0.01 per step)
+      const estimatedCost = workflow.steps.length * 0.01;
+      
+      // Validate against budget
+      const validation = await this.budgetService.validateBudget(
+        options.userId,
+        'workflow',
+        workflowName,
+        estimatedCost
+      );
+
+      if (!validation.allowed && validation.budget) {
+        this.logger.warn('Workflow blocked by budget limit', {
+          workflowName,
+          budgetId: validation.budget.id,
+          limitAmount: validation.budget.limitAmount,
+          currentSpend: validation.budget.currentSpend,
+          estimatedCost,
+        });
+
+        throw new BudgetExceededError({
+          budgetId: validation.budget.id,
+          budgetName: validation.budget.name,
+          limitAmount: Number(validation.budget.limitAmount),
+          currentSpend: Number(validation.budget.currentSpend),
+          estimatedCost,
+        });
+      }
+
+      this.logger.info('Budget validation passed', { 
+        workflowName, 
+        estimatedCost,
+        remainingBudget: validation.budget 
+          ? Number(validation.budget.limitAmount) - Number(validation.budget.currentSpend)
+          : 'unlimited'
+      });
     }
 
     const executionId = uuid();
@@ -220,6 +273,32 @@ export class Orchestrator {
         createdAt: new Date(),
       };
       this.traces.set(executionId, trace);
+
+      // Track actual cost and update budget
+      let totalCost = 0;
+      for (const [stepId, result] of results) {
+        if ((result as any).cost) {
+          totalCost += (result as any).cost;
+        }
+      }
+
+      // Increment budget spend after successful execution
+      if (this.budgetService && options?.userId && totalCost > 0) {
+        const budget = await this.budgetService.getActiveBudget(
+          options.userId,
+          'workflow',
+          workflowName
+        );
+        
+        if (budget) {
+          await this.budgetService.incrementSpend(budget.id, totalCost);
+          this.logger.info('Budget updated after workflow execution', {
+            budgetId: budget.id,
+            costAdded: totalCost,
+            newSpend: Number(budget.currentSpend) + totalCost,
+          });
+        }
+      }
 
       this.logger.info(`Workflow completed: ${workflowName}`, { executionId });
       this.emit('workflow:completed', { executionId, workflowName, results: Object.fromEntries(results) });

@@ -171,24 +171,42 @@ Verifica:
 
 ## Cobertura de Tests
 
-**Estado actual**: 146+ tests implementados
-
-**Coverage baseline**: 20% (lines, functions, branches, statements)
+**Estado actual**: 254+ tests implementados | **Coverage**: ~60%
 
 **Ejecutar coverage**:
 
 ```bash
 pnpm test:coverage
-# Ver reporte: coverage/index.html
+# Ver reporte: coverage/lcov-report/index.html
 ```
 
 **Distribución de tests**:
 
-- Unit tests: ~100+ tests
+- Unit tests: ~180+ tests
 - Integration tests: 37 tests
 - E2E tests: ~10+ tests
 - API tests: 32+ tests
 - WebSocket tests: ~5+ tests
+
+**Coverage por Componente**:
+
+| Componente | Coverage | Test Files                                                   | Tests |
+| ---------- | -------- | ------------------------------------------------------------ | ----- |
+| Routes API | ~70%     | routes-workflows, routes-costs, routes-traces, routes-agents | 51+   |
+| Providers  | ~75%     | AnthropicProvider, OllamaProvider, OpenAIProvider            | 63+   |
+| Services   | ~50%     | CostEstimationService, stores, cache                         | 17+   |
+| Validation | ~90%     | schemas                                                      | 23+   |
+| Middleware | ~80%     | auth, validator, sanitizer                                   | 30+   |
+
+**Archivos de test nuevos** (2025-12-16):
+
+- `apps/api/tests/unit/routes-workflows.test.ts` - 13 tests (GET, POST, execute, validación Zod)
+- `apps/api/tests/unit/routes-costs.test.ts` - 13 tests (summary, agregación, cache)
+- `apps/api/tests/unit/routes-traces.test.ts` - 12 tests (paginación, fallback)
+- `packages/core/tests/unit/AnthropicProvider.test.ts` - 17 tests (API calls, cost estimation, errors)
+- `packages/core/tests/unit/OllamaProvider.test.ts` - 13 tests (local models, custom URL)
+- `packages/core/tests/unit/CostEstimationService.test.ts` - 17 tests (estimación, workflows)
+- `packages/core/tests/unit/schemas.test.ts` - 23 tests (validación Zod completa)
 
 ## Solución de Problemas
 
@@ -294,4 +312,4 @@ apps/api/tests/
 
 ---
 
-**Versión**: 0.1.0 | **Actualizado**: 2025-11-28
+**Versión**: 0.1.0 | **Actualizado**: 2025-12-16

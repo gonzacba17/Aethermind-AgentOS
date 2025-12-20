@@ -55,6 +55,10 @@ export class PrismaStore implements StoreInterface {
     return this.connected;
   }
 
+  getPrisma(): PrismaClient {
+    return this.prisma;
+  }
+
   async close(): Promise<void> {
     await this.prisma.$disconnect();
     this.connected = false;
