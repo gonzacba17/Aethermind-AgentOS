@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import type { RedisCache } from '../services/RedisCache.js';
 
 const API_KEY_HEADER = 'x-api-key';
@@ -22,7 +23,95 @@ export function configureAuth(config: AuthConfig): void {
   authConfig = { ...authConfig, ...config };
 }
 
+/**
+ * Combined auth middleware that:
+ * - Allows public routes (/health, /auth/*)
+ * - Validates JWT for regular API routes (/api/agents, /api/costs, etc.)
+ * - Validates API Key only for admin routes (/api/admin/*)
+ */
 export async function authMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  // Public routes - no auth required
+  const publicRoutes = ['/health', '/metrics'];
+  const publicPathPrefixes = ['/auth/'];
+  
+  if (publicRoutes.includes(req.path) || 
+      publicPathPrefixes.some(prefix => req.path.startsWith(prefix))) {
+    next();
+    return;
+  }
+
+  // Admin routes - require API key
+  if (req.path.startsWith('/admin/')) {
+    await validateApiKey(req, res, next);
+    return;
+  }
+
+  // All other /api routes - require JWT
+  await validateJWT(req, res, next);
+}
+
+/**
+ * JWT validation middleware for regular API routes
+ */
+async function validateJWT(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '');
+
+  if (!token) {
+    console.warn('auth_failure', {
+      reason: 'missing_jwt',
+      ip: req.ip,
+      path: req.path,
+      timestamp: new Date().toISOString(),
+    });
+    res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Missing authentication token. Please login.',
+    });
+    return;
+  }
+
+  try {
+    const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production-min-32-chars';
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    
+    // Attach user info to request
+    req.user = {
+      id: decoded.id,
+      email: decoded.email,
+      plan: decoded.plan || 'free',
+      usageCount: decoded.usageCount || 0,
+      usageLimit: decoded.usageLimit || 100,
+    };
+    
+    next();
+  } catch (error) {
+    console.warn('auth_failure', {
+      reason: 'invalid_jwt',
+      ip: req.ip,
+      path: req.path,
+      error: (error as Error).message,
+      timestamp: new Date().toISOString(),
+    });
+    res.status(403).json({
+      error: 'Forbidden',
+      message: 'Invalid or expired authentication token.',
+    });
+  }
+}
+
+/**
+ * API Key validation middleware for admin routes
+ */
+async function validateApiKey(
   req: Request,
   res: Response,
   next: NextFunction
@@ -33,8 +122,11 @@ export async function authMiddleware(
   }
 
   if (!authConfig.apiKeyHash) {
-    console.warn('API_KEY_HASH not configured - authentication disabled');
-    next();
+    console.warn('API_KEY_HASH not configured - admin routes disabled');
+    res.status(503).json({
+      error: 'Service Unavailable',
+      message: 'Admin authentication not configured.',
+    });
     return;
   }
 

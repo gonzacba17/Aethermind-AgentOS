@@ -1,5 +1,22 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
+// Helper to include JWT token in headers
+function getHeaders(additionalHeaders?: Record<string, string>): HeadersInit {
+  const headers: Record<string, string> = {
+    ...(additionalHeaders || {}),
+  };
+  
+  // Get JWT token from localStorage (client-side only)
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  
+  return headers;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -108,13 +125,17 @@ export interface CostInfo {
 }
 
 export async function fetchAgents(): Promise<Agent[]> {
-  const res = await fetch(`${API_BASE}/api/agents`);
+  const res = await fetch(`${API_BASE}/api/agents`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch agents');
   return res.json();
 }
 
 export async function fetchAgent(id: string): Promise<Agent> {
-  const res = await fetch(`${API_BASE}/api/agents/${id}`);
+  const res = await fetch(`${API_BASE}/api/agents/${id}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch agent');
   return res.json();
 }
@@ -126,7 +147,7 @@ export async function createAgent(data: {
 }): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create agent');
@@ -139,7 +160,7 @@ export async function executeAgent(
 ): Promise<ExecutionResult> {
   const res = await fetch(`${API_BASE}/api/agents/${id}/execute`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
   if (!res.ok) throw new Error('Failed to execute agent');
@@ -160,37 +181,49 @@ export async function fetchLogs(params?: {
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
 
-  const res = await fetch(`${API_BASE}/api/logs?${searchParams}`);
+  const res = await fetch(`${API_BASE}/api/logs?${searchParams}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch logs');
   return res.json();
 }
 
 export async function fetchTraces(): Promise<Trace[]> {
-  const res = await fetch(`${API_BASE}/api/traces`);
+  const res = await fetch(`${API_BASE}/api/traces`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch traces');
   return res.json();
 }
 
 export async function fetchTrace(id: string): Promise<Trace> {
-  const res = await fetch(`${API_BASE}/api/traces/${id}`);
+  const res = await fetch(`${API_BASE}/api/traces/${id}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch trace');
   return res.json();
 }
 
 export async function fetchCostSummary(): Promise<CostSummary> {
-  const res = await fetch(`${API_BASE}/api/costs/summary`);
+  const res = await fetch(`${API_BASE}/api/costs/summary`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch cost summary');
   return res.json();
 }
 
 export async function fetchExecutions(): Promise<ExecutionResult[]> {
-  const res = await fetch(`${API_BASE}/api/executions`);
+  const res = await fetch(`${API_BASE}/api/executions`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch executions');
   return res.json();
 }
 
 export async function fetchHealth(): Promise<{ status: string; timestamp: string }> {
-  const res = await fetch(`${API_BASE}/api/health`);
+  const res = await fetch(`${API_BASE}/api/health`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('API not available');
   return res.json();
 }
@@ -201,7 +234,7 @@ export async function estimateWorkflowCost(
 ): Promise<CostEstimate> {
   const res = await fetch(`${API_BASE}/api/workflows/${workflowName}/estimate`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
   if (!res.ok) throw new Error('Failed to estimate cost');
@@ -220,7 +253,9 @@ export async function fetchCostHistory(params?: {
   if (params?.agentId) searchParams.set('agentId', params.agentId);
   if (params?.workflowName) searchParams.set('workflowName', params.workflowName);
 
-  const res = await fetch(`${API_BASE}/api/costs?${searchParams}`);
+  const res = await fetch(`${API_BASE}/api/costs?${searchParams}`, {
+    headers: getHeaders(),
+  });
   if (!res.ok) throw new Error('Failed to fetch cost history');
   return res.json();
 }
