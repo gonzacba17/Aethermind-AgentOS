@@ -295,6 +295,7 @@ async function startServer(): Promise<void> {
     }
   });
 
+
   // Public health check endpoint (no authentication required)
   app.get('/health', (_req, res) => {
     res.json({
@@ -306,12 +307,12 @@ async function startServer(): Promise<void> {
     });
   });
 
-  // OAuth routes (must be before auth middleware!)
+  // Public routes - OAuth and auth (MUST be before authMiddleware!)
   app.use('/api/auth', oauthRoutes);
-  
-  // Standard auth routes
   app.use('/api/auth', authRoutes);
 
+  // Apply auth middleware to all OTHER /api routes
+  // This will NOT affect routes already defined above
   app.use('/api', authMiddleware);
 
   app.use((req, _res, next) => {
@@ -435,7 +436,7 @@ declare global {
       budgetService: BudgetService;
       alertService: AlertService;
       prisma: any;
-      user: { id: string; email: string; plan: string; usageCount: number; usageLimit: number };
+      user?: any;
     }
   }
 }

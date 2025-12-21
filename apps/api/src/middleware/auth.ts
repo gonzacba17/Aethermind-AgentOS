@@ -38,11 +38,23 @@ export async function authMiddleware(
   // Use originalUrl to catch full path including /api prefix
   const url = req.originalUrl || req.url;
   
+  // Debug logging for OAuth routes
+  if (url.includes('/auth/')) {
+    console.log('[AUTH MIDDLEWARE DEBUG]', {
+      url,
+      path: req.path,
+      originalUrl: req.originalUrl,
+      baseUrl: req.baseUrl,
+      method: req.method,
+    });
+  }
+  
   const publicRoutes = ['/health', '/metrics'];
   const publicPathPrefixes = ['/api/auth/', '/auth/'];
   
   if (publicRoutes.includes(req.path) || 
       publicPathPrefixes.some(prefix => url.startsWith(prefix))) {
+    console.log(`[AUTH] Allowing public route: ${url}`);
     next();
     return;
   }
