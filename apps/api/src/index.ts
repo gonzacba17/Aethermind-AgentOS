@@ -436,7 +436,7 @@ declare global {
       budgetService: BudgetService;
       alertService: AlertService;
       prisma: any;
-      user?: any;
+      // user is defined by @types/passport
     }
   }
 }

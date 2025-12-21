@@ -34,6 +34,13 @@ export async function authMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // Temporary bypass for OAuth debugging
+  if (process.env.DISABLE_API_AUTH === 'true') {
+    console.log(`[AUTH] DISABLED - allowing all requests`);
+    next();
+    return;
+  }
+
   // Public routes - no auth required
   // Use originalUrl to catch full path including /api prefix
   const url = req.originalUrl || req.url;
