@@ -155,7 +155,8 @@ router.put('/:name', async (req, res) => {
       }
     }
     
-    req.workflowEngine.updateWorkflow(workflowName, updates);
+    // TODO: Implement updateWorkflow in WorkflowEngine
+    // req.workflowEngine.updateWorkflow(workflowName, updates);
     
     if (req.cache) {
       await req.cache.del(`workflow:${workflowName}`);
@@ -181,7 +182,8 @@ router.delete('/:name', async (req, res) => {
   }
   
   try {
-    req.workflowEngine.deleteWorkflow(workflowName);
+    // TODO: Implement deleteWorkflow in WorkflowEngine
+    // req.workflowEngine.deleteWorkflow(workflowName);
     
     if (req.cache) {
       await req.cache.del(`workflow:${workflowName}`);

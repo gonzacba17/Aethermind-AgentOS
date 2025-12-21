@@ -3,7 +3,7 @@ import passport from '../config/passport';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 // Extend Express Request type for session
 declare module 'express-session' {

@@ -33,7 +33,7 @@ const ListBudgetsSchema = z.object({
 router.post('/', validateBody(CreateBudgetSchema), async (req, res) => {
   try {
     const budget = await req.budgetService.createBudget({
-      userId: req.user.id,
+      userId: (req.user as any)?.id,
       ...req.body,
     });
     
@@ -50,7 +50,7 @@ router.get('/', validateQuery(ListBudgetsSchema), async (req, res) => {
     
     const budgets = await req.prisma.budget.findMany({
       where: {
-        userId: req.user.id,
+        userId: (req.user as any)?.id,
         ...(status && { status }),
         ...(scope && { scope }),
       },
@@ -69,7 +69,7 @@ router.get('/:id', async (req, res) => {
     const budget = await req.prisma.budget.findFirst({
       where: {
         id: req.params.id,
-        userId: req.user.id,
+        userId: (req.user as any)?.id,
       },
     });
     
@@ -88,14 +88,14 @@ router.patch('/:id', validateBody(UpdateBudgetSchema), async (req, res) => {
   try {
     await req.budgetService.updateBudget(
       req.params.id,
-      req.user.id,
+      (req.user as any)?.id,
       req.body
     );
     
     const updated = await req.prisma.budget.findFirst({
       where: {
         id: req.params.id,
-        userId: req.user.id,
+        userId: (req.user as any)?.id,
       },
     });
     
@@ -112,7 +112,7 @@ router.patch('/:id', validateBody(UpdateBudgetSchema), async (req, res) => {
 // Delete budget
 router.delete('/:id', async (req, res) => {
   try {
-    await req.budgetService.deleteBudget(req.params.id, req.user.id);
+    await req.budgetService.deleteBudget(req.params.id, (req.user as any)?.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -125,7 +125,7 @@ router.get('/:id/usage', async (req, res) => {
     const budget = await req.prisma.budget.findFirst({
       where: {
         id: req.params.id,
-        userId: req.user.id,
+        userId: (req.user as any)?.id,
       },
     });
     

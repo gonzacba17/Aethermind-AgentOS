@@ -141,7 +141,7 @@ router.get('/budget', async (req, res) => {
     // Get user's active budget from Prisma
     const budget = await req.prisma.budget.findFirst({
       where: {
-        userId: req.user.id,
+        userId: (req.user as any)?.id,
         status: 'active',
         scope: 'user',
       },

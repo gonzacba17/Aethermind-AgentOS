@@ -28,7 +28,7 @@ export async function findOrCreateOAuthUser(data: OAuthUserData) {
   
   // 1. Check if user exists with this OAuth provider ID
   let user = await prisma.user.findUnique({
-    where: { [providerField]: providerId },
+    where: { [providerField]: providerId } as any,
   });
   
   if (user) {
@@ -57,8 +57,8 @@ export async function findOrCreateOAuthUser(data: OAuthUserData) {
       where: { id: user.id },
       data: {
         [providerField]: providerId,
-        name: user.name || name, // Keep existing name if present
-      },
+        name: (user as any).name || name, // Keep existing name if present
+      } as any,
     });
     
     return user;
@@ -84,7 +84,7 @@ export async function findOrCreateOAuthUser(data: OAuthUserData) {
       usageCount: 0,
       apiKey,
       emailVerified: true, // OAuth emails are pre-verified
-    },
+    } as any,
   });
   
   logger.info('New OAuth user created', {
