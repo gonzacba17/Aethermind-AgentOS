@@ -35,17 +35,20 @@ export async function authMiddleware(
   next: NextFunction
 ): Promise<void> {
   // Public routes - no auth required
+  // Use originalUrl to catch full path including /api prefix
+  const url = req.originalUrl || req.url;
+  
   const publicRoutes = ['/health', '/metrics'];
-  const publicPathPrefixes = ['/auth/'];
+  const publicPathPrefixes = ['/api/auth/', '/auth/'];
   
   if (publicRoutes.includes(req.path) || 
-      publicPathPrefixes.some(prefix => req.path.startsWith(prefix))) {
+      publicPathPrefixes.some(prefix => url.startsWith(prefix))) {
     next();
     return;
   }
 
   // Admin routes - require API key
-  if (req.path.startsWith('/admin/')) {
+  if (url.startsWith('/api/admin/') || req.path.startsWith('/admin/')) {
     await validateApiKey(req, res, next);
     return;
   }
