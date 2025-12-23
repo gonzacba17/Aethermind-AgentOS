@@ -14,7 +14,7 @@ const router: ExpressRouter = Router();
 
 router.use(jwtAuthMiddleware as any);
 
-router.get('/', validateQuery(PaginationSchema), async (req: AuthRequest, res) => {
+router.get('/', validateQuery(PaginationSchema), async (req: AuthRequest, res: any) => {
   const { offset, limit } = req.query as any;
   
   const agents = await req.store.getAgents({ userId: req.userId!, offset, limit });
@@ -44,7 +44,7 @@ router.get('/:id', validateParams(IdParamSchema), (req, res) => {
   });
 });
 
-router.post('/', validateBody(CreateAgentSchema), async (req: AuthRequest, res) => {
+router.post('/', validateBody(CreateAgentSchema), async (req: AuthRequest, res: any) => {
   try {
     const config = req.body;
 
@@ -72,7 +72,7 @@ router.post('/', validateBody(CreateAgentSchema), async (req: AuthRequest, res) 
   }
 });
 
-router.post('/:id/execute', usageLimiter as any, validateParams(IdParamSchema), validateBody(ExecuteAgentSchema), async (req: AuthRequest, res) => {
+router.post('/:id/execute', usageLimiter as any, validateParams(IdParamSchema), validateBody(ExecuteAgentSchema), async (req: AuthRequest, res: any) => {
   const agent = req.runtime.getAgent(req.params['id']!);
   if (!agent) {
     res.status(404).json({ error: 'Agent not found' });

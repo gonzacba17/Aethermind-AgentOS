@@ -142,27 +142,45 @@ async function startServer(): Promise<void> {
       process.env['SENDGRID_API_KEY'],
       process.env['SLACK_WEBHOOK_URL']
     );
-    console.log('✅ Budget and Alert services initialized');
+    logger.info('✅ Budget and Alert services initialized');
     
-    // TODO: Connect BudgetService to Orchestrator for enforcement
-    // orchestrator.setBudgetService(budgetService);
-    console.log('✅ Budget enforcement enabled in Orchestrator');
+    // Connect BudgetService to Orchestrator for enforcement
+    orchestrator.setBudgetService(budgetService);
+    logger.info('✅ Budget enforcement enabled in Orchestrator');
     
     // Start periodic alert checking (every 5 minutes)
+    let isCheckingAlerts = false;
     setInterval(async () => {
+      if (isCheckingAlerts) {
+        logger.warn('Alert check already in progress, skipping');
+        return;
+      }
+      
+      isCheckingAlerts = true;
       try {
         await alertService?.checkAndSendAlerts();
       } catch (error) {
-        console.error('Error checking alerts:', error);
+        logger.error('Error checking alerts', { error });
+      } finally {
+        isCheckingAlerts = false;
       }
     }, 5 * 60 * 1000);
     
     // Start periodic budget reset (every hour)
+    let isResettingBudget = false;
     setInterval(async () => {
+      if (isResettingBudget) {
+        logger.warn('Budget reset already in progress, skipping');
+        return;
+      }
+      
+      isResettingBudget = true;
       try {
         await budgetService?.resetPeriodic();
       } catch (error) {
-        console.error('Error resetting budgets:', error);
+        logger.error('Error resetting budgets', { error });
+      } finally {
+        isResettingBudget = false;
       }
     }, 60 * 60 * 1000);
   }
@@ -179,11 +197,11 @@ async function startServer(): Promise<void> {
     logger.info('Anthropic provider configured');
   }
 
-  runtime.getEmitter().on('agent:event', (event) => {
+  runtime.getEmitter().on('agent:event', (event: any) => {
     wsManager.broadcast('agent:event', event);
   });
 
-  runtime.getEmitter().on('log', (entry) => {
+  runtime.getEmitter().on('log', (entry: any) => {
     const sanitizedEntry = {
       ...entry,
       message: sanitizeLog(entry.message),
@@ -193,15 +211,15 @@ async function startServer(): Promise<void> {
     wsManager.broadcast('log', sanitizedEntry);
   });
 
-  runtime.getEmitter().on('workflow:started', (event) => {
+  runtime.getEmitter().on('workflow:started', (event: any) => {
     wsManager.broadcast('workflow:started', event);
   });
 
-  runtime.getEmitter().on('workflow:completed', (event) => {
+  runtime.getEmitter().on('workflow:completed', (event: any) => {
     wsManager.broadcast('workflow:completed', event);
   });
 
-  runtime.getEmitter().on('workflow:failed', (event) => {
+  runtime.getEmitter().on('workflow:failed', (event: any) => {
     wsManager.broadcast('workflow:failed', event);
   });
 
@@ -234,10 +252,9 @@ async function startServer(): Promise<void> {
     xssFilter: true,
     hidePoweredBy: true,
   }));
-  
-  // Session middleware for OAuth state management
+
   app.use(session({
-    secret: process.env.JWT_SECRET || 'aethermind-secret-key',
+    secret: process.env.JWT_SECRET!,
     resave: false,
     saveUninitialized: false,
     cookie: {

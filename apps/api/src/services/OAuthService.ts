@@ -2,8 +2,6 @@ import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
-const prisma = new PrismaClient();
-
 interface OAuthUserData {
   provider: 'google' | 'github';
   providerId: string;
@@ -18,7 +16,10 @@ interface OAuthUserData {
  * 2. User exists with this email -> link OAuth ID to account
  * 3. New user -> create with OAuth ID
  */
-export async function findOrCreateOAuthUser(data: OAuthUserData) {
+export async function findOrCreateOAuthUser(
+  prisma: PrismaClient,
+  data: OAuthUserData
+) {
   const { provider, providerId, email, name } = data;
   
   // Determine which field to check based on provider

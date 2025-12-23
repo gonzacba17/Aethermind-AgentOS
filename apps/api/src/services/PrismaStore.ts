@@ -1,6 +1,7 @@
 ﻿import { PrismaClient, type Prisma } from '@prisma/client';
 import type { LogEntry, Trace, CostInfo, ExecutionResult, LogLevel, AgentStatus, TraceNode } from '@aethermind/core';
 import type { StoreInterface, PaginatedResult, AgentRecord } from './PostgresStore';
+import logger from '../utils/logger';
 
 /**
  * PrismaStore - Type-safe data access using Prisma Client
@@ -30,9 +31,9 @@ export class PrismaStore implements StoreInterface {
     });
 
     if (process.env['NODE_ENV'] === 'development') {
-      this.prisma.$on('query', (e: { duration: number; query: string }) => {
+      (this.prisma.$on as any)('query', (e: { duration: number; query: string }) => {
         if (e.duration > 100) {
-          console.warn(`[Slow Query] ${e.duration}ms: ${e.query}`);
+          logger.warn('Slow Prisma query detected', { duration: e.duration, query: e.query });
         }
       });
     }
@@ -42,10 +43,10 @@ export class PrismaStore implements StoreInterface {
     try {
       await this.prisma.$connect();
       this.connected = true;
-      console.log('Prisma connected successfully');
+      logger.info('Prisma connected successfully');
       return true;
     } catch (error) {
-      console.error('Failed to connect via Prisma:', error);
+      logger.error('Failed to connect to Prisma', { error });
       this.connected = false;
       return false;
     }
@@ -76,7 +77,7 @@ export class PrismaStore implements StoreInterface {
         },
       });
     } catch (error) {
-      console.error('Failed to add agent:', error);
+      logger.error('Failed to add agent', { error });
     }
   }
 
@@ -103,7 +104,7 @@ export class PrismaStore implements StoreInterface {
       ]);
 
       return {
-        data: data.map(agent => ({
+        data: data.map((agent: any) => ({
           id: agent.id,
           userId: agent.userId,
           name: agent.name,
@@ -118,7 +119,7 @@ export class PrismaStore implements StoreInterface {
         hasMore: offset + limit < total,
       };
     } catch (error) {
-      console.error('Failed to get agents:', error);
+      logger.error('Failed to get agents', { error });
       return {
         data: [],
         total: 0,
@@ -143,7 +144,7 @@ export class PrismaStore implements StoreInterface {
         updatedAt: agent.updatedAt || undefined,
       };
     } catch (error) {
-      console.error('Failed to get agent:', error);
+      logger.error('Failed to get agent', { error });
       return undefined;
     }
   }
@@ -173,7 +174,7 @@ export class PrismaStore implements StoreInterface {
         },
       });
     } catch (error) {
-      console.error('Failed to add log:', error);
+      logger.error('Failed to add log', { error });
     }
   }
 
@@ -204,7 +205,7 @@ export class PrismaStore implements StoreInterface {
       ]);
 
       return {
-        data: data.map(log => ({
+        data: data.map((log: any) => ({
           id: log.id,
           executionId: log.executionId || undefined,
           agentId: log.agentId || undefined,
@@ -219,7 +220,7 @@ export class PrismaStore implements StoreInterface {
         hasMore: offset + limit < total,
       };
     } catch (error) {
-      console.error('Failed to get logs:', error);
+      logger.error('Failed to get logs', { error });
       return {
         data: [],
         total: 0,
@@ -234,7 +235,7 @@ export class PrismaStore implements StoreInterface {
     try {
       return await this.prisma.log.count();
     } catch (error) {
-      console.error('Failed to get log count:', error);
+      logger.error('Failed to get log count', { error});
       return 0;
     }
   }
@@ -243,7 +244,7 @@ export class PrismaStore implements StoreInterface {
     try {
       await this.prisma.log.deleteMany();
     } catch (error) {
-      console.error('Failed to clear logs:', error);
+      logger.error('Failed to clear logs', { error });
     }
   }
 
@@ -263,7 +264,7 @@ export class PrismaStore implements StoreInterface {
         },
       });
     } catch (error) {
-      console.error('Failed to add trace:', error);
+      logger.error('Failed to add trace', { error });
     }
   }
 
@@ -282,7 +283,7 @@ export class PrismaStore implements StoreInterface {
         createdAt: trace.createdAt || new Date(),
       };
     } catch (error) {
-      console.error('Failed to get trace:', error);
+      logger.error('Failed to get trace', { error });
       return undefined;
     }
   }
@@ -294,14 +295,14 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return traces.map(trace => ({
+      return traces.map((trace: any) => ({
         id: trace.id,
         executionId: trace.executionId || '',
         rootNode: trace.treeData as unknown as TraceNode,
         createdAt: trace.createdAt || new Date(),
       }));
     } catch (error) {
-      console.error('Failed to get all traces:', error);
+      logger.error('Failed to get all traces', { error });
       return [];
     }
   }
@@ -322,7 +323,7 @@ export class PrismaStore implements StoreInterface {
         },
       });
     } catch (error) {
-      console.error('Failed to add cost:', error);
+      logger.error('Failed to add cost', { error });
     }
   }
 
@@ -351,7 +352,7 @@ export class PrismaStore implements StoreInterface {
       ]);
 
       return {
-        data: data.map(cost => ({
+        data: data.map((cost: any) => ({
           executionId: cost.executionId || '',
           model: cost.model,
           tokens: {
@@ -368,7 +369,7 @@ export class PrismaStore implements StoreInterface {
         hasMore: offset + limit < total,
       };
     } catch (error) {
-      console.error('Failed to get costs:', error);
+      logger.error('Failed to get costs', { error });
       return {
         data: [],
         total: 0,
@@ -386,7 +387,7 @@ export class PrismaStore implements StoreInterface {
       });
       return parseFloat(result._sum.cost?.toString() || '0');
     } catch (error) {
-      console.error('Failed to get total cost:', error);
+      logger.error('Failed to get total cost', { error });
       return 0;
     }
   }
@@ -404,7 +405,7 @@ export class PrismaStore implements StoreInterface {
       }
       return byModel;
     } catch (error) {
-      console.error('Failed to get cost by model:', error);
+      logger.error('Failed to get cost by model', { error });
       return {};
     }
   }
@@ -435,7 +436,7 @@ export class PrismaStore implements StoreInterface {
         },
       });
     } catch (error) {
-      console.error('Failed to add execution:', error);
+      logger.error('Failed to add execution', { error });
     }
   }
 
@@ -454,11 +455,11 @@ export class PrismaStore implements StoreInterface {
         output: execution.output,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
-        completedAt: execution.completedAt || undefined,
+        completedAt: execution.completedAt || new Date(),
         duration: execution.durationMs || 0,
       };
     } catch (error) {
-      console.error('Failed to get execution:', error);
+      logger.error('Failed to get execution', { error });
       return undefined;
     }
   }
@@ -470,18 +471,18 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return executions.map(execution => ({
+      return executions.map((execution: any) => ({
         executionId: execution.id,
         agentId: execution.agentId || '',
         status: execution.status as AgentStatus,
         output: execution.output,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
-        completedAt: execution.completedAt || undefined,
+        completedAt: execution.completedAt || new Date(),
         duration: execution.durationMs || 0,
       }));
     } catch (error) {
-      console.error('Failed to get all executions:', error);
+      logger.error('Failed to get all executions', { error });
       return [];
     }
   }
@@ -494,18 +495,18 @@ export class PrismaStore implements StoreInterface {
         take: 100,
       });
 
-      return executions.map(execution => ({
+      return executions.map((execution: any) => ({
         executionId: execution.id,
         agentId: execution.agentId || '',
         status: execution.status as AgentStatus,
         output: execution.output,
         error: execution.error ? new Error(execution.error) : undefined,
         startedAt: execution.startedAt || new Date(),
-        completedAt: execution.completedAt || undefined,
+        completedAt: execution.completedAt || new Date(),
         duration: execution.durationMs || 0,
       }));
     } catch (error) {
-      console.error('Failed to get executions by agent:', error);
+      logger.error('Failed to get executions by agent', { error });
       return [];
     }
   }

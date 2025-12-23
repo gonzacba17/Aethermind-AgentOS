@@ -1,11 +1,9 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
-import { PrismaClient } from '@prisma/client';
 import { findOrCreateOAuthUser } from '../services/OAuthService';
 import logger from '../utils/logger';
-
-const prisma = new PrismaClient();
+import prisma from '../lib/prisma';
 
 // Configure Google OAuth Strategy
 passport.use(
@@ -22,7 +20,7 @@ passport.use(
           email: profile.emails?.[0]?.value,
         });
 
-        const user = await findOrCreateOAuthUser({
+        const user = await findOrCreateOAuthUser(prisma, {
           provider: 'google',
           providerId: profile.id,
           email: profile.emails?.[0]?.value || '',
@@ -53,7 +51,7 @@ passport.use(
           username: profile.username,
         });
 
-        const user = await findOrCreateOAuthUser({
+        const user = await findOrCreateOAuthUser(prisma, {
           provider: 'github',
           providerId: profile.id,
           email: profile.emails?.[0]?.value || `${profile.username}@github.local`,

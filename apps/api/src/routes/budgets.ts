@@ -87,7 +87,7 @@ router.get('/:id', async (req, res) => {
 router.patch('/:id', validateBody(UpdateBudgetSchema), async (req, res) => {
   try {
     await req.budgetService.updateBudget(
-      req.params.id,
+      req.params.id!,
       (req.user as any)?.id,
       req.body
     );

@@ -59,10 +59,10 @@ export function CostDashboard({ summary }: CostDashboardProps) {
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={modelData}>
                   <XAxis dataKey="model" />
-                  <YAxis tickFormatter={(value) => `$${value.toFixed(2)}`} />
+                  <YAxis tickFormatter={(value: number) => `$${value.toFixed(2)}`} />
                   <Tooltip
                     formatter={(value: number) => formatCost(value)}
-                    labelFormatter={(label) => modelData.find((d) => d.model === label)?.fullModel || label}
+                    labelFormatter={(label: string) => modelData.find((d) => d.model === label)?.fullModel || label}
                   />
                   <Bar dataKey="cost" fill="#0088FE" />
                 </BarChart>
@@ -90,7 +90,7 @@ export function CostDashboard({ summary }: CostDashboardProps) {
                     cx="50%"
                     cy="50%"
                     outerRadius={100}
-                    label={({ model, percent }) => `${model} (${(percent * 100).toFixed(0)}%)`}
+                    label={({ model, percent }: { model: string; percent: number }) => `${model} (${(percent * 100).toFixed(0)}%)`}
                   >
                     {modelData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

@@ -122,14 +122,14 @@ export function CostHistoryChart({ costs }: CostHistoryChartProps) {
                             <XAxis
                                 dataKey="date"
                                 tick={{ fontSize: 12 }}
-                                tickFormatter={(value) => {
+                                tickFormatter={(value: string) => {
                                     const date = new Date(value);
                                     return `${date.getMonth() + 1}/${date.getDate()}`;
                                 }}
                             />
                             <YAxis
                                 tick={{ fontSize: 12 }}
-                                tickFormatter={(value) => `$${value.toFixed(2)}`}
+                                tickFormatter={(value: number) => `$${value.toFixed(2)}`}
                             />
                             <Tooltip
                                 content={({ active, payload }) => {

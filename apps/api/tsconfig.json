@@ -9,13 +9,18 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "esModuleInterop": true,
-    "strict": false,
+    "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "declaration": true,
-    "noImplicitAny": false,
-    "noPropertyAccessFromIndexSignature": false,
-    "strictNullChecks": false
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noPropertyAccessFromIndexSignature": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

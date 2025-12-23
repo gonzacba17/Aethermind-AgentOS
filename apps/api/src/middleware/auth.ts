@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import type { RedisCache } from '../services/RedisCache.js';
+import logger from '../utils/logger';
 
 const API_KEY_HEADER = 'x-api-key';
 const AUTH_CACHE_TTL = 300;
@@ -34,12 +35,8 @@ export async function authMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  // Temporary bypass for OAuth debugging
-  if (process.env.DISABLE_API_AUTH === 'true') {
-    console.log(`[AUTH] DISABLED - allowing all requests`);
-    next();
-    return;
-  }
+  // Security: DISABLE_API_AUTH removed for production safety
+  // Authentication is now always required
 
   // Public routes - no auth required
   // Use originalUrl to catch full path including /api prefix
@@ -47,7 +44,7 @@ export async function authMiddleware(
   
   // Debug logging for OAuth routes
   if (url.includes('/auth/')) {
-    console.log('[AUTH MIDDLEWARE DEBUG]', {
+    logger.debug('Auth middleware processing OAuth route', {
       url,
       path: req.path,
       originalUrl: req.originalUrl,
@@ -61,7 +58,7 @@ export async function authMiddleware(
   
   if (publicRoutes.includes(req.path) || 
       publicPathPrefixes.some(prefix => url.startsWith(prefix))) {
-    console.log(`[AUTH] Allowing public route: ${url}`);
+    logger.debug('Allowing public route', { url });
     next();
     return;
   }
@@ -88,11 +85,10 @@ async function validateJWT(
   const token = authHeader?.replace('Bearer ', '');
 
   if (!token) {
-    console.warn('auth_failure', {
+    logger.warn('JWT authentication failed: token missing', {
       reason: 'missing_jwt',
       ip: req.ip,
       path: req.path,
-      timestamp: new Date().toISOString(),
     });
     res.status(401).json({
       error: 'Unauthorized',
@@ -102,7 +98,20 @@ async function validateJWT(
   }
 
   try {
-    const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production-min-32-chars';
+    // Enforce JWT_SECRET requirement
+    const JWT_SECRET = (() => {
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        throw new Error(
+          'JWT_SECRET environment variable is required. Generate with: openssl rand -base64 32'
+        );
+      }
+      if (secret.length < 32) {
+        throw new Error('JWT_SECRET must be at least 32 characters long');
+      }
+      return secret;
+    })();
+    
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     // Attach user info to request
@@ -116,12 +125,11 @@ async function validateJWT(
     
     next();
   } catch (error) {
-    console.warn('auth_failure', {
+    logger.warn('JWT authentication failed: invalid token', {
       reason: 'invalid_jwt',
       ip: req.ip,
       path: req.path,
       error: (error as Error).message,
-      timestamp: new Date().toISOString(),
     });
     res.status(403).json({
       error: 'Forbidden',
@@ -144,7 +152,7 @@ async function validateApiKey(
   }
 
   if (!authConfig.apiKeyHash) {
-    console.warn('API_KEY_HASH not configured - admin routes disabled');
+    logger.warn('API_KEY_HASH not configured - admin routes disabled');
     res.status(503).json({
       error: 'Service Unavailable',
       message: 'Admin authentication not configured.',
@@ -155,11 +163,10 @@ async function validateApiKey(
   const apiKey = req.header(API_KEY_HEADER);
 
   if (!apiKey) {
-    console.warn('auth_failure', {
+    logger.warn('API Key authentication failed: key missing', {
       reason: 'missing_api_key',
       ip: req.ip,
       path: req.path,
-      timestamp: new Date().toISOString(),
     });
     res.status(401).json({
       error: 'Unauthorized',
@@ -183,11 +190,10 @@ async function validateApiKey(
     const isValid = await bcrypt.compare(apiKey, authConfig.apiKeyHash);
 
     if (!isValid) {
-      console.warn('auth_failure', {
+      logger.warn('API Key authentication failed: invalid key', {
         reason: 'invalid_api_key',
         ip: req.ip,
         path: req.path,
-        timestamp: new Date().toISOString(),
       });
       res.status(403).json({
         error: 'Forbidden',
@@ -202,12 +208,11 @@ async function validateApiKey(
 
     next();
   } catch (error) {
-    console.error('auth_failure', {
+    logger.error('API Key authentication error', {
       reason: 'auth_error',
       ip: req.ip,
       path: req.path,
       error: (error as Error).message,
-      timestamp: new Date().toISOString(),
     });
     res.status(500).json({
       error: 'Internal Server Error',
@@ -226,7 +231,7 @@ export async function verifyApiKey(apiKey: string | undefined): Promise<boolean>
   }
 
   if (!authConfig.apiKeyHash) {
-    console.warn('API_KEY_HASH not configured - authentication disabled');
+    logger.warn('API_KEY_HASH not configured - authentication disabled');
     return true;
   }
 
@@ -237,7 +242,7 @@ export async function verifyApiKey(apiKey: string | undefined): Promise<boolean>
   try {
     return await bcrypt.compare(apiKey, authConfig.apiKeyHash);
   } catch (error) {
-    console.error('verifyApiKey error:', error);
+    logger.error('verifyApiKey error', { error });
     return false;
   }
 }

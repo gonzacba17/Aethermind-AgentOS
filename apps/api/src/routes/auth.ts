@@ -110,6 +110,10 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    if (!user.passwordHash) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
     const validPassword = await bcrypt.compare(password, user.passwordHash);
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });

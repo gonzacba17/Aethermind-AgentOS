@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import { v4 as uuid } from 'uuid';
+import logger from '../utils/logger';
 
 interface Client {
   id: string;
@@ -26,14 +27,14 @@ export class WebSocketManager {
 
       // Check if API key is provided
       if (!apiKey) {
-        console.warn('[WebSocket] Connection rejected: No API key provided');
+        logger.warn('WebSocket connection rejected: no API key', { clientId });
         ws.close(1008, 'Authentication required: Missing API key');
         return;
       }
 
       // Check if verifyApiKey function is configured
       if (!this.verifyApiKey) {
-        console.error('[WebSocket] Connection rejected: verifyApiKey not configured');
+        logger.error('WebSocket connection rejected: verifyApiKey not configured', { clientId });
         ws.close(1008, 'Authentication not configured');
         return;
       }
@@ -42,7 +43,7 @@ export class WebSocketManager {
       const authenticated = await this.verifyApiKey(apiKey);
 
       if (!authenticated) {
-        console.warn('[WebSocket] Connection rejected: Invalid API key');
+        logger.warn('WebSocket connection rejected: invalid API key', { clientId });
         ws.close(1008, 'Authentication failed: Invalid API key');
         return;
       }
@@ -55,7 +56,7 @@ export class WebSocketManager {
       };
 
       this.clients.set(clientId, client);
-      console.log(`[WebSocket] Client connected: ${clientId} (authenticated: ${authenticated})`);
+      logger.info('WebSocket client connected', { clientId, authenticated });
 
       this.send(ws, 'connected', { clientId, authenticated });
 
@@ -64,17 +65,17 @@ export class WebSocketManager {
           const message = JSON.parse(data.toString()) as { type: string; channels?: string[] };
           this.handleMessage(client, message);
         } catch {
-          console.error('Invalid WebSocket message');
+          logger.error('Invalid WebSocket message received');
         }
       });
 
       ws.on('close', () => {
         this.clients.delete(clientId);
-        console.log(`[WebSocket] Client disconnected: ${clientId}`);
+        logger.info('WebSocket client disconnected', { clientId });
       });
 
       ws.on('error', (error) => {
-        console.error(`WebSocket error for client ${clientId}:`, error);
+        logger.error('WebSocket error', { clientId, error: error.message });
         this.clients.delete(clientId);
       });
     });

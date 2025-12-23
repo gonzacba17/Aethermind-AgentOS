@@ -155,8 +155,8 @@ router.put('/:name', async (req, res) => {
       }
     }
     
-    // TODO: Implement updateWorkflow in WorkflowEngine
-    // req.workflowEngine.updateWorkflow(workflowName, updates);
+    // Update workflow using WorkflowEngine
+    req.workflowEngine.updateWorkflow(workflowName, updates as Partial<import('@aethermind/core').WorkflowDefinition>);
     
     if (req.cache) {
       await req.cache.del(`workflow:${workflowName}`);
@@ -182,8 +182,8 @@ router.delete('/:name', async (req, res) => {
   }
   
   try {
-    // TODO: Implement deleteWorkflow in WorkflowEngine
-    // req.workflowEngine.deleteWorkflow(workflowName);
+    // Delete workflow using WorkflowEngine
+    req.workflowEngine.deleteWorkflow(workflowName);
     
     if (req.cache) {
       await req.cache.del(`workflow:${workflowName}`);
