@@ -57,7 +57,10 @@ router.get(
         throw new Error('No user returned from OAuth');
       }
       
-      const redirect = req.session?.oauthRedirect || process.env.DASHBOARD_URL || 'http://localhost:3000';
+      const redirect = req.session?.oauthRedirect || 
+                       process.env.FRONTEND_URL || 
+                       process.env.DASHBOARD_URL || 
+                       'https://aethermind-page.vercel.app';
       
       // Generate JWT token
       const token = jwt.sign(
@@ -76,6 +79,7 @@ router.get(
         userId: user.id,
         email: user.email,
         provider: 'google',
+        redirectingTo: redirect,
       });
       
       // Clear session
@@ -84,15 +88,20 @@ router.get(
       }
       
       // Redirect to frontend with token
+      logger.info('Redirecting to frontend with token', { url: `${redirect}?token=***` });
       res.redirect(`${redirect}?token=${token}`);
     } catch (error) {
       logger.error('OAuth callback error', {
         error: (error as Error).message,
+        stack: (error as Error).stack,
         provider: 'google',
       });
       
-      const redirect = req.session?.oauthRedirect || process.env.DASHBOARD_URL || 'http://localhost:3000';
-      res.redirect(`${redirect}?error=oauth_failed`);
+      const redirect = req.session?.oauthRedirect || 
+                       process.env.FRONTEND_URL || 
+                       process.env.DASHBOARD_URL || 
+                       'https://aethermind-page.vercel.app';
+      res.redirect(`${redirect}?error=oauth_failed&message=${encodeURIComponent((error as Error).message)}`)  ;
     }
   }
 );
@@ -141,7 +150,10 @@ router.get(
         throw new Error('No user returned from OAuth');
       }
       
-      const redirect = req.session?.oauthRedirect || process.env.DASHBOARD_URL || 'http://localhost:3000';
+      const redirect = req.session?.oauthRedirect || 
+                       process.env.FRONTEND_URL || 
+                       process.env.DASHBOARD_URL || 
+                       'https://aethermind-page.vercel.app';
       
       // Generate JWT token
       const token = jwt.sign(
@@ -160,6 +172,7 @@ router.get(
         userId: user.id,
         email: user.email,
         provider: 'github',
+        redirectingTo: redirect,
       });
       
       // Clear session
@@ -167,15 +180,20 @@ router.get(
         req.session.oauthRedirect = undefined;
       }
       
+      logger.info('Redirecting to frontend with token', { url: `${redirect}?token=***` });
       res.redirect(`${redirect}?token=${token}`);
     } catch (error) {
       logger.error('OAuth callback error', {
         error: (error as Error).message,
+        stack: (error as Error).stack,
         provider: 'github',
       });
       
-      const redirect = req.session?.oauthRedirect || process.env.DASHBOARD_URL || 'http://localhost:3000';
-      res.redirect(`${redirect}?error=oauth_failed`);
+      const redirect = req.session?.oauthRedirect || 
+                       process.env.FRONTEND_URL || 
+                       process.env.DASHBOARD_URL || 
+                       'https://aethermind-page.vercel.app';
+      res.redirect(`${redirect}?error=oauth_failed&message=${encodeURIComponent((error as Error).message)}`)  ;
     }
   }
 );
