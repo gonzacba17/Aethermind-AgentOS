@@ -325,8 +325,11 @@ async function startServer(): Promise<void> {
   });
 
   // Public routes - OAuth and auth (MUST be before authMiddleware!)
-  app.use('/api/auth', oauthRoutes);
-  app.use('/api/auth', authRoutes);
+  // Mount at BOTH /auth and /api/auth for maximum compatibility
+  app.use('/auth', oauthRoutes);     // Direct /auth/google, /auth/github
+  app.use('/auth', authRoutes);      // Direct /auth/login, /auth/signup  
+  app.use('/api/auth', oauthRoutes); // Also at /api/auth/google
+  app.use('/api/auth', authRoutes);  // Also at /api/auth/login
 
   // Apply auth middleware to all OTHER /api routes
   // This will NOT affect routes already defined above
