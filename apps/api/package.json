@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist",
     "test": "cross-env NODE_OPTIONS='--experimental-vm-modules' jest",
-    "postinstall": "prisma generate && prisma db push --accept-data-loss --skip-generate"
+    "postinstall": "prisma generate --schema=../../prisma/schema.prisma && prisma db push --schema=../../prisma/schema.prisma --accept-data-loss --skip-generate"
   },
   "dependencies": {
     "@aethermind/core": "workspace:*",
