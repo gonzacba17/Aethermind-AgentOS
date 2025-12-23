@@ -286,7 +286,10 @@ async function startServer(): Promise<void> {
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
-  // HTTP request metrics middleware
+  // HTTP request metrics middleware - DISABLED TEMPORARILY
+  // TODO: Fix metrics module initialization before re-enabling
+  // Issue: httpRequestDuration.labels is not a function in production
+  /*
   app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
@@ -297,6 +300,8 @@ async function startServer(): Promise<void> {
     });
     next();
   });
+  */
+  logger.warn('⚠️  Prometheus metrics middleware disabled - fix metrics module before re-enabling');
 
   app.get('/api/openapi', (_req, res) => {
     res.sendFile('/docs/openapi.yaml', { root: process.cwd() });
