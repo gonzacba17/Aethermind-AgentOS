@@ -1,10 +1,10 @@
-import { Router, Request, Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { apiKeyAuthCached } from '../middleware/apiKeyAuth.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 
-const router = Router();
+const router: Router = Router();
 const prisma = new PrismaClient();
 
 /**
