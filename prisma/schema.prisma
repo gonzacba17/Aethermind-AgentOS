@@ -8,6 +8,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(255)
+  slug            String   @unique @db.VarChar(255)
+  apiKeyHash      String   @unique @map("api_key_hash") @db.VarChar(255)
+  plan            String   @default("FREE") @db.VarChar(50)
+  rateLimitPerMin Int      @default(100) @map("rate_limit_per_min")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  users           User[]
+  events          TelemetryEvent[]
+  
+  @@index([apiKeyHash], map: "idx_organizations_api_key")
+  @@index([plan], map: "idx_organizations_plan")
+  @@map("organizations")
+}
+
 model User {
   id               String      @id @default(cuid())
   email            String      @unique @db.VarChar(255)
@@ -25,8 +43,11 @@ model User {
   verificationToken String?    @map("verification_token") @db.VarChar(255)
   resetToken       String?     @map("reset_token") @db.VarChar(255)
   resetTokenExpiry DateTime?   @map("reset_token_expiry") @db.Timestamptz(6)
+  organizationId   String?     @map("organization_id") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   agents           Agent[]
   workflows        Workflow[]
   executions       Execution[]
@@ -37,6 +58,7 @@ model User {
   @@index([plan], map: "idx_users_plan")
   @@index([googleId], map: "idx_users_google_id")
   @@index([githubId], map: "idx_users_github_id")
+  @@index([organizationId], map: "idx_users_organization_id")
   @@map("users")
 }
 
@@ -186,4 +208,28 @@ model AlertLog {
   @@index([budgetId], map: "idx_alert_logs_budget_id")
   @@index([sentAt], map: "idx_alert_logs_sent_at")
   @@map("alert_logs")
+}
+
+model TelemetryEvent {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  timestamp        DateTime     @db.Timestamptz(6)
+  provider         String       @db.VarChar(50)
+  model            String       @db.VarChar(255)
+  promptTokens     Int          @map("prompt_tokens")
+  completionTokens Int          @map("completion_tokens")
+  totalTokens      Int          @map("total_tokens")
+  cost             Decimal      @db.Decimal(10, 6)
+  latency          Int
+  status           String       @db.VarChar(20)
+  error            String?
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@index([organizationId, timestamp], map: "idx_telemetry_org_time")
+  @@index([provider, model], map: "idx_telemetry_provider_model")
+  @@index([status], map: "idx_telemetry_status")
+  @@index([createdAt], map: "idx_telemetry_created_at")
+  @@map("telemetry_events")
 }

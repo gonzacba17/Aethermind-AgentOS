@@ -35,6 +35,97 @@ Aethermind AgentOS is built as a **monorepo** using pnpm workspaces and Turborep
 
 ---
 
+## SaaS Hybrid Architecture (v0.2.0+)
+
+### Evolution from Self-Hosted to SaaS
+
+Aethermind AgentOS is transitioning to a **hybrid SaaS model** where client applications install a lightweight SDK that automatically monitors AI API usage:
+
+**Architecture Components:**
+
+1. **Client SDK** (`@aethermind/agent`): Lightweight NPM package installed in client applications
+2. **Telemetry Interception**: SDK monkey-patches OpenAI/Anthropic SDKs to capture API calls automatically
+3. **Cloud Ingestion API**: Events batched and sent to centralized ingestion endpoint
+4. **Multi-tenant Dashboard**: Organizations monitor costs via cloud dashboard
+
+**Key Benefits:**
+
+- ✅ **Zero code changes** - Drop-in integration with existing OpenAI/Anthropic code
+- ✅ **Automatic tracking** - No manual instrumentation needed
+- ✅ **Real-time visibility** - Live cost and usage monitoring
+- ✅ **Multi-tenant isolation** - Organization-scoped data and API keys
+
+### Data Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant App as Client App
+    participant SDK as @aethermind/agent
+    participant OpenAI as OpenAI API
+    participant Ingest as Cloud API<br/>/v1/ingest
+    participant DB as PostgreSQL
+    participant Dashboard as Dashboard UI
+
+    App->>SDK: initAethermind(config)
+    SDK->>SDK: Instrument OpenAI SDK
+
+    App->>SDK: openai.chat.completions.create()
+    SDK->>OpenAI: Proxied API call
+    OpenAI-->>SDK: Response + usage
+    SDK->>SDK: Calculate cost & capture event
+    SDK->>Ingest: POST /v1/ingest (batched)
+    Ingest->>DB: Store telemetry
+
+    Dashboard->>DB: Query metrics
+    DB-->>Dashboard: Cost & usage data
+```
+
+### Multi-tenant Data Model
+
+**Organization** is the top-level tenant:
+
+- Each organization has one unique API key
+- Users belong to organizations (N:1 relationship)
+- All telemetry events scoped to `organizationId`
+- Rate limits enforced per organization based on plan
+
+```mermaid
+erDiagram
+    Organization ||--o{ User : "has members"
+    Organization ||--o{ TelemetryEvent : "generates"
+
+    Organization {
+        uuid id PK
+        string name
+        string slug UK
+        string apiKeyHash UK
+        string plan
+        int rateLimitPerMin
+    }
+
+    User {
+        string id PK
+        string email UK
+        uuid organizationId FK
+        string plan
+    }
+
+    TelemetryEvent {
+        uuid id PK
+        uuid organizationId FK
+        timestamp timestamp
+        string provider
+        string model
+        int promptTokens
+        int completionTokens
+        decimal cost
+        int latency
+        string status
+    }
+```
+
+---
+
 ## System Architecture
 
 ```mermaid
@@ -667,6 +758,6 @@ Cloud Provider (AWS/GCP/Azure)
 
 ---
 
-**Last Updated**: 2025-11-28  
-**Version**: 0.1.0  
+**Last Updated**: 2025-12-25  
+**Version**: 0.2.0-alpha (SaaS Hybrid Pivot)  
 **Maintainer**: Aethermind Team

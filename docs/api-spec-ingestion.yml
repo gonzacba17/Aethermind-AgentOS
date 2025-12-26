@@ -1,0 +1,233 @@
+openapi: 3.0.0
+info:
+  title: Aethermind Telemetry Ingestion API
+  version: 1.0.0
+  description: |
+    API for ingesting telemetry events from Aethermind Agent SDK.
+    Events are captured automatically from OpenAI and Anthropic API calls.
+  contact:
+    email: support@aethermind.io
+    url: https://docs.aethermind.io
+
+servers:
+  - url: https://api.aethermind.io
+    description: Production API
+  - url: http://localhost:3001
+    description: Local development
+
+paths:
+  /v1/ingest:
+    post:
+      summary: Ingest telemetry events
+      description: |
+        Accepts a batch of telemetry events from the Aethermind SDK.
+        Events are processed asynchronously and the endpoint returns immediately.
+      operationId: ingestEvents
+      tags:
+        - Ingestion
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestRequest"
+            examples:
+              openai_success:
+                summary: Successful OpenAI call
+                value:
+                  events:
+                    - timestamp: "2024-12-25T23:00:00.000Z"
+                      provider: "openai"
+                      model: "gpt-4"
+                      tokens:
+                        prompt: 1000
+                        completion: 500
+                        total: 1500
+                      cost: 0.06
+                      latency: 2500
+                      status: "success"
+              anthropic_error:
+                summary: Failed Anthropic call
+                value:
+                  events:
+                    - timestamp: "2024-12-25T23:00:00.000Z"
+                      provider: "anthropic"
+                      model: "claude-3-5-sonnet-20241022"
+                      tokens:
+                        prompt: 0
+                        completion: 0
+                        total: 0
+                      cost: 0
+                      latency: 1000
+                      status: "error"
+                      error: "Rate limit exceeded"
+      responses:
+        "202":
+          description: Events accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestResponse"
+              example:
+                accepted: 10
+                message: "Events queued for processing"
+        "400":
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Invalid request body"
+                message: "Event at index 0 has invalid timestamp format"
+        "401":
+          description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Unauthorized"
+                message: "Invalid API key"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                error: "Rate limit exceeded"
+                message: "You have exceeded your plan's rate limit of 100 events per minute"
+                retryAfter: 60
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API key obtained from Aethermind dashboard.
+        Format: `aether_xxxxxxxxxxxxxxxxxxxxx`
+
+  schemas:
+    IngestRequest:
+      type: object
+      required:
+        - events
+      properties:
+        events:
+          type: array
+          description: Array of telemetry events (max 1000 per request)
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/TelemetryEvent"
+
+    TelemetryEvent:
+      type: object
+      required:
+        - timestamp
+        - provider
+        - model
+        - tokens
+        - cost
+        - latency
+        - status
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when the event occurred
+          example: "2024-12-25T23:00:00.000Z"
+        provider:
+          type: string
+          enum:
+            - openai
+            - anthropic
+          description: LLM provider
+          example: "openai"
+        model:
+          type: string
+          description: Model name used for the request
+          example: "gpt-4"
+        tokens:
+          type: object
+          required:
+            - prompt
+            - completion
+            - total
+          properties:
+            prompt:
+              type: integer
+              minimum: 0
+              description: Input/prompt tokens consumed
+              example: 1000
+            completion:
+              type: integer
+              minimum: 0
+              description: Output/completion tokens consumed
+              example: 500
+            total:
+              type: integer
+              minimum: 0
+              description: Total tokens consumed
+              example: 1500
+        cost:
+          type: number
+          format: double
+          minimum: 0
+          description: Cost in USD
+          example: 0.06
+        latency:
+          type: integer
+          minimum: 0
+          description: Request latency in milliseconds
+          example: 2500
+        status:
+          type: string
+          enum:
+            - success
+            - error
+          description: Execution status
+          example: "success"
+        error:
+          type: string
+          description: Error message (only present if status is 'error')
+          example: "Rate limit exceeded"
+
+    IngestResponse:
+      type: object
+      required:
+        - accepted
+        - message
+      properties:
+        accepted:
+          type: integer
+          description: Number of events accepted
+          example: 10
+        message:
+          type: string
+          description: Human-readable response message
+          example: "Events queued for processing"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: "Unauthorized"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid API key"
+        retryAfter:
+          type: integer
+          description: Seconds to wait before retrying (only for 429 responses)
+          example: 60

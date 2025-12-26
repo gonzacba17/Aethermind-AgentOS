@@ -1,0 +1,49 @@
+{
+  "name": "@aethermind/agent",
+  "version": "0.1.0-alpha.0",
+  "description": "Lightweight SDK for monitoring AI API costs with Aethermind",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "jest"
+  },
+  "keywords": [
+    "openai",
+    "anthropic",
+    "ai",
+    "monitoring",
+    "cost-tracking",
+    "telemetry"
+  ],
+  "author": "Aethermind Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "openai": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    },
+    "@anthropic-ai/sdk": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "rimraf": "^5.0.10"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
