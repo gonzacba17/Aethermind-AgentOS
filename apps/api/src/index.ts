@@ -19,6 +19,7 @@ import { traceRoutes } from './routes/traces';
 import { costRoutes } from './routes/costs';
 import { workflowRoutes } from './routes/workflows';
 import { budgetRoutes } from './routes/budgets';
+import ingestionRoutes from './routes/ingestion';
 import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
 import session from 'express-session';
@@ -335,6 +336,10 @@ async function startServer(): Promise<void> {
   app.use('/auth', authRoutes);      // Direct /auth/login, /auth/signup  
   app.use('/api/auth', oauthRoutes); // Also at /api/auth/google
   app.use('/api/auth', authRoutes);  // Also at /api/auth/login
+
+  // Public ingestion endpoint - uses its own auth middleware
+  // Must be before general authMiddleware
+  app.use('/v1', ingestionRoutes);
 
   // Apply auth middleware to all OTHER /api routes
   // This will NOT affect routes already defined above
