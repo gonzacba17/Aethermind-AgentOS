@@ -36,7 +36,8 @@
     }
   },
   "dependencies": {
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@aethermind/core-shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

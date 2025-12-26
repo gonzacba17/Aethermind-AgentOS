@@ -39,12 +39,31 @@ export function initAethermind(config: Partial<AethermindConfig> & { apiKey: str
     return;
   }
   
-  console.log('[Aethermind] SDK initialized successfully');
-  
-  // TODO: Initialize interceptors here in Phase 1
-  // - OpenAIInterceptor
-  // - AnthropicInterceptor
-  // - BatchTransport
+  // Import interceptors and transport dynamically to avoid circular deps
+  import('../interceptors/index.js').then(({ OpenAIInterceptor, AnthropicInterceptor }) => {
+    import('../transport/BatchTransport.js').then(({ getTransport }) => {
+      const transport = getTransport();
+      
+      // Create interceptors with callback to transport
+      const openaiInterceptor = new OpenAIInterceptor((event) => {
+        transport.send(event);
+      });
+      
+      const anthropicInterceptor = new AnthropicInterceptor((event) => {
+        transport.send(event);
+      });
+      
+      // Instrument SDKs
+      openaiInterceptor.instrument();
+      anthropicInterceptor.instrument();
+      
+      console.log('[Aethermind] SDK initialized successfully');
+    }).catch((error) => {
+      console.error('[Aethermind] Failed to initialize transport:', error);
+    });
+  }).catch((error) => {
+    console.error('[Aethermind] Failed to initialize interceptors:', error);
+  });
 }
 
 /**

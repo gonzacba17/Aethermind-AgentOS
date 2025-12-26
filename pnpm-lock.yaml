@@ -278,6 +278,9 @@ importers:
 
   packages/agent:
     dependencies:
+      '@aethermind/core-shared':
+        specifier: workspace:*
+        version: link:../core-shared
       openai:
         specifier: ^4.0.0
         version: 4.104.0(ws@8.18.3)(zod@3.25.76)
