@@ -1,8 +1,29 @@
 # Aethermind AgentOS
 
-> **FinOps Platform for AI** - Control and prevent excessive LLM costs before they happen
+> **FinOps Platform for AI Cost Control** - Track, predict, and optimize your OpenAI and Anthropic API costs in real-time.
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue)](https://www.typescriptlang.org/)
+**🎯 Now Available: SaaS Hybrid Model**
+
+Install our lightweight SDK to automatically monitor AI API costs with zero code changes:
+
+```bash
+npm install @aethermind/agent
+# or
+pnpm add @aethermind/agent
+```
+
+```typescript
+import { initAethermind } from '@aethermind/agent';
+
+initAethermind({ apiKey: process.env.AETHERMIND_API_KEY });
+
+// Use OpenAI as normal - events automatically tracked!
+const response = await openai.chat.completions.create({ ... });
+```
+
+See [`packages/agent/README.md`](./packages/agent/README.md) for complete documentation.
+
+---[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange)](https://github.com/aethermind/agentos/releases)
