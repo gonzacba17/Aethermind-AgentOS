@@ -70,7 +70,7 @@ export default function OrganizationSettingsPage() {
             <Input 
               id="name" 
               value={organization.name} 
-              onChange={(e) => setOrganization({ ...organization, name: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOrganization({ ...organization, name: e.target.value })}
             />
           </div>
           

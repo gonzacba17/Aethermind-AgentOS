@@ -43,7 +43,7 @@ export default function OnboardingPage() {
         </div>
         <h1 className="text-4xl font-bold mb-2">Welcome to Aethermind!</h1>
         <p className="text-xl text-gray-600">
-          Your organization "{organization.name}" is ready to go.
+          Your organization &quot;{organization.name}&quot; is ready to go.
         </p>
       </div>
 
@@ -85,7 +85,7 @@ export default function OnboardingPage() {
                   Add one line to start tracking automatically
                 </p>
                 <code className="block mt-2 bg-gray-100 px-3 py-2 rounded text-sm">
-                  initAethermind(&#123; apiKey: '{apiKey.slice(0, 20)}...' &#125;);
+                  initAethermind(&#123; apiKey: &apos;{apiKey.slice(0, 20)}...&apos; &#125;);
                 </code>
               </div>
             </div>

@@ -32,7 +32,9 @@ COPY . .
 RUN pnpm add -D @types/jsonwebtoken --filter=@aethermind/api
 
 # Generar Prisma Client
-RUN pnpm prisma generate
+RUN pnpm prisma generate --schema=./prisma/schema.prisma
+# Apply database migrations
+RUN pnpm prisma db push --schema=./prisma/schema.prisma --accept-data-loss || true
 
 # Build del API con todas sus dependencias workspace
 RUN pnpm turbo run build --filter=@aethermind/api...

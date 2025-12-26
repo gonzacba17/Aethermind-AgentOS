@@ -12,7 +12,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 interface TelemetryMetrics {
   summary: {
-    total Cost: number;
+    totalCost: number;
     totalRequests: number;
     totalTokens: number;
     avgLatency: number;
@@ -206,7 +206,7 @@ export default function TelemetryDashboard() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {providerStats.map((stat) => (
+            {providerStats.map((stat: any) => (
               <div key={stat.provider} className="flex items-center justify-between">
                 <div className="flex items-center">
                   <div className="font-semibold capitalize">{stat.provider}</div>
@@ -244,7 +244,7 @@ export default function TelemetryDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentEvents.map((event) => (
+                {recentEvents.map((event: any) => (
                   <tr key={event.id} className="border-b hover:bg-gray-50">
                     <td className="py-2 px-4 text-sm">
                       {new Date(event.timestamp).toLocaleString()}
