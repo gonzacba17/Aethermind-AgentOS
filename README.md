@@ -2,26 +2,27 @@
 
 > **FinOps Platform for AI Cost Control** - Track, predict, and optimize your OpenAI and Anthropic API costs in real-time.
 
-**🎯 Now Available: SaaS Hybrid Model**
+## 🎉 NEW: SaaS Hybrid Model - Production Ready!
 
-Install our lightweight SDK to automatically monitor AI API costs with zero code changes:
+The platform is now available as a **zero-friction SaaS service**:
 
 ```bash
+# Install SDK
 npm install @aethermind/agent
-# or
-pnpm add @aethermind/agent
-```
 
-```typescript
+# One line to start tracking
 import { initAethermind } from '@aethermind/agent';
-
 initAethermind({ apiKey: process.env.AETHERMIND_API_KEY });
 
-// Use OpenAI as normal - events automatically tracked!
-const response = await openai.chat.completions.create({ ... });
+# Use OpenAI/Anthropic normally - costs automatically tracked!
 ```
 
-See [`packages/agent/README.md`](./packages/agent/README.md) for complete documentation.
+**📚 Quick Links:**
+
+- [Quick Start Deployment](./docs/QUICK_START_DEPLOYMENT.md) - Deploy in 15 minutes
+- [Deployment Guide](./docs/DEPLOYMENT-SAAS.md) - Complete guide
+- [SDK Documentation](./packages/agent/README.md) - SDK usage
+- [API Specification](./docs/api-spec-ingestion.yml) - API reference
 
 ---[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-blue)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green)](https://nodejs.org/)
