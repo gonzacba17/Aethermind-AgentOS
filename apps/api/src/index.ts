@@ -23,22 +23,55 @@ async function ensureDatabaseSchema() {
     const prisma = new PrismaClient();
     
     try {
-      // Test connection and ensure tables exist
       await prisma.$connect();
+      console.log('✅ Connected to database');
       
-      // Try to query organizations table to verify schema
-      await prisma.organization.findFirst().catch(async (error: any) => {
-        if (error.code === 'P2021') {
-          console.log('⚠️  Tables not found, schema may need to be applied');
-          console.log('💡 Run: railway run npx prisma db push --schema=./prisma/schema.prisma');
+      // Try to query organizations table
+      try {
+        await prisma.organization.findFirst();
+        console.log('✅ Database schema verified - tables exist');
+      } catch (error: any) {
+        // If table doesn't exist, apply schema automatically
+        if (error.code === 'P2021' || error.message.includes('does not exist')) {
+          console.log('⚠️  Tables not found - applying schema automatically...');
+          
+          try {
+            // Import child_process to run Prisma commands
+            const { execSync } = require('child_process');
+            
+            // Apply schema using db push
+            console.log('🔧 Running: prisma db push...');
+            const output = execSync(
+              'npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate',
+              { 
+                encoding: 'utf-8',
+                cwd: process.cwd(),
+                env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL }
+              }
+            );
+            
+            console.log('✅ Schema applied successfully!');
+            console.log(output);
+            
+            // Verify tables were created
+            await prisma.organization.findFirst();
+            console.log('✅ Database schema verified after creation');
+            
+          } catch (applyError: any) {
+            console.error('❌ Failed to apply schema:', applyError.message);
+            console.log('💡 Manual fix: railway run npx prisma db push --schema=./prisma/schema.prisma');
+            // Don't crash the app, let it try to start anyway
+          }
+        } else {
+          // Other database error
+          throw error;
         }
-        throw error;
-      });
+      }
       
-      console.log('✅ Database schema verified');
     } catch (error: any) {
-      console.error('❌ Database schema check failed:', error.message);
-      // Don't crash the app, let it try to start anyway
+      console.error('❌ Database connection failed:', error.message);
+      console.log('⚠️  API will start but database operations may fail');
+      // Don't crash the app
     } finally {
       await prisma.$disconnect();
     }
