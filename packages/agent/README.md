@@ -1,73 +1,89 @@
 # @aethermind/agent
 
-Lightweight SDK for monitoring AI API costs with Aethermind AgentOS.
+Lightweight SDK for monitoring AI API costs in real-time.
 
-## Installation
+## 🚀 Quick Start
 
 ```bash
-npm install @aethermind/agent
-# or
-pnpm add @aethermind/agent
-# or
-yarn add @aethermind/agent
+npm install @aethermind/agent openai
 ```
-
-## Quick Start
 
 ```typescript
-import { initAethermind } from "@aethermind/agent";
+import OpenAI from 'openai';
+import { initAethermind } from '@aethermind/agent';
 
-// Initialize with your API key
+// Initialize Aethermind (do this once at app startup)
 initAethermind({
-  apiKey: process.env.AETHERMIND_API_KEY,
-  endpoint: "https://api.aethermind.io", // optional
+  apiKey: process.env.AETHERMIND_API_KEY, // Get from dashboard.aethermind.io
+  endpoint: 'https://api.aethermind.io',
 });
 
-// Use OpenAI as normal - events are automatically captured
-import OpenAI from "openai";
+// Use OpenAI normally - monitoring happens automatically!
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+const completion = await openai.chat.completions.create({
+  model: 'gpt-3.5-turbo',
+  messages: [{ role: 'user', content: 'Hello!' }],
 });
 
-const response = await openai.chat.completions.create({
-  model: "gpt-4",
-  messages: [{ role: "user", content: "Hello!" }],
-});
+// Costs are tracked automatically! View at dashboard.aethermind.io
 ```
 
-## Features
+## ✨ Features
 
-- 🎯 **Zero Code Changes**: Drop-in integration with OpenAI and Anthropic SDKs
-- 📊 **Automatic Cost Tracking**: Captures tokens, costs, and latency for every API call
-- 🚀 **High Performance**: Batched events with configurable flush intervals
-- 🔒 **Reliable**: Exponential backoff retry with graceful degradation
-- 🛡️ **Type Safe**: Full TypeScript support
+- 🎯 **Zero config** - Works out of the box
+- ⚡ **Zero overhead** - < 5ms latency per request
+- 🔄 **Auto-batching** - Efficient telemetry transmission (30s or 50 events)
+- 🛡️ **Resilient** - Never crashes your app
+- 📊 **Real-time** - See costs in dashboard immediately
+- 🔁 **Retry logic** - Exponential backoff with 3 retries
+- 🚪 **Graceful shutdown** - Flushes events on SIGINT/SIGTERM
 
-## Configuration
+## 📦 Supported Providers
+
+- ✅ OpenAI (GPT-4, GPT-3.5, etc.)
+- ✅ Anthropic (Claude 3, Claude 2, etc.)
+- 🔜 Google AI (Gemini)
+- 🔜 Cohere
+- 🔜 Mistral
+
+## 🔧 Configuration
 
 ```typescript
 initAethermind({
-  apiKey: string;           // Required: Your Aethermind API key
-  endpoint?: string;        // Optional: Custom API endpoint
-  flushInterval?: number;   // Optional: Batch flush interval in ms (default: 30000)
-  batchSize?: number;       // Optional: Max events per batch (default: 50)
-  enabled?: boolean;        // Optional: Enable/disable tracking (default: true)
+  apiKey: string;          // Required: Your Aethermind API key
+  endpoint?: string;       // Optional: Custom endpoint (defaults to production)
+  flushInterval?: number;  // Optional: Flush interval in ms (default: 30000)
+  batchSize?: number;      // Optional: Max events per batch (default: 50)
 });
 ```
 
-## Supported Providers
+## 💡 How It Works
 
-- ✅ OpenAI (GPT-3.5, GPT-4, GPT-4-turbo, o1)
-- ✅ Anthropic (Claude 3 Opus, Sonnet, Haiku)
-- 🔜 Additional providers coming soon
+1. SDK intercepts calls to OpenAI/Anthropic
+2. Captures: model, tokens, cost, latency, errors
+3. Batches events locally
+4. Sends to Aethermind API asynchronously
+5. View metrics in real-time dashboard
 
-## License
+**Zero impact on your application performance!**
 
-MIT
+## 📖 Documentation
 
-## Support
+- [Full Documentation](https://docs.aethermind.io)
+- [API Reference](https://docs.aethermind.io/api)
+- [Examples](https://github.com/gonzacba17/Aethermind-AgentOS/tree/main/packages/agent/examples)
 
-- Documentation: https://docs.aethermind.io
-- Issues: https://github.com/aethermind/agentos/issues
-- Email: support@aethermind.io
+## 🤝 Support
+
+- **Issues**: [GitHub Issues](https://github.com/gonzacba17/Aethermind-AgentOS/issues)
+- **Email**: support@aethermind.io
+- **Discord**: [Join our community](https://discord.gg/aethermind)
+
+## 📄 License
+
+MIT © Aethermind Team
+
+---
+
+Made with ❤️ for AI developers

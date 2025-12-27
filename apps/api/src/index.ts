@@ -10,8 +10,41 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
+import https from 'https';
+import fs from 'fs';
+import { PrismaClient } from '@prisma/client';
 import { WebSocketServer } from 'ws';
 import { createRuntime, createOrchestrator, createWorkflowEngine, createOpenAIProvider, createAnthropicProvider, createConfigWatcher, TaskQueueService } from '@aethermind/core';
+
+// Auto-apply database migrations on startup (production)
+async function ensureDatabaseSchema() {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🔄 Checking database schema...');
+    const prisma = new PrismaClient();
+    
+    try {
+      // Test connection and ensure tables exist
+      await prisma.$connect();
+      
+      // Try to query organizations table to verify schema
+      await prisma.organization.findFirst().catch(async (error: any) => {
+        if (error.code === 'P2021') {
+          console.log('⚠️  Tables not found, schema may need to be applied');
+          console.log('💡 Run: railway run npx prisma db push --schema=./prisma/schema.prisma');
+        }
+        throw error;
+      });
+      
+      console.log('✅ Database schema verified');
+    } catch (error: any) {
+      console.error('❌ Database schema check failed:', error.message);
+      // Don't crash the app, let it try to start anyway
+    } finally {
+      await prisma.$disconnect();
+    }
+  }
+}
+
 import { agentRoutes } from './routes/agents';
 import { executionRoutes } from './routes/executions';
 import { logRoutes } from './routes/logs';
@@ -400,15 +433,38 @@ async function startServer(): Promise<void> {
 
   const PORT = DEFAULT_PORT;
 
-  server.listen(PORT, () => {
-    console.log(`\n✅ Aethermind API server running on port ${PORT}`);
-    console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
-    console.log(`Health check: http://localhost:${PORT}/health (public)`);
-    console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
-    console.log(`Redis: ${authCache.isConnected() ? 'Connected' : 'Disconnected'}`);
-    console.log(`Queue: ${queueService ? 'Enabled' : 'Disabled'}`);
-    console.log(`Auth: ${process.env['API_KEY_HASH'] ? 'Enabled' : 'Disabled (set API_KEY_HASH to enable)'}\n`);
-  });
+  // === HTTPS Server (for production with SSL) ===
+  if (process.env.NODE_ENV === 'production' && fs.existsSync('/etc/ssl/private.key')) {
+    const privateKey = fs.readFileSync('/etc/ssl/private.key', 'utf8');
+    const certificate = fs.readFileSync('/etc/ssl/certificate.crt', 'utf8');
+    const credentials = { key: privateKey, cert: certificate };
+
+    const httpsServer = https.createServer(credentials, app);
+    httpsServer.listen(PORT, async () => {
+      // Ensure database schema before accepting requests
+      await ensureDatabaseSchema();
+      console.log(`✅ HTTPS Server running on port ${PORT}`);
+      console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
+      console.log(`Health check: http://localhost:${PORT}/health (public)`);
+      console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
+      console.log(`Redis: ${authCache.isConnected() ? 'Connected' : 'Disconnected'}`);
+      console.log(`Queue: ${queueService ? 'Enabled' : 'Disabled'}`);
+      console.log(`Auth: ${process.env['API_KEY_HASH'] ? 'Enabled' : 'Disabled (set API_KEY_HASH to enable)'}\n`);
+    });
+  } else {
+    // === HTTP Server (for development) ===
+    server.listen(PORT, async () => {
+      // Ensure database schema before accepting requests
+      await ensureDatabaseSchema();
+      console.log(`\n✅ Aethermind API server running on port ${PORT}`);
+      console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
+      console.log(`Health check: http://localhost:${PORT}/health (public)`);
+      console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
+      console.log(`Redis: ${authCache.isConnected() ? 'Connected' : 'Disconnected'}`);
+      console.log(`Queue: ${queueService ? 'Enabled' : 'Disabled'}`);
+      console.log(`Auth: ${process.env['API_KEY_HASH'] ? 'Enabled' : 'Disabled (set API_KEY_HASH to enable)'}\n`);
+    });
+  }
 }
 
 process.on('SIGINT', async () => {

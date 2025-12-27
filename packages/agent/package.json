@@ -1,18 +1,22 @@
 {
   "name": "@aethermind/agent",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0",
   "description": "Lightweight SDK for monitoring AI API costs with Aethermind",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "prepublishOnly": "pnpm clean && pnpm build && pnpm typecheck",
+    "test": "vitest"
   },
   "keywords": [
     "openai",
@@ -20,10 +24,22 @@
     "ai",
     "monitoring",
     "cost-tracking",
-    "telemetry"
+    "telemetry",
+    "llm",
+    "observability",
+    "finops"
   ],
   "author": "Aethermind Team",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gonzacba17/Aethermind-AgentOS.git",
+    "directory": "packages/agent"
+  },
+  "bugs": {
+    "url": "https://github.com/gonzacba17/Aethermind-AgentOS/issues"
+  },
+  "homepage": "https://aethermind.io",
   "peerDependencies": {
     "openai": "^4.0.0"
   },
@@ -40,8 +56,9 @@
     "@aethermind/core-shared": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.12.0",
     "typescript": "^5.4.0",
+    "vitest": "^2.1.8",
     "rimraf": "^5.0.10"
   },
   "engines": {

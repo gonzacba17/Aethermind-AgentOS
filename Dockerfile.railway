@@ -30,8 +30,10 @@ COPY . .
 
 # Instalar tipos faltantes antes del build
 RUN pnpm add -D @types/jsonwebtoken --filter=@aethermind/api
+# Copy prisma schema
+COPY prisma ./prisma/
 
-# Generar Prisma Client
+# Generate Prisma Client with correct schema path
 RUN pnpm prisma generate --schema=./prisma/schema.prisma
 # Apply database migrations
 RUN pnpm prisma db push --schema=./prisma/schema.prisma --accept-data-loss || true

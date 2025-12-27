@@ -4,12 +4,15 @@
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "postinstall": "prisma generate --schema=../../prisma/schema.prisma",
+    "db:push": "prisma db push --schema=../../prisma/schema.prisma",
+    "db:migrate:deploy": "prisma migrate deploy --schema=../../prisma/schema.prisma",
+    "db:migrate:dev": "prisma migrate dev --schema=../../prisma/schema.prisma",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist",
-    "test": "cross-env NODE_OPTIONS='--experimental-vm-modules' jest",
-    "postinstall": "prisma generate --schema=../../prisma/schema.prisma && prisma db push --schema=../../prisma/schema.prisma --accept-data-loss --skip-generate"
+    "test": "cross-env NODE_OPTIONS='--experimental-vm-modules' jest"
   },
   "dependencies": {
     "@aethermind/core": "workspace:*",
