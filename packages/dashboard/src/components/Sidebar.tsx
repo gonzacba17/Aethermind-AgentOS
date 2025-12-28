@@ -21,14 +21,14 @@ export function Sidebar() {
     <div className="flex h-screen w-64 flex-col bg-card border-r">
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/" className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-            <span className="text-2xl">⚡</span>
+          <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-xl">
+            A
           </div>
           <div>
-            <span className="font-bold text-lg bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <span className="font-bold text-lg">
               Aethermind
             </span>
-            <p className="text-xs text-muted-foreground">AgentOS</p>
+            <p className="text-xs text-muted-foreground">AgentOS Dashboard</p>
           </div>
         </Link>
       </div>

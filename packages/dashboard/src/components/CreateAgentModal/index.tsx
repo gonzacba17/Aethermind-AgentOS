@@ -102,6 +102,7 @@ export function CreateAgentModal({
     setIsCreating(true);
     setError(null);
     try {
+      console.log('Creating agent with data:', formData);
       const agent = await onCreateAgent({
         name: formData.name,
         model: formData.model,
@@ -112,13 +113,26 @@ export function CreateAgentModal({
         temperature: formData.temperature,
         maxTokens: formData.maxTokens,
       });
+      console.log('Agent created successfully:', agent);
       onSuccess(agent);
       onClose();
     } catch (err: any) {
-      console.error('Failed to create agent:', err);
-      const errorMessage = err?.response?.data?.error 
-        || err?.message 
-        || 'Failed to create agent. Please check your configuration and try again.';
+      console.error('Failed to create agent - Full error:', err);
+      console.error('Error details:', {
+        message: err?.message,
+        response: err?.response,
+        data: err?.response?.data,
+      });
+      
+      // Try to extract meaningful error message
+      let errorMessage = 'Failed to create agent. Please try again.';
+      
+      if (err?.response?.data) {
+        errorMessage = err.response.data.error || err.response.data.message || errorMessage;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setIsCreating(false);
@@ -152,8 +166,7 @@ export function CreateAgentModal({
     <Dialog open={isOpen} onOpenChange={(open: boolean) => !open && handleClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            <span className="text-blue-600">⚡</span>
+          <DialogTitle className="text-2xl font-bold">
             Create New Agent
           </DialogTitle>
           <DialogDescription>
