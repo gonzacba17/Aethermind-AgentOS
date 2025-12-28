@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BackToHomeButton } from '@/components/BackToHomeButton';
 import { CreateAgentModal } from '@/components/CreateAgentModal';
+import type { AgentFormData } from '@/components/CreateAgentModal/types';
 import { fetchAgents, createAgent, executeAgent, type Agent } from '@/lib/api';
 import { Plus, RefreshCw } from 'lucide-react';
 
@@ -41,6 +42,24 @@ export default function AgentsPage() {
 
   const handleAgentCreated = (agent: Agent) => {
     loadAgents();
+  };
+
+  const handleCreateAgent = async (data: Partial<AgentFormData>): Promise<Agent> => {
+    // Ensure name is present (it will be validated in the modal)
+    if (!data.name) {
+      throw new Error('Agent name is required');
+    }
+    
+    return createAgent({
+      name: data.name,
+      model: data.model,
+      systemPrompt: data.systemPrompt,
+      description: data.description,
+      tags: data.tags,
+      provider: data.provider,
+      temperature: data.temperature,
+      maxTokens: data.maxTokens,
+    });
   };
 
   return (
@@ -81,7 +100,7 @@ export default function AgentsPage() {
         onClose={() => setShowModal(false)}
         onSuccess={handleAgentCreated}
         existingAgents={agents}
-        onCreateAgent={createAgent}
+        onCreateAgent={handleCreateAgent}
       />
     </div>
   );
