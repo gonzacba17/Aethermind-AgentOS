@@ -41,6 +41,7 @@ export function CreateAgentModal({
   const [formData, setFormData] = useState<AgentFormData>(initialFormData);
   const [isCreating, setIsCreating] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -99,18 +100,26 @@ export function CreateAgentModal({
 
   const handleCreate = async () => {
     setIsCreating(true);
+    setError(null);
     try {
       const agent = await onCreateAgent({
         name: formData.name,
         model: formData.model,
         systemPrompt: formData.systemPrompt,
-        // Note: Current API might not support all fields, so we only send what's needed
+        description: formData.description,
+        tags: formData.tags,
+        provider: formData.provider,
+        temperature: formData.temperature,
+        maxTokens: formData.maxTokens,
       });
       onSuccess(agent);
       onClose();
-    } catch (error) {
-      console.error('Failed to create agent:', error);
-      alert('Failed to create agent. Please try again.');
+    } catch (err: any) {
+      console.error('Failed to create agent:', err);
+      const errorMessage = err?.response?.data?.error 
+        || err?.message 
+        || 'Failed to create agent. Please check your configuration and try again.';
+      setError(errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -141,13 +150,43 @@ export function CreateAgentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open: boolean) => !open && handleClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Agent</DialogTitle>
+          <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+            <span className="text-blue-600">⚡</span>
+            Create New Agent
+          </DialogTitle>
           <DialogDescription>
-            Set up a new AI agent with custom configuration
+            Set up a new AI agent with custom configuration. Follow the steps below.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Error Display */}
+        {error && (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 my-2">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <svg className="h-5 w-5 text-destructive" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-destructive mb-1">Error Creating Agent</h3>
+                <p className="text-sm text-destructive/90">{error}</p>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-destructive/60 hover:text-destructive transition-colors"
+                type="button"
+                aria-label="Dismiss error"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Progress Indicator */}
         <div className="flex items-center justify-between mb-6">

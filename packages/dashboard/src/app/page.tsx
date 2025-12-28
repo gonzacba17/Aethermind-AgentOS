@@ -6,6 +6,7 @@ import { QuickActions } from '@/components/Home/QuickActions';
 import { RecentActivity } from '@/components/Home/RecentActivity';
 import { GettingStarted } from '@/components/Home/GettingStarted';
 import { AlertBanner } from '@/components/Home/AlertBanner';
+import { BackToHomeButton } from '@/components/BackToHomeButton';
 import { fetchAgents, fetchCostSummary, fetchHealth, type Agent, type CostSummary } from '@/lib/api';
 
 export default function HomePage() {
@@ -43,11 +44,17 @@ export default function HomePage() {
   return (
     <div className="min-h-screen p-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-4xl font-bold mb-2">Welcome to Aethermind</h1>
-        <p className="text-muted-foreground text-lg">
-          Get started by creating your first agent or running a demo workflow
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-5xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-3">
+            <span className="text-blue-600">⚡</span>
+            Welcome to Aethermind
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Your AI Agent Orchestration Platform - Get started by creating your first agent or running a demo workflow
+          </p>
+        </div>
+        <BackToHomeButton />
       </div>
 
       {/* Alert Banners */}
