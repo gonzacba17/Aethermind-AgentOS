@@ -25,9 +25,10 @@ import { PrismaClient } from '@prisma/client';
 import { WebSocketServer } from 'ws';
 import { createRuntime, createOrchestrator, createWorkflowEngine, createOpenAIProvider, createAnthropicProvider, createConfigWatcher, TaskQueueService } from '@aethermind/core';
 
-// Auto-apply database migrations on startup (production)
+// Auto-apply database migrations on startup
 async function ensureDatabaseSchema() {
-  if (process.env.NODE_ENV === 'production') {
+  // Run in any environment if DATABASE_URL is configured
+  if (process.env.DATABASE_URL) {
     console.log('🔄 Checking database schema...');
     const prisma = new PrismaClient();
     
