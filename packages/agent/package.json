@@ -1,6 +1,6 @@
 {
   "name": "@aethermind/agent",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Lightweight SDK for monitoring AI API costs with Aethermind",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

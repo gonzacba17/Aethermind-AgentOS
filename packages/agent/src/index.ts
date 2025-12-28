@@ -9,4 +9,4 @@ export { initAethermind, type AethermindConfig } from './config/index.js';
 export { type TelemetryEvent } from './transport/types.js';
 
 // Version
-export const VERSION = '0.1.0-alpha.0';
+export const VERSION = '0.1.2';

@@ -1,5 +1,14 @@
 import 'dotenv/config';
+
+// Validate critical environment variables early
+if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+  console.error('❌ FATAL: DATABASE_URL is not configured');
+  console.error('💡 Set it in Railway variables or .env file');
+  process.exit(1);
+}
+
 import { initSentry, Sentry } from './lib/sentry';
+
 
 initSentry();
 

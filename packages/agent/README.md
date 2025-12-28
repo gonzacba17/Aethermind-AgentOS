@@ -20,7 +20,7 @@ import { initAethermind } from "@aethermind/agent";
 
 // 1. Initialize Aethermind (once at app startup)
 initAethermind({
-  apiKey: process.env.AETHERMIND_API_KEY, // Get from dashboard.aethermind.io
+  apiKey: process.env.AETHERMIND_API_KEY!, // Get from dashboard.aethermind.io
   endpoint: "https://aethermindapi-production.up.railway.app",
 });
 
@@ -51,33 +51,101 @@ That's it! Costs are tracked automatically.
 
 ## 📖 Configuration
 
-### Options
+### Basic Usage
 
 ```typescript
+import { initAethermind } from "@aethermind/agent";
+
 initAethermind({
-  apiKey: string;        // Required: Your Aethermind API key
-  endpoint?: string;     // Optional: Custom API endpoint
-  autoInstrument?: string[]; // Optional: ['openai', 'anthropic']
-  batchSize?: number;    // Optional: Events per batch (default: 50)
-  flushInterval?: number; // Optional: Flush interval in ms (default: 30000)
-  debug?: boolean;       // Optional: Enable debug logs
+  apiKey: "your-aethermind-api-key", // Required
+  endpoint: "https://api.aethermind.io", // Optional
+  flushInterval: 30000, // Optional: ms between flushes (default: 30000)
+  batchSize: 50, // Optional: events per batch (default: 50)
+  enabled: true, // Optional: enable/disable (default: true)
 });
 ```
 
-### Advanced Usage
+### CommonJS Usage
+
+```javascript
+const { initAethermind } = require("@aethermind/agent");
+
+initAethermind({
+  apiKey: process.env.AETHERMIND_API_KEY,
+  endpoint: "https://aethermindapi-production.up.railway.app",
+});
+```
+
+### Configuration Options
+
+| Option          | Type      | Default                     | Description                        |
+| --------------- | --------- | --------------------------- | ---------------------------------- |
+| `apiKey`        | `string`  | _required_                  | Your Aethermind API key            |
+| `endpoint`      | `string`  | `https://api.aethermind.io` | API endpoint URL                   |
+| `flushInterval` | `number`  | `30000`                     | Milliseconds between batch flushes |
+| `batchSize`     | `number`  | `50`                        | Maximum events per batch           |
+| `enabled`       | `boolean` | `true`                      | Enable/disable monitoring          |
+
+## 📚 Examples
+
+### OpenAI Integration
 
 ```typescript
-// Manual event tracking
-import { trackEvent } from "@aethermind/agent";
+import OpenAI from "openai";
+import { initAethermind } from "@aethermind/agent";
 
-trackEvent({
-  provider: "custom",
-  model: "my-local-llm",
-  tokensPrompt: 500,
-  tokensCompletion: 200,
-  cost: 0.01,
-  latency: 1200,
-  status: "success",
+// Initialize once at startup
+initAethermind({
+  apiKey: process.env.AETHERMIND_API_KEY!,
+});
+
+// Use OpenAI normally
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// All calls are automatically tracked
+const response = await openai.chat.completions.create({
+  model: "gpt-4",
+  messages: [
+    { role: "system", content: "You are a helpful assistant." },
+    { role: "user", content: "What is TypeScript?" },
+  ],
+});
+```
+
+### Anthropic Integration
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+import { initAethermind } from "@aethermind/agent";
+
+// Initialize Aethermind
+initAethermind({
+  apiKey: process.env.AETHERMIND_API_KEY!,
+});
+
+// Use Anthropic normally
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+// Automatically tracked
+const message = await anthropic.messages.create({
+  model: "claude-3-opus-20240229",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Hello, Claude!" }],
+});
+```
+
+### Disable Monitoring in Development
+
+```typescript
+import { initAethermind } from "@aethermind/agent";
+
+initAethermind({
+  apiKey: process.env.AETHERMIND_API_KEY!,
+  enabled: process.env.NODE_ENV === "production", // Only track in prod
 });
 ```
 
@@ -85,9 +153,10 @@ trackEvent({
 
 ### Events not appearing in dashboard?
 
-1. Wait 30 seconds (batch interval)
-2. Check API key is correct
-3. Enable debug mode: `initAethermind({ debug: true })`
+1. Wait 30 seconds (default batch interval)
+2. Verify API key is correct: `process.env.AETHERMIND_API_KEY`
+3. Check endpoint URL is correct
+4. Ensure `enabled: true` (default)
 
 ### TypeScript errors?
 
@@ -97,10 +166,33 @@ Make sure you have `@types/node` installed:
 npm install -D @types/node
 ```
 
+### Want to verify initialization?
+
+The SDK logs to console when initialized:
+
+```
+[Aethermind] SDK initialized successfully
+```
+
+If disabled:
+
+```
+[Aethermind] SDK initialized but disabled
+```
+
+## 🎯 How It Works
+
+1. **Instrumentation** - SDK patches OpenAI/Anthropic clients
+2. **Event Capture** - Captures model, tokens, cost, latency on each call
+3. **Batching** - Events batched locally (default: 50 events or 30s)
+4. **Async Transmission** - Sent to Aethermind API in background
+5. **Zero Impact** - No blocking, no errors thrown to your app
+
 ## 📚 Documentation
 
 - [Full Documentation](https://docs.aethermind.io)
 - [API Reference](https://docs.aethermind.io/api)
+- [Dashboard](https://dashboard.aethermind.io)
 - [Examples](https://github.com/gonzacba17/Aethermind-AgentOS/tree/main/examples)
 
 ## 🤝 Support

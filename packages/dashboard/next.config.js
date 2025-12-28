@@ -11,7 +11,8 @@ const nextConfig = {
       },
     ];
   },
-  output: 'standalone',
+  // output: 'standalone', // Disabled for Windows compatibility - Vercel handles this automatically
+
   distDir: '.next',
   experimental: {
     instrumentationHook: true,

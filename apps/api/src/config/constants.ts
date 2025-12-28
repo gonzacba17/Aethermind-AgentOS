@@ -14,12 +14,20 @@ export const REQUEST_BODY_LIMIT = process.env['REQUEST_BODY_LIMIT'] || '10mb';
 
 export const DEFAULT_PORT = parseInt(process.env['PORT'] || '3001', 10);
 
-export const CORS_ORIGINS = process.env['CORS_ORIGINS']?.split(',') || [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:5173',
-  'https://aethermind-page.vercel.app',
-  'https://aethermind-agent-os-dashboard.vercel.app'
-];
+// CORS Origins - strict whitelist in production
+export const CORS_ORIGINS = process.env.NODE_ENV === 'production'
+  ? [
+      'https://aethermind-page.vercel.app',
+      'https://aethermind-agent-os-dashboard.vercel.app',
+      'https://dashboard.aethermind.io', // Custom domain (future)
+    ]
+  : process.env['CORS_ORIGINS']?.split(',') || [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:5173',
+      'https://aethermind-page.vercel.app',
+      'https://aethermind-agent-os-dashboard.vercel.app'
+    ];
+
 
 export const REDIS_URL = process.env['REDIS_URL'];

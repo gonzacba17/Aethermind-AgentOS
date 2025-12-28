@@ -1,5 +1,5 @@
 import type { TelemetryEvent } from '../transport/types.js';
-import { calculateCost, type TokenUsage } from '@aethermind/core-shared';
+import { calculateCost, type TokenUsage } from '../shared/pricing.js';
 
 /**
  * Request context captured before API call
