@@ -138,6 +138,17 @@ const authCache = redisCache;
 logger.info('🔧 Initializing Aethermind API...');
 logger.info(`Cache status: ${authCache.isAvailable() ? '✅ Redis connected' : '⚠️  Redis unavailable (using fallback)'}`);
 
+// DEBUG: Show auth configuration
+console.log('\n🔍 AUTH CONFIGURATION DEBUG:');
+console.log(`   DISABLE_AUTH env var: "${process.env['DISABLE_AUTH']}"`);
+console.log(`   API_KEY_HASH exists: ${!!process.env['API_KEY_HASH']}`);
+console.log(`   NODE_ENV: ${process.env['NODE_ENV']}`);
+const shouldDisableAuth = process.env['DISABLE_AUTH'] === 'true';
+const hasApiKey = !!process.env['API_KEY_HASH'];
+const isProduction = process.env['NODE_ENV'] === 'production';
+console.log(`   Should disable auth: ${shouldDisableAuth}`);
+console.log(`   Calculated auth enabled: ${!shouldDisableAuth && (isProduction || hasApiKey)}\n`);
+
 configureAuth({
   apiKeyHash: process.env['API_KEY_HASH'],
   enabled: process.env['DISABLE_AUTH'] === 'true' ? false : (process.env['NODE_ENV'] === 'production' || !!process.env['API_KEY_HASH']),
