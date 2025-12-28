@@ -251,11 +251,19 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
  */
 router.get('/me', async (req: Request, res: Response) => {
   try {
+    // Debug logging
+    console.log('[/auth/me] Request received');
+    console.log('[/auth/me] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[/auth/me] Authorization header:', req.headers.authorization);
+    
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     const token = authHeader?.replace('Bearer ', '');
 
+    console.log('[/auth/me] Extracted token:', token ? `${token.substring(0, 20)}...` : 'NONE');
+
     if (!token) {
+      console.log('[/auth/me] REJECTED: No token found');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Missing authentication token'
@@ -265,8 +273,12 @@ router.get('/me', async (req: Request, res: Response) => {
     // Verify JWT token
     let decoded: any;
     try {
+      console.log('[/auth/me] Verifying token with JWT_SECRET');
       decoded = jwt.verify(token, JWT_SECRET);
+      console.log('[/auth/me] Token verified successfully. User ID:', decoded.userId || decoded.id);
     } catch (error) {
+      console.log('[/auth/me] REJECTED: JWT verification failed');
+      console.log('[/auth/me] Error:', (error as Error).message);
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid or expired token'
