@@ -1,6 +1,5 @@
 apps/api/
 docker-compose.yml
-prisma/
 packages/core/
 packages/sdk/
 packages/vscode-extension/
