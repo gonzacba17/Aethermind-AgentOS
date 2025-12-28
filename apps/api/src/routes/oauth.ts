@@ -87,9 +87,10 @@ router.get(
         req.session.oauthRedirect = undefined;
       }
       
-      // Redirect to frontend with token
-      logger.info('Redirecting to frontend with token', { url: `${redirect}?token=***` });
-      res.redirect(`${redirect}?token=${token}`);
+      // Redirect to frontend callback page with token
+      const callbackUrl = `${redirect}/auth/callback`;
+      logger.info('Redirecting to frontend callback with token', { url: `${callbackUrl}?token=***` });
+      res.redirect(`${callbackUrl}?token=${token}`);
     } catch (error) {
       logger.error('OAuth callback error', {
         error: (error as Error).message,
@@ -180,8 +181,10 @@ router.get(
         req.session.oauthRedirect = undefined;
       }
       
-      logger.info('Redirecting to frontend with token', { url: `${redirect}?token=***` });
-      res.redirect(`${redirect}?token=${token}`);
+      // Redirect to frontend callback page with token
+      const callbackUrl = `${redirect}/auth/callback`;
+      logger.info('Redirecting to frontend callback with token', { url: `${callbackUrl}?token=***` });
+      res.redirect(`${callbackUrl}?token=${token}`);
     } catch (error) {
       logger.error('OAuth callback error', {
         error: (error as Error).message,
