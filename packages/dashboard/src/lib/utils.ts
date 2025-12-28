@@ -31,7 +31,14 @@ export function formatDuration(ms: number): string {
 }
 
 export function formatCost(cost: number): string {
-  return `$${cost.toFixed(4)}`;
+  if (cost === 0) return '$0.00';
+  if (cost < 0.01) return '<$0.01';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(cost);
 }
 
 export function formatTokens(tokens: number): string {

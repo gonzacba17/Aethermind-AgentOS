@@ -1,115 +1,96 @@
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { DollarSign, Bell, TrendingUp, Users, Bot, BarChart3 } from 'lucide-react';
+'use client';
 
-const features = [
-  {
-    icon: DollarSign,
-    title: 'Budget Enforcement',
-    description: 'Set hard limits per team, agent, or workflow. Executions blocked automatically when exceeded.',
-  },
-  {
-    icon: Bell,
-    title: 'Smart Alerts',
-    description: 'Email and Slack notifications at 80% and 100% of budget. Never be surprised by costs.',
-  },
-  {
-    icon: TrendingUp,
-    title: 'Cost Forecasting',
-    description: 'Predict end-of-month spend based on usage patterns. Plan budgets with confidence.',
-  },
-  {
-    icon: Users,
-    title: 'Team Tracking',
-    description: 'Assign costs to departments. Know exactly which teams consume the most tokens.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Real-time Monitoring',
-    description: 'Monitor your AI agents in real-time with live cost tracking and performance metrics.',
-  },
-  {
-    icon: Bot,
-    title: 'Multi-Agent Orchestration',
-    description: 'Create and orchestrate multiple AI agents working together on complex tasks.',
-  },
-];
+import { useEffect, useState } from 'react';
+import { StatsGrid } from '@/components/Home/StatsGrid';
+import { QuickActions } from '@/components/Home/QuickActions';
+import { RecentActivity } from '@/components/Home/RecentActivity';
+import { GettingStarted } from '@/components/Home/GettingStarted';
+import { AlertBanner } from '@/components/Home/AlertBanner';
+import { fetchAgents, fetchCostSummary, fetchHealth, type Agent, type CostSummary } from '@/lib/api';
 
 export default function HomePage() {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [costSummary, setCostSummary] = useState<CostSummary | null>(null);
+  const [apiHealth, setApiHealth] = useState<{ status: string; timestamp: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [agentsData, costsData, healthData] = await Promise.all([
+          fetchAgents().catch(() => []),
+          fetchCostSummary().catch(() => null),
+          fetchHealth().catch(() => null),
+        ]);
+        
+        setAgents(agentsData);
+        setCostSummary(costsData);
+        setApiHealth(healthData);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+    // Refresh data every 10 seconds
+    const interval = setInterval(loadData, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const isApiDisconnected = !apiHealth || apiHealth.status !== 'ok';
+  const hasNoAgents = agents.length === 0;
+
   return (
-    <div className="min-h-screen">
-      <section className="py-20 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl font-bold mb-6">
-            Stop Overspending on AI
-          </h1>
-          <p className="text-xl text-muted-foreground mb-8">
-            Control your LLM costs with automatic budget limits, real-time alerts, 
-            and predictive analytics. Built for enterprises using OpenAI, Anthropic, 
-            and other AI providers in production.
-          </p>
-          <div className="flex gap-4 justify-center">
-            <Link href="/dashboard/costs">
-              <Button size="lg">
-                See Cost Dashboard
-              </Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button size="lg" variant="outline">
-                View Demo
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
+    <div className="min-h-screen p-6 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-4xl font-bold mb-2">Welcome to Aethermind</h1>
+        <p className="text-muted-foreground text-lg">
+          Get started by creating your first agent or running a demo workflow
+        </p>
+      </div>
 
-      <section className="py-16 px-6 bg-card">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">Features</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <Card key={feature.title}>
-                <CardHeader>
-                  <feature.icon className="h-10 w-10 text-primary mb-2" />
-                  <CardTitle>{feature.title}</CardTitle>
-                  <CardDescription>{feature.description}</CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* Alert Banners */}
+      <div className="space-y-3">
+        <AlertBanner
+          condition={isApiDisconnected}
+          title="API Disconnected"
+          message="The Aethermind API is not responding. Make sure the backend server is running on port 3001."
+          storageKey="api-disconnected"
+          variant="error"
+        />
+        
+        <AlertBanner
+          condition={hasNoAgents && !loading}
+          title="Get Started"
+          message="You haven't created any agents yet. Click 'Create Agent' below to set up your first AI agent."
+          storageKey="no-agents"
+          variant="info"
+        />
+      </div>
 
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-8">Quick Start</h2>
-          <Card>
-            <CardContent className="pt-6">
-              <pre className="bg-muted p-4 rounded-lg overflow-x-auto text-sm">
-{`import { createAgent, startOrchestrator } from '@aethermind/sdk'
+      {/* Stats Grid */}
+      <StatsGrid
+        agents={agents}
+        costSummary={costSummary}
+        apiHealth={apiHealth}
+        loading={loading}
+      />
 
-const researcher = createAgent({
-  name: "researcher",
-  model: "gpt-4",
-  systemPrompt: "You are a research assistant",
-  logic: async (ctx) => {
-    ctx.logger.info("Starting research...")
-    return { result: "Research completed" }
-  }
-})
+      {/* Quick Actions */}
+      <div>
+        <h2 className="text-2xl font-bold mb-4">Quick Actions</h2>
+        <QuickActions />
+      </div>
 
-const orchestrator = startOrchestrator({
-  agents: [researcher],
-  provider: { type: 'openai', apiKey: process.env.OPENAI_API_KEY }
-})
-
-await orchestrator.executeTask("researcher", { topic: "AI Agents" })`}
-              </pre>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Activity */}
+        <RecentActivity />
+        
+        {/* Getting Started */}
+        <GettingStarted />
+      </div>
     </div>
   );
 }

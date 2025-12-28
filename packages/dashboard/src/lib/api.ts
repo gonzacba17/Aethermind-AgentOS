@@ -144,6 +144,11 @@ export async function createAgent(data: {
   name: string;
   model?: string;
   systemPrompt?: string;
+  description?: string;
+  tags?: string[];
+  provider?: string;
+  temperature?: number;
+  maxTokens?: number;
 }): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents`, {
     method: 'POST',

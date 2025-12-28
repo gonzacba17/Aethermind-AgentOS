@@ -3,16 +3,16 @@
 import { useEffect, useState } from 'react';
 import { AgentCard } from '@/components/AgentCard';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { BackToHomeButton } from '@/components/BackToHomeButton';
+import { CreateAgentModal } from '@/components/CreateAgentModal';
 import { fetchAgents, createAgent, executeAgent, type Agent } from '@/lib/api';
 import { Plus, RefreshCw } from 'lucide-react';
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newAgent, setNewAgent] = useState({ name: '', model: 'gpt-4', systemPrompt: '' });
+  const [showModal, setShowModal] = useState(false);
 
   const loadAgents = async () => {
     setLoading(true);
@@ -30,17 +30,6 @@ export default function AgentsPage() {
     loadAgents();
   }, []);
 
-  const handleCreate = async () => {
-    try {
-      await createAgent(newAgent);
-      setNewAgent({ name: '', model: 'gpt-4', systemPrompt: '' });
-      setShowCreate(false);
-      loadAgents();
-    } catch (error) {
-      console.error('Failed to create agent:', error);
-    }
-  };
-
   const handleExecute = async (agent: Agent) => {
     try {
       await executeAgent(agent.id, { test: true });
@@ -48,6 +37,10 @@ export default function AgentsPage() {
     } catch (error) {
       console.error('Failed to execute agent:', error);
     }
+  };
+
+  const handleAgentCreated = (agent: Agent) => {
+    loadAgents();
   };
 
   return (
@@ -60,68 +53,12 @@ export default function AgentsPage() {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button onClick={() => setShowCreate(!showCreate)}>
+          <Button onClick={() => setShowModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Create Agent
           </Button>
         </div>
       </div>
-
-      {showCreate && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Agent</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <input
-                  type="text"
-                  className="w-full border rounded-md px-3 py-2"
-                  value={newAgent.name}
-                  onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
-                  placeholder="my-agent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Model</label>
-                <select
-                  className="w-full border rounded-md px-3 py-2"
-                  value={newAgent.model}
-                  onChange={(e) => setNewAgent({ ...newAgent, model: e.target.value })}
-                >
-                  <option value="gpt-4">GPT-4</option>
-                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                  <option value="gpt-4o">GPT-4o</option>
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
-                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                  <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-                  <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">System Prompt</label>
-                <textarea
-                  className="w-full border rounded-md px-3 py-2"
-                  rows={3}
-                  value={newAgent.systemPrompt}
-                  onChange={(e) => setNewAgent({ ...newAgent, systemPrompt: e.target.value })}
-                  placeholder="You are a helpful assistant..."
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handleCreate} disabled={!newAgent.name}>
-                  Create
-                </Button>
-                <Button variant="outline" onClick={() => setShowCreate(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {loading ? (
         <div className="text-center py-12 text-muted-foreground">Loading agents...</div>
@@ -138,6 +75,14 @@ export default function AgentsPage() {
           ))}
         </div>
       )}
+
+      <CreateAgentModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSuccess={handleAgentCreated}
+        existingAgents={agents}
+        onCreateAgent={createAgent}
+      />
     </div>
   );
 }

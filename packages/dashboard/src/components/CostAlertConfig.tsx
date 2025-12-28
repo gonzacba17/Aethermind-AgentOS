@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AlertCircle, Bell, BellOff, Settings } from 'lucide-react';
+import { formatCost } from '@/lib/utils';
 
 interface CostAlertConfigProps {
     currentCost: number;
@@ -70,7 +71,7 @@ export function CostAlertConfig({ currentCost, onThresholdChange }: CostAlertCon
                     <div className="flex-1">
                         <h3 className="font-semibold text-destructive mb-1">Cost Threshold Exceeded!</h3>
                         <p className="text-sm text-muted-foreground">
-                            Current {alertType} cost ({currentCost.toFixed(4)} USD) has exceeded your threshold of ${threshold.toFixed(2)}.
+                            Current {alertType} cost ({formatCost(currentCost)}) has exceeded your threshold of ${threshold.toFixed(2)}.
                         </p>
                     </div>
                     <Button
@@ -109,7 +110,7 @@ export function CostAlertConfig({ currentCost, onThresholdChange }: CostAlertCon
                     <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                         <div>
                             <div className="text-sm text-muted-foreground mb-1">Current {alertType} Cost</div>
-                            <div className="text-2xl font-bold">${currentCost.toFixed(4)}</div>
+                            <div className="text-2xl font-bold">{formatCost(currentCost)}</div>
                         </div>
                         <div className="text-right">
                             <div className="text-sm text-muted-foreground mb-1">Threshold</div>
