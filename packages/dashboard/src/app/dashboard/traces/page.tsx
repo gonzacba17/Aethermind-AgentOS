@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TraceTree } from '@/components/TraceTree';
+import { BackToHomeButton } from '@/components/BackToHomeButton';
 import { fetchTraces, type Trace } from '@/lib/api';
 import { formatDate, formatDuration } from '@/lib/utils';
 
@@ -31,7 +32,10 @@ export default function TracesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Traces</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Traces</h1>
+        <BackToHomeButton />
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">

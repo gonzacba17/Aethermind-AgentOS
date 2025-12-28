@@ -5,6 +5,7 @@ import { CostDashboard } from '@/components/CostDashboard';
 import { CostHistoryChart } from '@/components/CostHistoryChart';
 import { CostAlertConfig } from '@/components/CostAlertConfig';
 import { CostExportButton } from '@/components/CostExportButton';
+import { BackToHomeButton } from '@/components/BackToHomeButton';
 import { fetchCostSummary, fetchCostHistory, type CostSummary, type CostInfo } from '@/lib/api';
 
 export default function CostsPage() {
@@ -57,9 +58,12 @@ export default function CostsPage() {
             Track and manage your LLM API costs
           </p>
         </div>
-        {summary && costs.length > 0 && !loading && (
-          <CostExportButton summary={summary} costs={costs} />
-        )}
+        <div className="flex items-center gap-3">
+          <BackToHomeButton />
+          {summary && costs.length > 0 && !loading && (
+            <CostExportButton summary={summary} costs={costs} />
+          )}
+        </div>
       </div>
 
       {loading ? (

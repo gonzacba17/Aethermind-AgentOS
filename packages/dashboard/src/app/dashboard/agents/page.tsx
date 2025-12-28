@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AgentCard } from '@/components/AgentCard';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { BackToHomeButton } from '@/components/BackToHomeButton';
 import { fetchAgents, createAgent, executeAgent, type Agent } from '@/lib/api';
 import { Plus, RefreshCw } from 'lucide-react';
 
@@ -54,6 +55,7 @@ export default function AgentsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Agents</h1>
         <div className="flex gap-2">
+          <BackToHomeButton />
           <Button variant="outline" onClick={loadAgents} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh

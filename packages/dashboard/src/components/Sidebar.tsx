@@ -29,8 +29,11 @@ export function Sidebar() {
       </div>
       <nav className="flex-1 space-y-1 p-4">
         {navigation.map((item) => {
-          const isActive = pathname === item.href || 
-            (item.href !== '/' && pathname.startsWith(item.href));
+          // For the Dashboard button, use exact match to avoid staying active on sub-pages
+          const isActive = item.href === '/dashboard' 
+            ? pathname === item.href 
+            : pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+          
           return (
             <Link
               key={item.name}

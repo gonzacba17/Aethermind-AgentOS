@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LogViewer } from '@/components/LogViewer';
+import { BackToHomeButton } from '@/components/BackToHomeButton';
 import { fetchAgents, fetchCostSummary, fetchHealth, type Agent, type CostSummary } from '@/lib/api';
 import { formatCost } from '@/lib/utils';
 import { Bot, Activity, DollarSign, Cpu } from 'lucide-react';
@@ -41,9 +42,12 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <Badge variant={isHealthy ? 'success' : 'destructive'}>
-          {isHealthy ? 'API Connected' : 'API Disconnected'}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <BackToHomeButton />
+          <Badge variant={isHealthy ? 'success' : 'destructive'}>
+            {isHealthy ? 'API Connected' : 'API Disconnected'}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
