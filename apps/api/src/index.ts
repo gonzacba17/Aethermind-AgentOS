@@ -508,7 +508,8 @@ async function startServer(): Promise<void> {
       console.log(`Storage: ${prismaStore?.isConnected() ? 'Prisma' : 'InMemory'}`);
       console.log(`Redis: ${authCache.isConnected() ? 'Connected' : 'Disconnected'}`);
       console.log(`Queue: ${queueService ? 'Enabled' : 'Disabled'}`);
-      console.log(`Auth: ${process.env['API_KEY_HASH'] ? 'Enabled' : 'Disabled (set API_KEY_HASH to enable)'}\n`);
+      const authEnabled = process.env['DISABLE_AUTH'] === 'true' ? false : (!!process.env['API_KEY_HASH']);
+      console.log(`Auth: ${authEnabled ? 'Enabled' : 'Disabled (DISABLE_AUTH=true)'}\n`);
     });
   }
 }
