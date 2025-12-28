@@ -244,4 +244,86 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
   }
 });
 
+/**
+ * GET /auth/me
+ * Returns current authenticated user information
+ * Requires: Authorization: Bearer <JWT_TOKEN>
+ */
+router.get('/me', async (req: Request, res: Response) => {
+  try {
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Missing authentication token'
+      });
+    }
+
+    // Verify JWT token
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid or expired token'
+      });
+    }
+
+    // Get user from database using userId from token
+    const userId = decoded.userId || decoded.id;
+    
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        plan: true,
+        apiKey: true,
+        emailVerified: true,
+        usageCount: true,
+        usageLimit: true,
+        stripeCustomerId: true,
+        stripeSubscriptionId: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'The user associated with this token does not exist'
+      });
+    }
+
+    // Return user info with subscription status
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      plan: user.plan,
+      apiKey: user.apiKey,
+      emailVerified: user.emailVerified,
+      usageCount: user.usageCount,
+      usageLimit: user.usageLimit,
+      subscription: user.stripeSubscriptionId ? {
+        status: 'active', // TODO: Get real status from Stripe
+        plan: user.plan,
+      } : null,
+      createdAt: user.createdAt,
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to fetch user'
+    });
+  }
+});
+
 export default router;
+
