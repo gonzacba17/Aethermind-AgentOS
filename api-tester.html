@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aethermind API Test</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      h1 {
+        color: #3b82f6;
+      }
+      .test-section {
+        background: #1e293b;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border: 1px solid #334155;
+      }
+      button {
+        background: #3b82f6;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        margin: 5px;
+        font-weight: 600;
+      }
+      button:hover {
+        background: #2563eb;
+      }
+      .result {
+        margin-top: 15px;
+        padding: 15px;
+        border-radius: 6px;
+        font-family: "Courier New", monospace;
+        font-size: 13px;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .success {
+        background: #064e3b;
+        border: 1px solid #10b981;
+        color: #6ee7b7;
+      }
+      .error {
+        background: #7f1d1d;
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+      }
+      .info {
+        background: #1e3a8a;
+        border: 1px solid #3b82f6;
+        color: #93c5fd;
+      }
+      input {
+        width: 100%;
+        padding: 10px;
+        margin: 10px 0;
+        background: #0f172a;
+        border: 1px solid #475569;
+        border-radius: 6px;
+        color: #e2e8f0;
+        font-size: 14px;
+      }
+      label {
+        display: block;
+        margin-top: 15px;
+        font-weight: 600;
+        color: #cbd5e1;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🔧 Aethermind API Tester</h1>
+    <p>
+      Este script te ayudará a diagnosticar el problema de creación de agentes.
+    </p>
+
+    <!-- Test 1: Health Check -->
+    <div class="test-section">
+      <h2>1. Health Check</h2>
+      <p>Verificar que el API está online</p>
+      <button onclick="testHealth()">🏥 Test Health</button>
+      <div id="health-result"></div>
+    </div>
+
+    <!-- Test 2: CORS Test -->
+    <div class="test-section">
+      <h2>2. CORS Test</h2>
+      <p>Verificar que CORS permite peticiones desde esta página</p>
+      <button onclick="testCORS()">🌐 Test CORS</button>
+      <div id="cors-result"></div>
+    </div>
+
+    <!-- Test 3: Get Agents (con auth) -->
+    <div class="test-section">
+      <h2>3. Get Agents (con autenticación)</h2>
+      <p>Probar endpoint /api/agents con las credenciales del localStorage</p>
+      <button onclick="testGetAgents()">📋 Get Agents</button>
+      <div id="get-agents-result"></div>
+    </div>
+
+    <!-- Test 4: Create Agent -->
+    <div class="test-section">
+      <h2>4. Create Agent</h2>
+      <label for="agent-name">Nombre del Agente:</label>
+      <input type="text" id="agent-name" value="test-agent-debug" />
+
+      <label for="agent-model">Model:</label>
+      <input type="text" id="agent-model" value="gpt-4o-mini" />
+
+      <button onclick="testCreateAgent()">➕ Create Agent</button>
+      <div id="create-agent-result"></div>
+    </div>
+
+    <!-- Test 5: Check localStorage -->
+    <div class="test-section">
+      <h2>5. LocalStorage Auth Token</h2>
+      <p>Ver si hay token de autenticación guardado</p>
+      <button onclick="checkLocalStorage()">🔑 Check Token</button>
+      <div id="localstorage-result"></div>
+    </div>
+
+    <script>
+      const API_URL = "https://aethermindapi-production.up.railway.app";
+
+      function showResult(elementId, message, type = "info") {
+        const el = document.getElementById(elementId);
+        el.className = `result ${type}`;
+        el.textContent = message;
+      }
+
+      async function testHealth() {
+        showResult("health-result", "⏳ Testing...", "info");
+        try {
+          const response = await fetch(`${API_URL}/health`);
+          const data = await response.json();
+          showResult(
+            "health-result",
+            `✅ SUCCESS\nStatus: ${response.status}\nResponse: ${JSON.stringify(
+              data,
+              null,
+              2
+            )}`,
+            "success"
+          );
+        } catch (error) {
+          showResult(
+            "health-result",
+            `❌ ERROR\n${error.message}\n\nDetalles: ${error.toString()}`,
+            "error"
+          );
+        }
+      }
+
+      async function testCORS() {
+        showResult("cors-result", "⏳ Testing CORS...", "info");
+        try {
+          const response = await fetch(`${API_URL}/health`, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (response.ok) {
+            showResult(
+              "cors-result",
+              `✅ CORS OK\n\nEl servidor permite peticiones desde este origen.`,
+              "success"
+            );
+          } else {
+            showResult(
+              "cors-result",
+              `⚠️ Respuesta: ${response.status}\nPero no hay error CORS`,
+              "info"
+            );
+          }
+        } catch (error) {
+          if (error.message.includes("CORS")) {
+            showResult(
+              "cors-result",
+              `❌ CORS ERROR\n\nEl servidor está bloqueando peticiones desde este origen.\n\nError: ${error.message}`,
+              "error"
+            );
+          } else {
+            showResult(
+              "cors-result",
+              `❌ ERROR (no CORS)\n${error.message}`,
+              "error"
+            );
+          }
+        }
+      }
+
+      async function testGetAgents() {
+        showResult("get-agents-result", "⏳ Getting agents...", "info");
+
+        const token = localStorage.getItem("auth_token");
+        const headers = {
+          "Content-Type": "application/json",
+        };
+
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        try {
+          const response = await fetch(`${API_URL}/api/agents`, {
+            method: "GET",
+            headers: headers,
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            showResult(
+              "get-agents-result",
+              `✅ SUCCESS\nStatus: ${response.status}\n\nAgents (${
+                data.length
+              }):\n${JSON.stringify(data, null, 2)}`,
+              "success"
+            );
+          } else {
+            showResult(
+              "get-agents-result",
+              `❌ ERROR ${response.status}\n\nResponse:\n${JSON.stringify(
+                data,
+                null,
+                2
+              )}`,
+              "error"
+            );
+          }
+        } catch (error) {
+          showResult(
+            "get-agents-result",
+            `❌ FETCH ERROR\n${error.message}`,
+            "error"
+          );
+        }
+      }
+
+      async function testCreateAgent() {
+        showResult("create-agent-result", "⏳ Creating agent...", "info");
+
+        const name = document.getElementById("agent-name").value;
+        const model = document.getElementById("agent-model").value;
+
+        const token = localStorage.getItem("auth_token");
+        const headers = {
+          "Content-Type": "application/json",
+        };
+
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        const agentData = {
+          name: name,
+          model: model,
+          systemPrompt: "You are a helpful assistant.",
+        };
+
+        console.log("Sending agent data:", agentData);
+        console.log("Headers:", headers);
+
+        try {
+          const response = await fetch(`${API_URL}/api/agents`, {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify(agentData),
+          });
+
+          const responseText = await response.text();
+          let data;
+          try {
+            data = JSON.parse(responseText);
+          } catch {
+            data = responseText;
+          }
+
+          if (response.ok) {
+            showResult(
+              "create-agent-result",
+              `✅ AGENT CREATED!\nStatus: ${
+                response.status
+              }\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
+              "success"
+            );
+          } else {
+            showResult(
+              "create-agent-result",
+              `❌ CREATE FAILED\nStatus: ${
+                response.status
+              }\n\nRequest:\n${JSON.stringify(
+                agentData,
+                null,
+                2
+              )}\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
+              "error"
+            );
+          }
+        } catch (error) {
+          showResult(
+            "create-agent-result",
+            `❌ FETCH ERROR\n\nError: ${error.message}\n\nStack: ${error.stack}`,
+            "error"
+          );
+        }
+      }
+
+      function checkLocalStorage() {
+        const token = localStorage.getItem("auth_token");
+
+        if (token) {
+          showResult(
+            "localstorage-result",
+            `✅ Token encontrado\n\nToken (primeros 50 chars):\n${token.substring(
+              0,
+              50
+            )}...\n\nLength: ${token.length} chars`,
+            "success"
+          );
+        } else {
+          showResult(
+            "localstorage-result",
+            `⚠️ NO HAY TOKEN\n\nNo se encontró 'auth_token' en localStorage.\n\nEsto podría ser el problema - el frontend necesita autenticación.`,
+            "error"
+          );
+        }
+      }
+    </script>
+  </body>
+</html>

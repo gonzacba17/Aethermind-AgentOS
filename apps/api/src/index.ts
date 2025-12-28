@@ -140,7 +140,7 @@ logger.info(`Cache status: ${authCache.isAvailable() ? '✅ Redis connected' : '
 
 configureAuth({
   apiKeyHash: process.env['API_KEY_HASH'],
-  enabled: process.env['NODE_ENV'] === 'production' || !!process.env['API_KEY_HASH'],
+  enabled: process.env['DISABLE_AUTH'] === 'true' ? false : (process.env['NODE_ENV'] === 'production' || !!process.env['API_KEY_HASH']),
   cache: authCache,
 });
 
