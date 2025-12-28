@@ -46,13 +46,16 @@ async function ensureDatabaseSchema() {
           console.log('⚠️  Tables not found - applying schema automatically...');
           
           try {
-            // Import child_process to run Prisma commands
             const { execSync } = require('child_process');
+            const path = require('path');
+            
+            // Determine schema path (Railway runs from apps/api)
+            const schemaPath = path.join(process.cwd(), '../../prisma/schema.prisma');
             
             // Apply schema using db push
-            console.log('🔧 Running: prisma db push...');
+            console.log(`🔧 Running: prisma db push with schema at ${schemaPath}...`);
             const output = execSync(
-              'npx prisma db push --schema=./prisma/schema.prisma --accept-data-loss --skip-generate',
+              `npx prisma db push --schema=${schemaPath} --accept-data-loss --skip-generate`,
               { 
                 encoding: 'utf-8',
                 cwd: process.cwd(),
