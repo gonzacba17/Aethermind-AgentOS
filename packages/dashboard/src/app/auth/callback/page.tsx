@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setAuthToken, clearAuthToken } from '@/lib/auth-utils';
 
@@ -10,7 +10,30 @@ import { setAuthToken, clearAuthToken } from '@/lib/auth-utils';
  * Handles the OAuth redirect from backend after successful Google/GitHub login.
  * Extracts JWT token from URL, stores it, validates it, and redirects to dashboard.
  */
-export default function AuthCallbackPage() {
+
+// Loading fallback for Suspense
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="max-w-md w-full mx-4">
+        <div className="bg-card border border-border rounded-lg shadow-lg p-8">
+          <div className="text-center">
+            <div className="mb-4">
+              <div className="inline-block h-12 w-12 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent"></div>
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Loading...</h1>
+            <p className="text-muted-foreground">
+              Please wait...
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Component that uses useSearchParams - must be wrapped in Suspense
+function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -167,5 +190,14 @@ export default function AuthCallbackPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Main page component
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <AuthCallbackContent />
+    </Suspense>
   );
 }
