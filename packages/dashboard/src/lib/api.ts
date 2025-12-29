@@ -20,28 +20,20 @@ function getHeaders(additionalHeaders?: Record<string, string>): HeadersInit {
 }
 
 // Helper to handle API errors with auto-redirect on 401
-async function handleApiError(response: Response, endpoint: string, isWriteOperation = false): Promise<never> {
+async function handleApiError(response: Response, endpoint: string): Promise<never> {
   const status = response.status;
   
   // Handle 401 Unauthorized - token expired or invalid
   if (status === 401) {
-    console.error(`[API] 401 Unauthorized on ${endpoint}`);
+    console.error(`[API] 401 Unauthorized on ${endpoint} - clearing token and redirecting to login`);
     
-    // Only redirect for write operations (POST, PUT, DELETE)
-    // For read operations, just throw the error and let the component handle it
-    if (isWriteOperation) {
-      console.error('[API] Write operation failed - clearing token and redirecting to login');
+    // Clear invalid token
+    if (typeof window !== 'undefined') {
+      clearAuthToken();
       
-      // Clear invalid token
-      if (typeof window !== 'undefined') {
-        clearAuthToken();
-        
-        // Redirect to landing page login
-        const landingPageUrl = 'https://aethermind-page.vercel.app';
-        window.location.href = landingPageUrl;
-      }
-    } else {
-      console.warn('[API] Read operation failed - user may need to log in');
+      // Redirect to landing page login
+      const landingPageUrl = 'https://aethermind-page.vercel.app';
+      window.location.href = landingPageUrl;
     }
   }
   
@@ -195,7 +187,7 @@ export async function createAgent(data: {
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data),
   });
-  if (!res.ok) await handleApiError(res, '/api/agents', true);
+  if (!res.ok) await handleApiError(res, '/api/agents');
   return res.json();
 }
 
@@ -208,7 +200,7 @@ export async function executeAgent(
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
-  if (!res.ok) await handleApiError(res, `/api/agents/${id}/execute`, true);
+  if (!res.ok) await handleApiError(res, `/api/agents/${id}/execute`);
   return res.json();
 }
 
@@ -282,7 +274,7 @@ export async function estimateWorkflowCost(
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
-  if (!res.ok) await handleApiError(res, `/api/workflows/${workflowName}/estimate`, true);
+  if (!res.ok) await handleApiError(res, `/api/workflows/${workflowName}/estimate`);
   return res.json();
 }
 
