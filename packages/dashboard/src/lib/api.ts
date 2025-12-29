@@ -1,3 +1,5 @@
+import { getAuthToken, clearAuthToken } from './auth-utils';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Helper to include JWT token in headers
@@ -8,13 +10,43 @@ function getHeaders(additionalHeaders?: Record<string, string>): HeadersInit {
   
   // Get JWT token from localStorage (client-side only)
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('auth_token');
+    const token = getAuthToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
   }
   
   return headers;
+}
+
+// Helper to handle API errors with auto-redirect on 401
+async function handleApiError(response: Response, endpoint: string): Promise<never> {
+  const status = response.status;
+  
+  // Handle 401 Unauthorized - token expired or invalid
+  if (status === 401) {
+    console.error(`[API] 401 Unauthorized on ${endpoint} - clearing token and redirecting to login`);
+    
+    // Clear invalid token
+    if (typeof window !== 'undefined') {
+      clearAuthToken();
+      
+      // Redirect to landing page login
+      const landingPageUrl = 'https://aethermind-page.vercel.app';
+      window.location.href = landingPageUrl;
+    }
+  }
+  
+  // Try to parse error message from response
+  let errorMessage = `API request failed: ${status}`;
+  try {
+    const errorData = await response.json();
+    errorMessage = errorData.message || errorData.error || errorMessage;
+  } catch {
+    // Use default error message if JSON parsing fails
+  }
+  
+  throw new Error(errorMessage);
 }
 
 export interface Agent {
@@ -128,7 +160,7 @@ export async function fetchAgents(): Promise<Agent[]> {
   const res = await fetch(`${API_BASE}/api/agents`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch agents');
+  if (!res.ok) await handleApiError(res, '/api/agents');
   return res.json();
 }
 
@@ -136,7 +168,7 @@ export async function fetchAgent(id: string): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents/${id}`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch agent');
+  if (!res.ok) await handleApiError(res, `/api/agents/${id}`);
   return res.json();
 }
 
@@ -155,7 +187,7 @@ export async function createAgent(data: {
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error('Failed to create agent');
+  if (!res.ok) await handleApiError(res, '/api/agents');
   return res.json();
 }
 
@@ -168,7 +200,7 @@ export async function executeAgent(
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
-  if (!res.ok) throw new Error('Failed to execute agent');
+  if (!res.ok) await handleApiError(res, `/api/agents/${id}/execute`);
   return res.json();
 }
 
@@ -189,7 +221,7 @@ export async function fetchLogs(params?: {
   const res = await fetch(`${API_BASE}/api/logs?${searchParams}`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch logs');
+  if (!res.ok) await handleApiError(res, '/api/logs');
   return res.json();
 }
 
@@ -197,7 +229,7 @@ export async function fetchTraces(): Promise<Trace[]> {
   const res = await fetch(`${API_BASE}/api/traces`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch traces');
+  if (!res.ok) await handleApiError(res, '/api/traces');
   return res.json();
 }
 
@@ -205,7 +237,7 @@ export async function fetchTrace(id: string): Promise<Trace> {
   const res = await fetch(`${API_BASE}/api/traces/${id}`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch trace');
+  if (!res.ok) await handleApiError(res, `/api/traces/${id}`);
   return res.json();
 }
 
@@ -213,7 +245,7 @@ export async function fetchCostSummary(): Promise<CostSummary> {
   const res = await fetch(`${API_BASE}/api/costs/summary`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch cost summary');
+  if (!res.ok) await handleApiError(res, '/api/costs/summary');
   return res.json();
 }
 
@@ -221,7 +253,7 @@ export async function fetchExecutions(): Promise<ExecutionResult[]> {
   const res = await fetch(`${API_BASE}/api/executions`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch executions');
+  if (!res.ok) await handleApiError(res, '/api/executions');
   return res.json();
 }
 
@@ -229,7 +261,7 @@ export async function fetchHealth(): Promise<{ status: string; timestamp: string
   const res = await fetch(`${API_BASE}/api/health`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('API not available');
+  if (!res.ok) await handleApiError(res, '/api/health');
   return res.json();
 }
 
@@ -242,7 +274,7 @@ export async function estimateWorkflowCost(
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
-  if (!res.ok) throw new Error('Failed to estimate cost');
+  if (!res.ok) await handleApiError(res, `/api/workflows/${workflowName}/estimate`);
   return res.json();
 }
 
@@ -261,6 +293,6 @@ export async function fetchCostHistory(params?: {
   const res = await fetch(`${API_BASE}/api/costs?${searchParams}`, {
     headers: getHeaders(),
   });
-  if (!res.ok) throw new Error('Failed to fetch cost history');
+  if (!res.ok) await handleApiError(res, '/api/costs');
   return res.json();
 }
