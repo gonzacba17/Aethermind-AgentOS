@@ -74,6 +74,17 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
         plan: 'free',
         usageLimit: 100,
         usageCount: 0,
+        // Onboarding defaults
+        hasCompletedOnboarding: false,
+        onboardingStep: 'welcome',
+        // Subscription status
+        subscriptionStatus: 'free',
+        // Free tier limits
+        maxAgents: 3,
+        logRetentionDays: 30,
+        // Login tracking
+        firstLoginAt: new Date(),
+        lastLoginAt: new Date(),
       },
     });
 
@@ -302,6 +313,19 @@ router.get('/me', async (req: Request, res: Response) => {
         stripeCustomerId: true,
         stripeSubscriptionId: true,
         createdAt: true,
+        // Onboarding fields
+        hasCompletedOnboarding: true,
+        onboardingStep: true,
+        // Trial fields
+        trialStartedAt: true,
+        trialEndsAt: true,
+        subscriptionStatus: true,
+        // Login tracking
+        firstLoginAt: true,
+        lastLoginAt: true,
+        // Free tier limits
+        maxAgents: true,
+        logRetentionDays: true,
       },
     });
 
@@ -312,7 +336,26 @@ router.get('/me', async (req: Request, res: Response) => {
       });
     }
 
-    // Return user info with subscription status
+    // Calculate trial status
+    const now = new Date();
+    const isTrialActive = user.trialStartedAt && user.trialEndsAt && now < user.trialEndsAt;
+    const daysLeftInTrial = isTrialActive && user.trialEndsAt 
+      ? Math.ceil((user.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    // Check if first-time user
+    const isFirstTimeUser = user.createdAt ? 
+      (now.getTime() - new Date(user.createdAt).getTime() < 24 * 60 * 60 * 1000) : false;
+
+    // Update lastLoginAt asynchronously (non-blocking)
+    prisma.user.update({
+      where: { id: userId },
+      data: { lastLoginAt: now },
+    }).catch((error) => {
+      console.error('Failed to update lastLoginAt:', error);
+    });
+
+    // Return user info with enhanced subscription status
     res.json({
       id: user.id,
       name: user.name,
@@ -322,10 +365,26 @@ router.get('/me', async (req: Request, res: Response) => {
       emailVerified: user.emailVerified,
       usageCount: user.usageCount,
       usageLimit: user.usageLimit,
-      subscription: user.stripeSubscriptionId ? {
-        status: 'active', // TODO: Get real status from Stripe
+      // Onboarding status
+      hasCompletedOnboarding: user.hasCompletedOnboarding,
+      onboardingStep: user.onboardingStep,
+      isFirstTimeUser,
+      // Subscription info  
+      subscription: {
+        status: user.subscriptionStatus,
         plan: user.plan,
-      } : null,
+        isTrialActive,
+        daysLeftInTrial,
+        trialEndsAt: user.trialEndsAt,
+        stripeCustomerId: user.stripeCustomerId,
+        stripeSubscriptionId: user.stripeSubscriptionId,
+      },
+      // Login tracking
+      firstLoginAt: user.firstLoginAt,
+      lastLoginAt: user.lastLoginAt,
+      // Free tier limits
+      maxAgents: user.maxAgents,
+      logRetentionDays: user.logRetentionDays,
       createdAt: user.createdAt,
     });
   } catch (error) {

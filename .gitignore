@@ -16,3 +16,6 @@ coverage
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Environment backups (may contain sensitive data)
+.env.backup

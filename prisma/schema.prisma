@@ -47,6 +47,26 @@ model User {
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
   
+  // Onboarding Tracking
+  hasCompletedOnboarding Boolean   @default(false) @map("has_completed_onboarding")
+  onboardingStep         String?   @default("welcome") @map("onboarding_step") @db.VarChar(50)
+  
+  // Trial Management
+  trialStartedAt         DateTime? @map("trial_started_at") @db.Timestamptz(6)
+  trialEndsAt            DateTime? @map("trial_ends_at") @db.Timestamptz(6)
+  
+  // Subscription Status
+  // Values: "free", "trial", "active", "past_due", "cancelled", "inactive"
+  subscriptionStatus     String    @default("free") @map("subscription_status") @db.VarChar(50)
+  
+  // Login Tracking
+  lastLoginAt            DateTime? @map("last_login_at") @db.Timestamptz(6)
+  firstLoginAt           DateTime? @map("first_login_at") @db.Timestamptz(6)
+  
+  // Free Tier Limits
+  maxAgents              Int       @default(3) @map("max_agents")
+  logRetentionDays       Int       @default(30) @map("log_retention_days")
+  
   organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   agents           Agent[]
   workflows        Workflow[]

@@ -61,6 +61,7 @@ export async function findOrCreateOAuthUser(
         where: { id: user.id },
         data: {
           [providerField]: providerId,
+          lastLoginAt: new Date(), // Update login timestamp
         } as any,
       });
       
@@ -80,6 +81,17 @@ export async function findOrCreateOAuthUser(
         usageCount: 0,
         apiKey: `aethermind_${uuidv4()}`,
         emailVerified: true, // OAuth emails are pre-verified
+        // Onboarding defaults
+        hasCompletedOnboarding: false,
+        onboardingStep: 'welcome',
+        // Subscription status
+        subscriptionStatus: 'free',
+        // Free tier limits
+        maxAgents: 3,
+        logRetentionDays: 30,
+        // Login tracking
+        firstLoginAt: new Date(),
+        lastLoginAt: new Date(),
       } as any,
     });
     

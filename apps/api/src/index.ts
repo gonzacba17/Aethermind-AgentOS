@@ -101,6 +101,7 @@ import { budgetRoutes } from './routes/budgets';
 import ingestionRoutes from './routes/ingestion';
 import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
+import onboardingRoutes from './routes/onboarding';
 import session from 'express-session';
 import passportConfig from './config/passport';
 import { WebSocketManager } from './websocket/WebSocketManager';
@@ -457,6 +458,7 @@ async function startServer(): Promise<void> {
   app.use('/api/costs', costRoutes);
   app.use('/api/workflows', workflowRoutes);
   app.use('/api/budgets', budgetRoutes);
+  app.use('/api/onboarding', onboardingRoutes);
 
   app.use(Sentry.Handlers.errorHandler());
 
