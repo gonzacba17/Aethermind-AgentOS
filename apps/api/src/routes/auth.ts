@@ -5,6 +5,10 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../lib/prisma';
+import { emailService } from '../services/EmailService';
+import { StripeService } from '../services/StripeService';
+
+const stripeService = new StripeService(prisma);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -64,6 +68,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const apiKey = `aethermind_${randomBytes(32).toString('hex')}`;
     const verificationToken = randomBytes(32).toString('hex');
+    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const user = await prisma.user.create({
       data: {
@@ -71,6 +76,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
         passwordHash,
         apiKey,
         verificationToken,
+        verificationExpiry,
         plan: 'free',
         usageLimit: 100,
         usageCount: 0,
@@ -86,6 +92,11 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
         firstLoginAt: new Date(),
         lastLoginAt: new Date(),
       },
+    });
+
+    // Send verification email (non-blocking)
+    emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
+      console.error('Failed to send verification email:', error);
     });
 
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
@@ -161,11 +172,14 @@ router.post('/verify-email', async (req: Request, res: Response) => {
     }
 
     const user = await prisma.user.findFirst({
-      where: { verificationToken: token },
+      where: {
+        verificationToken: token,
+        verificationExpiry: { gte: new Date() }, // Token not expired
+      },
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'Invalid verification token' });
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
     await prisma.user.update({
@@ -173,17 +187,19 @@ router.post('/verify-email', async (req: Request, res: Response) => {
       data: {
         emailVerified: true,
         verificationToken: null,
+        verificationExpiry: null,
       },
     });
 
-    res.json({ message: 'Email verified successfully' });
+    res.json({ success: true, message: 'Email verified successfully' });
   } catch (error) {
     console.error('Verify email error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/reset-request', authLimiter, async (req: Request, res: Response) => {
+// Forgot password endpoint (frontend compatibility)
+router.post('/forgot-password', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email } = req.body as ResetRequestBody;
 
@@ -192,12 +208,14 @@ router.post('/reset-request', authLimiter, async (req: Request, res: Response) =
     }
 
     const user = await prisma.user.findUnique({ where: { email } });
+    
+    // Always return success to prevent email enumeration
     if (!user) {
-      return res.json({ message: 'If email exists, reset link sent' });
+      return res.json({ success: true, message: 'If that email exists, a reset link was sent' });
     }
 
     const resetToken = randomBytes(32).toString('hex');
-    const resetTokenExpiry = new Date(Date.now() + 3600000);
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await prisma.user.update({
       where: { id: user.id },
@@ -207,11 +225,22 @@ router.post('/reset-request', authLimiter, async (req: Request, res: Response) =
       },
     });
 
-    res.json({ message: 'If email exists, reset link sent' });
+    // Send password reset email (non-blocking)
+    emailService.sendPasswordResetEmail(user.email, resetToken).catch((error) => {
+      console.error('Failed to send password reset email:', error);
+    });
+
+    res.json({ success: true, message: 'If that email exists, a reset link was sent' });
   } catch (error) {
     console.error('Reset request error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// Legacy endpoint for backward compatibility
+router.post('/reset-request', authLimiter, async (req: Request, res: Response) => {
+  // Redirect to new endpoint
+  return router.stack.find(layer => layer.route?.path === '/forgot-password')?.handle(req, res, () => {});
 });
 
 router.post('/reset-password', authLimiter, async (req: Request, res: Response) => {
@@ -251,6 +280,135 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
     console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /auth/update-plan
+ * Update user's subscription plan
+ * CRITICAL ENDPOINT - Required by frontend
+ */
+router.post('/update-plan', async (req: Request, res: Response) => {
+  try {
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Missing authentication token'
+      });
+    }
+
+    // Verify JWT token
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid or expired token'
+      });
+    }
+
+    const userId = decoded.userId || decoded.id;
+    const { plan } = req.body;
+
+    // Validate plan
+    const validPlans = ['free', 'pro', 'enterprise'];
+    if (!plan || !validPlans.includes(plan)) {
+      return res.status(400).json({
+        error: 'Invalid plan',
+        message: 'Plan must be one of: free, pro, enterprise'
+      });
+    }
+
+    // Get current user
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Check if downgrading from paid to free with active subscription
+    if (plan === 'free' && user.stripeSubscriptionId) {
+      return res.status(400).json({
+        error: 'Cannot downgrade to free',
+        message: 'Please cancel your Stripe subscription first via the billing portal'
+      });
+    }
+
+    // Update user plan
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        plan,
+        subscriptionStatus: plan === 'free' ? 'free' : user.subscriptionStatus,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        plan: true,
+        apiKey: true,
+        emailVerified: true,
+        usageCount: true,
+        usageLimit: true,
+        subscriptionStatus: true,
+        stripeCustomerId: true,
+        stripeSubscriptionId: true,
+        hasCompletedOnboarding: true,
+        onboardingStep: true,
+        trialStartedAt: true,
+        trialEndsAt: true,
+        maxAgents: true,
+        logRetentionDays: true,
+        createdAt: true,
+      },
+    });
+
+    // Log plan change
+    await prisma.subscriptionLog.create({
+      data: {
+        userId,
+        event: 'plan_updated',
+        metadata: {
+          oldPlan: user.plan,
+          newPlan: plan,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    }).catch((error) => {
+      console.error('Failed to log plan change:', error);
+    });
+
+    console.log(`✅ Plan updated for user ${user.email}: ${user.plan} → ${plan}`);
+
+    // Calculate trial status for response
+    const now = new Date();
+    const isTrialActive = updatedUser.trialStartedAt && updatedUser.trialEndsAt && now < updatedUser.trialEndsAt;
+    const daysLeftInTrial = isTrialActive && updatedUser.trialEndsAt
+      ? Math.ceil((updatedUser.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    res.json({
+      success: true,
+      user: {
+        ...updatedUser,
+        subscription: {
+          status: updatedUser.subscriptionStatus,
+          plan: updatedUser.plan,
+          isTrialActive,
+          daysLeftInTrial,
+          trialEndsAt: updatedUser.trialEndsAt,
+          stripe_subscription_id: updatedUser.stripeSubscriptionId,
+          stripe_customer_id: updatedUser.stripeCustomerId,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Update plan error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -336,6 +494,34 @@ router.get('/me', async (req: Request, res: Response) => {
       });
     }
 
+    // Sync with Stripe if subscription exists
+    let subscriptionStatus = user.subscriptionStatus;
+    let currentPeriodEnd: Date | null = null;
+
+    if (user.stripeSubscriptionId && stripeService.isConfigured()) {
+      try {
+        const stripeSubscription = await stripeService.getSubscription(user.stripeSubscriptionId);
+        if (stripeSubscription) {
+          // Update if status differs
+          if (stripeSubscription.status !== user.subscriptionStatus) {
+            const newStatus = stripeSubscription.status === 'active' ? 'active' :
+              stripeSubscription.status === 'trialing' ? 'trial' :
+              stripeSubscription.status === 'past_due' ? 'past_due' :
+              stripeSubscription.status === 'canceled' ? 'cancelled' : 'inactive';
+            
+            await prisma.user.update({
+              where: { id: userId },
+              data: { subscriptionStatus: newStatus },
+            });
+            subscriptionStatus = newStatus;
+          }
+          currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
+        }
+      } catch (error) {
+        console.error('Failed to sync with Stripe:', error);
+      }
+    }
+
     // Calculate trial status
     const now = new Date();
     const isTrialActive = user.trialStartedAt && user.trialEndsAt && now < user.trialEndsAt;
@@ -371,13 +557,14 @@ router.get('/me', async (req: Request, res: Response) => {
       isFirstTimeUser,
       // Subscription info  
       subscription: {
-        status: user.subscriptionStatus,
+        status: subscriptionStatus,
         plan: user.plan,
         isTrialActive,
         daysLeftInTrial,
         trialEndsAt: user.trialEndsAt,
-        stripeCustomerId: user.stripeCustomerId,
-        stripeSubscriptionId: user.stripeSubscriptionId,
+        currentPeriodEnd,
+        stripe_subscription_id: user.stripeSubscriptionId,
+        stripe_customer_id: user.stripeCustomerId,
       },
       // Login tracking
       firstLoginAt: user.firstLoginAt,

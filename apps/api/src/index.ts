@@ -102,6 +102,7 @@ import ingestionRoutes from './routes/ingestion';
 import authRoutes from './routes/auth';
 import oauthRoutes from './routes/oauth';
 import onboardingRoutes from './routes/onboarding';
+import stripeRoutes from './routes/stripe';
 import session from 'express-session';
 import passportConfig from './config/passport';
 import { WebSocketManager } from './websocket/WebSocketManager';
@@ -378,6 +379,10 @@ async function startServer(): Promise<void> {
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
+  // Stripe webhook endpoint - MUST use raw body for signature verification
+  // Mount BEFORE express.json() middleware to get raw buffer
+  app.use('/stripe/webhook', express.raw({ type: 'application/json' }), stripeRoutes);
+
   // HTTP request metrics middleware - DISABLED TEMPORARILY
   // TODO: Fix metrics module initialization before re-enabling
   // Issue: httpRequestDuration.labels is not a function in production
@@ -410,14 +415,80 @@ async function startServer(): Promise<void> {
   });
 
 
-  // Public health check endpoint (no authentication required)
-  app.get('/health', (_req, res) => {
-    res.json({
-      status: 'ok',
-      timestamp: new Date().toISOString(),
+  // Enhanced health check endpoint with service status monitoring
+  app.get('/health', async (_req, res) => {
+    const checks = {
+      database: false,
+      redis: false,
+      stripe: false,
+      email: false,
+    };
+
+    const details: any = {
       storage: prismaStore?.isConnected() ? 'prisma' : 'memory',
-      redis: authCache.isConnected() ? 'connected' : 'disconnected',
       queue: queueService ? 'enabled' : 'disabled',
+    };
+
+    // Check database connectivity
+    try {
+      if (prismaStore) {
+        await prismaStore.getPrisma().$queryRaw`SELECT 1`;
+        checks.database = true;
+        details.database = 'connected';
+      } else {
+        checks.database = false;
+        details.database = 'in-memory mode';
+      }
+    } catch (error) {
+      checks.database = false;
+      details.database = 'disconnected';
+      details.databaseError = (error as Error).message;
+    }
+
+    // Check Redis cache
+    checks.redis = authCache.isConnected();
+    details.redis = checks.redis ? 'connected' : 'disconnected';
+
+    // Check Stripe service
+    try {
+      const { StripeService } = await import('./services/StripeService');
+      const { prisma: prismaClient } = await import('./lib/prisma');
+      const stripeService = new StripeService(prismaStore?.getPrisma() || prismaClient);
+      checks.stripe = stripeService.isConfigured();
+      details.stripe = checks.stripe ? 'configured' : 'not configured';
+    } catch (error) {
+      checks.stripe = false;
+      details.stripe = 'error';
+      details.stripeError = (error as Error).message;
+    }
+
+    // Check Email service
+    try {
+      const { emailService } = await import('./services/EmailService');
+      checks.email = emailService.isConfigured();
+      details.email = emailService.isConfigured() 
+        ? `configured (${emailService.getProvider()})` 
+        : 'not configured';
+    } catch (error) {
+      checks.email = false;
+      details.email = 'error';
+      details.emailError = (error as Error).message;
+    }
+
+    // Determine overall health status
+    const criticalServices = [checks.database];
+    const allHealthy = Object.values(checks).every(v => v);
+    const criticalHealthy = criticalServices.every(v => v);
+
+    const status = allHealthy ? 'healthy' : (criticalHealthy ? 'degraded' : 'unhealthy');
+    const httpStatus = allHealthy ? 200 : (criticalHealthy ? 200 : 503);
+
+    res.status(httpStatus).json({
+      status,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      checks,
+      details,
     });
   });
 
@@ -459,6 +530,7 @@ async function startServer(): Promise<void> {
   app.use('/api/workflows', workflowRoutes);
   app.use('/api/budgets', budgetRoutes);
   app.use('/api/onboarding', onboardingRoutes);
+  app.use('/api/stripe', stripeRoutes); // Protected Stripe endpoints (checkout, portal)
 
   app.use(Sentry.Handlers.errorHandler());
 

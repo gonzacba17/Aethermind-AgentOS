@@ -41,6 +41,7 @@ model User {
   stripeSubscriptionId String? @map("stripe_subscription_id") @db.VarChar(255)
   emailVerified    Boolean     @default(false) @map("email_verified")
   verificationToken String?    @map("verification_token") @db.VarChar(255)
+  verificationExpiry DateTime?  @map("verification_expiry") @db.Timestamptz(6)
   resetToken       String?     @map("reset_token") @db.VarChar(255)
   resetTokenExpiry DateTime?   @map("reset_token_expiry") @db.Timestamptz(6)
   organizationId   String?     @map("organization_id") @db.Uuid
@@ -72,6 +73,7 @@ model User {
   workflows        Workflow[]
   executions       Execution[]
   budgets          Budget[]
+  subscriptionLogs SubscriptionLog[]
 
   @@index([email], map: "idx_users_email")
   @@index([apiKey], map: "idx_users_api_key")
@@ -252,4 +254,19 @@ model TelemetryEvent {
   @@index([status], map: "idx_telemetry_status")
   @@index([createdAt], map: "idx_telemetry_created_at")
   @@map("telemetry_events")
+}
+
+model SubscriptionLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id")
+  event     String   @db.VarChar(100)
+  metadata  Json?
+  timestamp DateTime @default(now()) @db.Timestamptz(6)
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId], map: "idx_subscription_logs_user_id")
+  @@index([timestamp], map: "idx_subscription_logs_timestamp")
+  @@index([event], map: "idx_subscription_logs_event")
+  @@map("subscription_logs")
 }
