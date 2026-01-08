@@ -1,7 +1,6 @@
 import { Home } from 'lucide-react';
 import { Button } from './ui/button';
-
-const LANDING_PAGE_URL = 'https://aethermind-page.vercel.app/';
+import { LANDING_PAGE_URL } from '@/lib/config';
 
 export function BackToHomeButton() {
   return (

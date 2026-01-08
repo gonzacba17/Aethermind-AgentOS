@@ -5,6 +5,8 @@
  * for the Aethermind dashboard.
  */
 
+import { LANDING_PAGE_URL } from './config';
+
 const AUTH_TOKEN_KEY = 'auth_token';
 
 /**
@@ -76,11 +78,10 @@ export function redirectToLogin(returnUrl?: string): void {
     return;
   }
   
-  const landingPageUrl = 'https://aethermind-page.vercel.app';
   const returnParam = returnUrl ? `?return=${encodeURIComponent(returnUrl)}` : '';
   
   console.log('[Auth] Redirecting to login...');
-  window.location.href = `${landingPageUrl}${returnParam}`;
+  window.location.href = `${LANDING_PAGE_URL}${returnParam}`;
 }
 
 /**

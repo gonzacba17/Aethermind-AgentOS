@@ -1,4 +1,5 @@
 import { getAuthToken, clearAuthToken } from './auth-utils';
+import { LANDING_PAGE_URL } from './config';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -32,8 +33,7 @@ async function handleApiError(response: Response, endpoint: string): Promise<nev
       clearAuthToken();
       
       // Redirect to landing page login
-      const landingPageUrl = 'https://aethermind-page.vercel.app';
-      window.location.href = landingPageUrl;
+      window.location.href = LANDING_PAGE_URL;
     }
   }
   

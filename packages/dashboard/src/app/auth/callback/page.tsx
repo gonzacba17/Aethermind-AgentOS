@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setAuthToken, clearAuthToken } from '@/lib/auth-utils';
+import { LANDING_PAGE_URL } from '@/lib/config';
 
 /**
  * OAuth Callback Page
@@ -58,7 +59,7 @@ function AuthCallbackContent() {
           
           // Redirect to landing page after 3 seconds
           setTimeout(() => {
-            window.location.href = 'https://aethermind-page.vercel.app';
+            window.location.href = LANDING_PAGE_URL;
           }, 3000);
           return;
         }
@@ -71,7 +72,7 @@ function AuthCallbackContent() {
           
           // Redirect to landing page after 3 seconds
           setTimeout(() => {
-            window.location.href = 'https://aethermind-page.vercel.app';
+            window.location.href = LANDING_PAGE_URL;
           }, 3000);
           return;
         }
@@ -113,7 +114,7 @@ function AuthCallbackContent() {
         
         // Redirect to landing page after 3 seconds
         setTimeout(() => {
-          window.location.href = 'https://aethermind-page.vercel.app';
+          window.location.href = LANDING_PAGE_URL;
         }, 3000);
       }
     }

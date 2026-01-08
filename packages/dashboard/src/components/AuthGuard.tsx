@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth-utils';
+import { LANDING_PAGE_URL } from '@/lib/config';
 
 /**
  * Authentication Guard Component
@@ -27,8 +28,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     if (!authenticated) {
       console.log('[AuthGuard] No token found - redirecting to landing page');
-      // Redirect to landing page
-      window.location.href = 'https://aethermind-page.vercel.app';
+      // Redirect to landing page (login page is in the frontend repo)
+      window.location.href = LANDING_PAGE_URL;
       return;
     }
 
