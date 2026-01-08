@@ -19,3 +19,13 @@ coverage
 
 # Environment backups (may contain sensitive data)
 .env.backup
+.env.fixed
+.env.temp
+.env.migration
+.env.*.old
+
+# Package tarballs
+*.tgz
+
+# Build artifacts that shouldn't be committed
+.pnpm-store
