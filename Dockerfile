@@ -37,12 +37,20 @@ COPY --from=builder --chown=nodejs:nodejs /app/apps/api/package.json ./apps/api/
 COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=deps --chown=nodejs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
+COPY --chown=nodejs:nodejs docker-entrypoint.sh /app/
+
+RUN chmod +x /app/docker-entrypoint.sh
 
 USER nodejs
 
 WORKDIR /app/apps/api
 EXPOSE 3001
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \\\n  CMD node -e \"require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })\"\n\nCMD ["dumb-init", "node", "dist/index.js"]
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["dumb-init", "node", "dist/index.js"]
 
 FROM base AS dashboard
 WORKDIR /app
