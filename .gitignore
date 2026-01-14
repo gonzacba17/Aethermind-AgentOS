@@ -29,3 +29,20 @@ coverage
 
 # Build artifacts that shouldn't be committed
 .pnpm-store
+
+# Logs directory
+logs/
+*.log
+
+# Backups (local development only)
+backups/
+*.backup
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/settings.json
