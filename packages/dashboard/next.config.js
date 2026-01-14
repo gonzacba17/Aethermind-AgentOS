@@ -1,5 +1,3 @@
-const { withSentryConfig } = require("@sentry/nextjs");
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   async rewrites() {
@@ -11,26 +9,14 @@ const nextConfig = {
       },
     ];
   },
-  // output: 'standalone', // Disabled for Windows compatibility - Vercel handles this automatically
 
   distDir: '.next',
   experimental: {
-    instrumentationHook: true,
     serverActions: {
       bodySizeLimit: '2mb',
     },
   },
 };
 
-const sentryWebpackPluginOptions = {
-  org: "aethermind-xt",
-  project: "javascript-nextjs",
-  silent: !process.env.CI,
-  disableLogger: true,
-  widenClientFileUpload: true,
-  hideSourceMaps: true,
-  disableServerWebpackPlugin: process.env.NODE_ENV !== "production",
-  disableClientWebpackPlugin: process.env.NODE_ENV !== "production",
-};
+module.exports = nextConfig;
 
-module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);
