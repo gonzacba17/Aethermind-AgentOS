@@ -20,20 +20,23 @@ function getHeaders(additionalHeaders?: Record<string, string>): HeadersInit {
   return headers;
 }
 
-// Helper to handle API errors with auto-redirect on 401
+// Helper to handle API errors
+// Note: Auto-redirect disabled - dashboard should handle auth errors internally
 async function handleApiError(response: Response, endpoint: string): Promise<never> {
   const status = response.status;
   
   // Handle 401 Unauthorized - token expired or invalid
   if (status === 401) {
-    console.error(`[API] 401 Unauthorized on ${endpoint} - clearing token and redirecting to login`);
+    console.error(`[API] 401 Unauthorized on ${endpoint} - Not authenticated`);
     
     // Clear invalid token
     if (typeof window !== 'undefined') {
       clearAuthToken();
       
-      // Redirect to landing page login
-      window.location.href = LANDING_PAGE_URL;
+      // REDIRECT DISABLED: Dashboard should stay accessible without auth
+      // Previously this redirected to: LANDING_PAGE_URL
+      // To re-enable auth: uncomment line below OR implement /login route in dashboard
+      // window.location.href = LANDING_PAGE_URL;
     }
   }
   
