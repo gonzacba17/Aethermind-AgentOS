@@ -77,6 +77,6 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3001) + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Start the app directly - migrations are handled by ensureDatabaseSchema() in index.ts
-# This ensures the healthcheck can pass even if migrations are running
-CMD ["dumb-init", "node", "apps/api/dist/index.js"]
+# Run migrations and then start the app
+# Railway now has PostgreSQL configured, so migrations will work
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=./prisma/schema.prisma && dumb-init node apps/api/dist/index.js"]
