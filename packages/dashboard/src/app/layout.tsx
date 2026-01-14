@@ -19,14 +19,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthGuard>
+        {/* AuthGuard temporarily disabled for testing - ENABLE BEFORE PRODUCTION */}
+        {/* <AuthGuard> */}
           <div className="flex h-screen">
             <Sidebar />
             <main className="flex-1 overflow-y-auto bg-muted/30">
               {children}
             </main>
           </div>
-        </AuthGuard>
+        {/* </AuthGuard> */}
       </body>
     </html>
   );
