@@ -35,3 +35,28 @@ Thumbs.db
 
 test_auditoria.sh
 test_auditoria_*.log
+
+# Development scripts
+scripts/dev/
+scripts/test/
+
+# CI/CD
+.github/
+.husky/
+
+# Logs and backups
+logs/
+backups/
+*.backup
+*.bak
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE
+.vscode/
+.idea/
+
+# License (keep in image)
+!LICENSE
