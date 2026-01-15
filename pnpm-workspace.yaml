@@ -1,4 +1,6 @@
 packages:
   - "packages/*"
+  - "!packages/dashboard-old"
+  - "!packages/dashboard-backup-*"
   - "apps/*"
   - "examples/*"
