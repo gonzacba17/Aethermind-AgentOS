@@ -38,6 +38,10 @@ logs/
 backups/
 *.backup
 *.bak
+*-old/
+*-backup-*/
+packages/dashboard-old/
+packages/dashboard-backup-*/
 
 # OS files
 .DS_Store
