@@ -60,10 +60,6 @@ COPY --from=builder --chown=nodejs:nodejs /app/packages/core/node_modules ./pack
 COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/node_modules ./packages/sdk/node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 
-# Copy startup script
-COPY --chown=nodejs:nodejs apps/api/start.sh /app/apps/api/start.sh
-RUN chmod +x /app/apps/api/start.sh
-
 # Crear directorio de logs con permisos correctos ANTES de cambiar a nodejs user
 RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
 
@@ -71,7 +67,7 @@ RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
 USER nodejs
 
 # Mantener directorio de trabajo en la raíz del proyecto
-WORKDIR /app
+WORKDIR /app/apps/api
 
 # Exponer puerto (Railway usa PORT env variable)
 EXPOSE 3001
@@ -80,5 +76,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3001) + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Run startup script that syncs schema and starts app
-CMD ["/app/apps/api/start.sh"]
+# Start using startup.js which syncs schema and starts app
+CMD ["node", "startup.js"]

@@ -28,11 +28,6 @@
     "validate": "tsx examples/validate-system.ts",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "db:migrate:dev": "prisma migrate dev",
-    "db:seed": "node scripts/seed-db.js",
-    "db:reset": "pnpm docker:down && pnpm docker:up && sleep 30 && pnpm db:migrate && pnpm db:seed",
-    "db:studio": "prisma studio",
-    "prisma:generate": "prisma generate",
     "clean": "turbo run clean && rimraf node_modules",
     "update:deps": "pnpm update --latest",
     "security:scan": "snyk test",
@@ -40,7 +35,7 @@
     "security:fix": "snyk fix"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.0",
+
     "@sentry/nextjs": "10",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.41.7",
@@ -67,7 +62,7 @@
     "lint-staged": "^15.2.0",
     "nock": "^13.5.0",
     "ora": "^8.0.1",
-    "prisma": "^6.19.0",
+
     "rimraf": "^5.0.10",
     "snyk": "^1.1301.2",
     "supertest": "^6.3.4",
