@@ -38,7 +38,7 @@ async function main() {
     // Use drizzle-kit push instead of migrate (more resilient for Railway)
     // Push directly syncs the schema without requiring migrations table
     console.log('📋 Pushing schema to database...');
-    const { stdout, stderr } = await execAsync('npx drizzle-kit push --config=./drizzle.config.ts --yes', {
+    const { stdout, stderr } = await execAsync('npx drizzle-kit push --config=./drizzle.config.ts', {
       cwd: __dirname,
       env: process.env,
       timeout: 45000, // 45 second timeout
