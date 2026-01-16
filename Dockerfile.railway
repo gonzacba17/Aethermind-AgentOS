@@ -37,6 +37,9 @@ RUN cd apps/api && pnpm drizzle-kit push || true
 # Build del API con todas sus dependencias workspace
 RUN pnpm turbo run build --filter=@aethermind/api...
 
+# Copy startup script
+COPY apps/api/startup.js ./apps/api/startup.js
+
 # Imagen final de producción
 FROM base AS production
 WORKDIR /app
@@ -54,7 +57,7 @@ COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/dist ./packages/sdk/
 COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/package.json ./packages/sdk/
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/package.json ./apps/api/
-COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nodejs:nodejs /app/apps/api/startup.js ./apps/api/startup.js
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/packages/core/node_modules ./packages/core/node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/node_modules ./packages/sdk/node_modules
