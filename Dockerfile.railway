@@ -64,6 +64,9 @@ COPY --from=builder --chown=nodejs:nodejs /app/packages/core/node_modules ./pack
 COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/node_modules ./packages/sdk/node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 
+# Crear directorio de logs con permisos correctos ANTES de cambiar a nodejs user
+RUN mkdir -p /app/logs && chown -R nodejs:nodejs /app/logs
+
 # Cambiar a usuario no-root
 USER nodejs
 
