@@ -32,51 +32,40 @@ async function main() {
   }
   
   console.log('');
-  console.log('🔄 Running database migrations with Drizzle...');
+  console.log('🔄 Syncing database schema with Drizzle...');
   
   try {
-    // Check if migrations exist first
-    const migrationsExist = fs.existsSync(migrationsPath) && 
-                           fs.readdirSync(migrationsPath).some(f => f.endsWith('.sql'));
+    // Use drizzle-kit push instead of migrate (more resilient for Railway)
+    // Push directly syncs the schema without requiring migrations table
+    console.log('📋 Pushing schema to database...');
+    const { stdout, stderr } = await execAsync('npx drizzle-kit push --config=./drizzle.config.ts --yes', {
+      cwd: __dirname,
+      env: process.env,
+      timeout: 45000, // 45 second timeout
+    });
     
-    if (!migrationsExist) {
-      console.warn('⚠️  No migrations found - database may not be initialized');
-      console.warn('   Run: npx drizzle-kit generate to create migrations');
-    } else {
-      // Run drizzle-kit migrate to apply migrations from the migrations folder
-      console.log('📋 Applying SQL migrations...');
-      const { stdout, stderr } = await execAsync('npx drizzle-kit migrate --config=./drizzle.config.ts', {
-        cwd: __dirname,
-        env: process.env,
-        timeout: 30000, // 30 second timeout for migrations
-      });
-      
-      if (stdout) {
-        console.log('📋 Drizzle migration output:');
-        console.log(stdout);
-      }
-      if (stderr) {
-        console.warn('⚠️  Drizzle migration warnings:');
-        console.warn(stderr);
-      }
-      
-      console.log('✅ Database migrations completed successfully');
+    if (stdout) {
+      console.log('📋 Drizzle output:');
+      console.log(stdout);
     }
-  } catch (error) {
-    console.error('❌ Database migration failed:', error.message);
-    if (error.stdout) console.log('stdout:', error.stdout);
-    if (error.stderr) console.error('stderr:', error.stderr);
+    if (stderr && !stderr.includes('No schema changes')) {
+      console.warn('⚠️  Drizzle warnings:');
+      console.warn(stderr);
+    }
     
-    // Log helpful diagnostics
+    console.log('✅ Database schema sync completed');
+  } catch (error) {
+    console.error('❌ Database schema sync failed:', error.message);
+    
+    // Log diagnostics
     console.error('');
-    console.error('📊 Migration Diagnostics:');
+    console.error('📊 Database Diagnostics:');
     console.error(`   DATABASE_URL configured: ${!!process.env.DATABASE_URL}`);
     console.error(`   Migrations path: ${migrationsPath}`);
     console.error(`   Migrations exist: ${fs.existsSync(migrationsPath)}`);
     
-    console.warn('⚠️  Continuing to start application despite migration failure...');
-    console.warn('   The database may be in an inconsistent state.');
-    console.warn('   Verify migrations manually if needed.');
+    console.warn('⚠️  Continuing to start application...');
+    console.warn('   The database schema may need manual verification.');
   }
   
   console.log('');
