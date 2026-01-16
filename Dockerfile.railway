@@ -30,13 +30,9 @@ COPY . .
 
 # Instalar tipos faltantes antes del build
 RUN pnpm add -D @types/jsonwebtoken --filter=@aethermind/api
-# Copy prisma schema
-COPY prisma ./prisma/
 
-# Generate Prisma Client with correct schema path
-RUN pnpm prisma generate --schema=./prisma/schema.prisma
-# Apply database migrations
-RUN pnpm prisma db push --schema=./prisma/schema.prisma --accept-data-loss || true
+# Sync database schema with Drizzle (not Prisma)
+RUN cd apps/api && pnpm drizzle-kit push || true
 
 # Build del API con todas sus dependencias workspace
 RUN pnpm turbo run build --filter=@aethermind/api...
@@ -80,6 +76,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3001) + '/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Run migrations and then start the app
-# Railway now has PostgreSQL configured, so migrations will work
-CMD ["sh", "-c", "echo 'Aplicando migraciones...' && npx prisma migrate deploy --schema=./prisma/schema.prisma && echo 'Generando cliente Prisma...' && npx prisma generate --schema=./prisma/schema.prisma && echo 'Iniciando aplicación...' && dumb-init node apps/api/dist/index.js"]
+# Start the app with dumb-init for proper signal handling
+CMD ["dumb-init", "node", "apps/api/dist/index.js"]
