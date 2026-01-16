@@ -1,6 +1,7 @@
 {
   "name": "@aethermind/api",
   "version": "0.1.0",
+  "description": "Aethermind API - Drizzle ORM",
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc",
