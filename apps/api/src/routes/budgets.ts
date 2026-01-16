@@ -2,6 +2,9 @@ import { Router } from 'express';
 import type { Router as ExpressRouter } from 'express';
 import { z } from 'zod';
 import { validateBody, validateQuery } from '../middleware/validator.js';
+import { db } from '../db/index.js';
+import { budgets } from '../db/schema.js';
+import { eq, and } from 'drizzle-orm';
 
 const router: ExpressRouter = Router();
 
@@ -48,16 +51,16 @@ router.get('/', validateQuery(ListBudgetsSchema), async (req, res) => {
   try {
     const { status, scope } = req.query as any;
     
-    const budgets = await req.prisma.budget.findMany({
-      where: {
-        userId: (req.user as any)?.id,
-        ...(status && { status }),
-        ...(scope && { scope }),
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const conditions = [eq(budgets.userId, (req.user as any)?.id)];
+    if (status) conditions.push(eq(budgets.status, status));
+    if (scope) conditions.push(eq(budgets.scope, scope));
     
-    res.json(budgets);
+    const results = await db.select()
+      .from(budgets)
+      .where(and(...conditions))
+      .orderBy(budgets.createdAt);
+    
+    res.json(results);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
@@ -66,12 +69,13 @@ router.get('/', validateQuery(ListBudgetsSchema), async (req, res) => {
 // Get budget by ID
 router.get('/:id', async (req, res) => {
   try {
-    const budget = await req.prisma.budget.findFirst({
-      where: {
-        id: req.params.id,
-        userId: (req.user as any)?.id,
-      },
-    });
+    const [budget] = await db.select()
+      .from(budgets)
+      .where(and(
+        eq(budgets.id, req.params.id),
+        eq(budgets.userId, (req.user as any)?.id)
+      ))
+      .limit(1);
     
     if (!budget) {
       return res.status(404).json({ error: 'Budget not found' });
@@ -86,18 +90,23 @@ router.get('/:id', async (req, res) => {
 // Update budget
 router.patch('/:id', validateBody(UpdateBudgetSchema), async (req, res) => {
   try {
+    if (!req.params.id) {
+      return res.status(400).json({ error: 'Budget ID is required' });
+    }
+    
     await req.budgetService.updateBudget(
-      req.params.id!,
+      req.params.id,
       (req.user as any)?.id,
       req.body
     );
     
-    const updated = await req.prisma.budget.findFirst({
-      where: {
-        id: req.params.id,
-        userId: (req.user as any)?.id,
-      },
-    });
+    const [updated] = await db.select()
+      .from(budgets)
+      .where(and(
+        eq(budgets.id, req.params.id),
+        eq(budgets.userId, (req.user as any)?.id)
+      ))
+      .limit(1);
     
     if (!updated) {
       return res.status(404).json({ error: 'Budget not found' });
@@ -122,12 +131,13 @@ router.delete('/:id', async (req, res) => {
 // Get budget usage summary
 router.get('/:id/usage', async (req, res) => {
   try {
-    const budget = await req.prisma.budget.findFirst({
-      where: {
-        id: req.params.id,
-        userId: (req.user as any)?.id,
-      },
-    });
+    const [budget] = await db.select()
+      .from(budgets)
+      .where(and(
+        eq(budgets.id, req.params.id),
+        eq(budgets.userId, (req.user as any)?.id)
+      ))
+      .limit(1);
     
     if (!budget) {
       return res.status(404).json({ error: 'Budget not found' });

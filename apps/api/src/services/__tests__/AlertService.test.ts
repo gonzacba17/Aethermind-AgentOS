@@ -64,7 +64,7 @@ describe('AlertService', () => {
 
   describe('checkAndSendAlerts', () => {
     beforeEach(() => {
-      alertService = new AlertService(mockPrisma, mockSendgridKey, mockSlackWebhook);
+      alertService = new AlertService(mockSendgridKey, mockSlackWebhook);
     });
 
     it('should fetch all active budgets', async () => {

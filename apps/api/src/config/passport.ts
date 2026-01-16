@@ -3,7 +3,9 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { findOrCreateOAuthUser } from '../services/OAuthService';
 import logger from '../utils/logger';
-import prisma from '../lib/prisma';
+import { db } from '../db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 // Configure Google OAuth Strategy (only if credentials are provided)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
@@ -21,7 +23,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
             email: profile.emails?.[0]?.value,
           });
 
-          const user = await findOrCreateOAuthUser(prisma, {
+          const user = await findOrCreateOAuthUser({
             provider: 'google',
             providerId: profile.id,
             email: profile.emails?.[0]?.value || '',
@@ -57,7 +59,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
             username: profile.username,
           });
 
-          const user = await findOrCreateOAuthUser(prisma, {
+          const user = await findOrCreateOAuthUser({
             provider: 'github',
             providerId: profile.id,
             email: profile.emails?.[0]?.value || `${profile.username}@github.local`,
@@ -84,8 +86,8 @@ passport.serializeUser((user: any, done) => {
 
 passport.deserializeUser(async (id: string, done) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id } });
-    done(null, user);
+    const [user] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    done(null, user || null);
   } catch (error) {
     done(error);
   }

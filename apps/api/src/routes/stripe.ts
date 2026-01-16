@@ -1,13 +1,12 @@
 import { Router, Request, Response } from 'express';
 import type { Router as ExpressRouter } from 'express';
 import { StripeService } from '../services/StripeService';
-import { prisma } from '../lib/prisma';
 import requireEmailVerified from '../middleware/requireEmailVerified';
 
 const router: ExpressRouter = Router();
 
 // Initialize Stripe service
-const stripeService = new StripeService(prisma);
+const stripeService = new StripeService();
 
 /**
  * POST /stripe/webhook

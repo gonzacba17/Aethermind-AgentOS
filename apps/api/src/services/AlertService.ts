@@ -1,9 +1,10 @@
-import { PrismaClient } from '@prisma/client';
-import type { Budget, User } from '@prisma/client';
+import { db } from '../db';
+import { budgets, users, alertLogs } from '../db/schema';
+import type { Budget, User } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 export class AlertService {
   constructor(
-    private prisma: PrismaClient,
     private sendgridApiKey?: string,
     private slackWebhookUrl?: string
   ) {}
@@ -12,13 +13,18 @@ export class AlertService {
    * Check all active budgets and send alerts if thresholds are exceeded
    */
   async checkAndSendAlerts(): Promise<void> {
-    const budgets = await this.prisma.budget.findMany({
-      where: { status: 'active' },
-      include: { user: true },
-    });
+    const budgetsWithUsers = await db.select()
+      .from(budgets)
+      .leftJoin(users, eq(budgets.userId, users.id))
+      .where(eq(budgets.status, 'active'));
 
-    for (const budget of budgets) {
-      await this.checkBudgetAlerts(budget);
+    for (const row of budgetsWithUsers) {
+      if (row.budgets && row.users) {
+        await this.checkBudgetAlerts({
+          ...row.budgets,
+          user: row.users,
+        });
+      }
     }
   }
 
@@ -31,19 +37,17 @@ export class AlertService {
     // 80% warning (or custom alertAt threshold)
     if (percentUsed >= budget.alertAt && !budget.alert80Sent) {
       await this.sendAlert(budget, 'warning', percentUsed);
-      await this.prisma.budget.update({
-        where: { id: budget.id },
-        data: { alert80Sent: true },
-      });
+      await db.update(budgets)
+        .set({ alert80Sent: true })
+        .where(eq(budgets.id, budget.id));
     }
 
     // 100% critical
     if (percentUsed >= 100 && !budget.alert100Sent) {
       await this.sendAlert(budget, 'critical', percentUsed);
-      await this.prisma.budget.update({
-        where: { id: budget.id },
-        data: { alert100Sent: true },
-      });
+      await db.update(budgets)
+        .set({ alert100Sent: true })
+        .where(eq(budgets.id, budget.id));
     }
   }
 
@@ -77,16 +81,14 @@ export class AlertService {
     }
 
     // Log alert
-    await this.prisma.alertLog.create({
-      data: {
-        budgetId: budget.id,
-        alertType: severity,
-        channel: this.getChannelsString(),
-        recipient: budget.user.email,
-        message,
-        success: errors.length === 0,
-        error: errors.length > 0 ? errors.join('; ') : null,
-      },
+    await db.insert(alertLogs).values({
+      budgetId: budget.id,
+      alertType: severity,
+      channel: this.getChannelsString(),
+      recipient: budget.user.email,
+      message,
+      success: errors.length === 0,
+      error: errors.length > 0 ? errors.join('; ') : null,
     });
   }
 
@@ -198,9 +200,8 @@ export class AlertService {
 }
 
 export function createAlertService(
-  prisma: PrismaClient,
   sendgridApiKey?: string,
   slackWebhookUrl?: string
 ): AlertService {
-  return new AlertService(prisma, sendgridApiKey, slackWebhookUrl);
+  return new AlertService(sendgridApiKey, slackWebhookUrl);
 }

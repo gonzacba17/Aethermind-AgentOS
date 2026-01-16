@@ -273,9 +273,8 @@ async function startServer(): Promise<void> {
 
   // Initialize Budget and Alert services
   if (prismaStore) {
-    budgetService = new BudgetService(prismaStore.getPrisma());
+    budgetService = new BudgetService();
     alertService = new AlertService(
-      prismaStore.getPrisma(),
       process.env["SENDGRID_API_KEY"],
       process.env["SLACK_WEBHOOK_URL"]
     );
@@ -513,10 +512,7 @@ async function startServer(): Promise<void> {
     // Check Stripe service
     try {
       const { StripeService } = await import("./services/StripeService");
-      const { prisma: prismaClient } = await import("./lib/prisma");
-      const stripeService = new StripeService(
-        prismaStore?.getPrisma() || prismaClient
-      );
+      const stripeService = new StripeService();
       checks.stripe = stripeService.isConfigured();
       details.stripe = checks.stripe ? "configured" : "not configured";
     } catch (error) {

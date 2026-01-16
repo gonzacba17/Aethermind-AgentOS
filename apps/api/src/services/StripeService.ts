@@ -1,5 +1,7 @@
 import Stripe from 'stripe';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../db';
+import { users, subscriptionLogs } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { emailService } from './EmailService';
 
 /**
@@ -20,11 +22,9 @@ const PRICE_TO_PLAN: Record<string, 'pro' | 'enterprise'> = {
 
 export class StripeService {
   private stripe: Stripe | null = null;
-  private prisma: PrismaClient;
   private webhookSecret: string;
 
-  constructor(prisma: PrismaClient) {
-    this.prisma = prisma;
+  constructor() {
     this.webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
     if (process.env.STRIPE_SECRET_KEY) {
@@ -111,9 +111,10 @@ export class StripeService {
     }
 
     // Find user by Stripe customer ID
-    const user = await this.prisma.user.findUnique({
-      where: { stripeCustomerId: customerId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.stripeCustomerId, customerId))
+      .limit(1);
 
     if (!user) {
       console.warn(`⚠️  User not found for customer: ${customerId}`);
@@ -121,15 +122,14 @@ export class StripeService {
     }
 
     // Update user subscription
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
+    await db.update(users)
+      .set({
         plan,
         subscriptionStatus: subscription.status === 'trialing' ? 'trial' : 'active',
         stripeSubscriptionId: subscription.id,
         trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-      },
-    });
+      })
+      .where(eq(users.id, user.id));
 
     // Log the event
     await this.logSubscriptionEvent(user.id, 'subscription_created', {
@@ -149,9 +149,10 @@ export class StripeService {
     const priceId = subscription.items.data[0]?.price.id;
     const plan = priceId ? PRICE_TO_PLAN[priceId] : undefined;
 
-    const user = await this.prisma.user.findUnique({
-      where: { stripeCustomerId: customerId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.stripeCustomerId, customerId))
+      .limit(1);
 
     if (!user) {
       console.warn(`⚠️  User not found for customer: ${customerId}`);
@@ -166,14 +167,13 @@ export class StripeService {
     else if (subscription.status === 'canceled' || subscription.status === 'unpaid') subscriptionStatus = 'cancelled';
 
     // Update user
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
+    await db.update(users)
+      .set({
         plan: plan || user.plan,
         subscriptionStatus,
         stripeSubscriptionId: subscription.id,
-      },
-    });
+      })
+      .where(eq(users.id, user.id));
 
     // Log the event
     await this.logSubscriptionEvent(user.id, 'subscription_updated', {
@@ -196,9 +196,10 @@ export class StripeService {
   private async handleSubscriptionDeleted(subscription: Stripe.Subscription): Promise<void> {
     const customerId = subscription.customer as string;
 
-    const user = await this.prisma.user.findUnique({
-      where: { stripeCustomerId: customerId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.stripeCustomerId, customerId))
+      .limit(1);
 
     if (!user) {
       console.warn(`⚠️  User not found for customer: ${customerId}`);
@@ -206,15 +207,14 @@ export class StripeService {
     }
 
     // Downgrade to free plan
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
+    await db.update(users)
+      .set({
         plan: 'free',
         subscriptionStatus: 'cancelled',
         stripeSubscriptionId: null,
         trialEndsAt: null,
-      },
-    });
+      })
+      .where(eq(users.id, user.id));
 
     // Log the event
     await this.logSubscriptionEvent(user.id, 'subscription_deleted', {
@@ -234,9 +234,10 @@ export class StripeService {
   private async handlePaymentSucceeded(invoice: Stripe.Invoice): Promise<void> {
     const customerId = invoice.customer as string;
 
-    const user = await this.prisma.user.findUnique({
-      where: { stripeCustomerId: customerId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.stripeCustomerId, customerId))
+      .limit(1);
 
     if (!user) {
       console.warn(`⚠️  User not found for customer: ${customerId}`);
@@ -244,12 +245,9 @@ export class StripeService {
     }
 
     // Update subscription status to active
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        subscriptionStatus: 'active',
-      },
-    });
+    await db.update(users)
+      .set({ subscriptionStatus: 'active' })
+      .where(eq(users.id, user.id));
 
     // Log the event
     await this.logSubscriptionEvent(user.id, 'payment_succeeded', {
@@ -267,9 +265,10 @@ export class StripeService {
   private async handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
     const customerId = invoice.customer as string;
 
-    const user = await this.prisma.user.findUnique({
-      where: { stripeCustomerId: customerId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.stripeCustomerId, customerId))
+      .limit(1);
 
     if (!user) {
       console.warn(`⚠️  User not found for customer: ${customerId}`);
@@ -277,12 +276,9 @@ export class StripeService {
     }
 
     // Update subscription status to past_due
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        subscriptionStatus: 'past_due',
-      },
-    });
+    await db.update(users)
+      .set({ subscriptionStatus: 'past_due' })
+      .where(eq(users.id, user.id));
 
     // Log the event
     await this.logSubscriptionEvent(user.id, 'payment_failed', {
@@ -304,19 +300,19 @@ export class StripeService {
     const subscriptionId = session.subscription as string;
 
     // Get or create user association
-    const user = await this.prisma.user.findUnique({
-      where: { stripeCustomerId: customerId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.stripeCustomerId, customerId))
+      .limit(1);
 
     if (!user && session.client_reference_id) {
       // Link customer to user if not already linked
-      await this.prisma.user.update({
-        where: { id: session.client_reference_id },
-        data: {
+      await db.update(users)
+        .set({
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
-        },
-      });
+        })
+        .where(eq(users.id, session.client_reference_id));
 
       console.log(`✅ Linked customer ${customerId} to user ${session.client_reference_id}`);
     }
@@ -348,9 +344,10 @@ export class StripeService {
       throw new Error('Stripe is not configured');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
     if (!user) {
       throw new Error('User not found');
@@ -368,10 +365,9 @@ export class StripeService {
       customerId = customer.id;
 
       // Update user with customer ID
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { stripeCustomerId: customerId },
-      });
+      await db.update(users)
+        .set({ stripeCustomerId: customerId })
+        .where(eq(users.id, userId));
     }
 
     // Create checkout session
@@ -400,9 +396,10 @@ export class StripeService {
       throw new Error('Stripe is not configured');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
 
     if (!user || !user.stripeCustomerId) {
       throw new Error('User does not have a Stripe customer');
@@ -437,12 +434,10 @@ export class StripeService {
    */
   private async logSubscriptionEvent(userId: string, event: string, metadata: any): Promise<void> {
     try {
-      await this.prisma.subscriptionLog.create({
-        data: {
-          userId,
-          event,
-          metadata,
-        },
+      await db.insert(subscriptionLogs).values({
+        userId,
+        event,
+        metadata,
       });
     } catch (error) {
       console.error('Failed to log subscription event:', error);

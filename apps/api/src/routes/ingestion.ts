@@ -1,11 +1,11 @@
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../db/index.js';
+import { telemetryEvents } from '../db/schema.js';
 import { apiKeyAuthCached } from '../middleware/apiKeyAuth.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 
 const router: Router = Router();
-const prisma = new PrismaClient();
 
 /**
  * Telemetry event schema (matches SDK)
@@ -121,17 +121,14 @@ async function storeEvents(
     promptTokens: event.tokens.promptTokens,
     completionTokens: event.tokens.completionTokens,
     totalTokens: event.tokens.totalTokens,
-    cost: event.cost,
+    cost: event.cost.toString(), // Convert to string for Drizzle
     latency: event.latency,
     status: event.status,
-    error: event.error,
+    error: event.error || null,
   }));
 
   // Bulk insert
-  await prisma.telemetryEvent.createMany({
-    data,
-    skipDuplicates: true,
-  });
+  await db.insert(telemetryEvents).values(data).onConflictDoNothing();
 
   console.log(`[Ingestion] Stored ${data.length} events for org ${organizationId}`);
 }

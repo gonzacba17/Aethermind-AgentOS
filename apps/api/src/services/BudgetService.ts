@@ -1,9 +1,9 @@
-import { PrismaClient } from '@prisma/client';
-import type { Budget } from '@prisma/client';
+import { db } from '../db';
+import { budgets } from '../db/schema';
+import type { Budget } from '../db/schema';
+import { eq, and, lt, sql } from 'drizzle-orm';
 
 export class BudgetService {
-  constructor(private prisma: PrismaClient) {}
-
   /**
    * Get the active budget for a given scope
    */
@@ -12,15 +12,18 @@ export class BudgetService {
     scope: string,
     scopeId?: string
   ): Promise<Budget | null> {
-    return this.prisma.budget.findFirst({
-      where: {
-        userId,
-        scope,
-        scopeId: scopeId || null,
-        status: 'active',
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const [budget] = await db.select()
+      .from(budgets)
+      .where(and(
+        eq(budgets.userId, userId),
+        eq(budgets.scope, scope),
+        scopeId ? eq(budgets.scopeId, scopeId) : sql`${budgets.scopeId} IS NULL`,
+        eq(budgets.status, 'active')
+      ))
+      .orderBy(sql`${budgets.createdAt} DESC`)
+      .limit(1);
+    
+    return budget || null;
   }
 
   /**
@@ -49,14 +52,18 @@ export class BudgetService {
    * Increment the current spend for a budget
    */
   async incrementSpend(budgetId: string, amount: number): Promise<void> {
-    await this.prisma.budget.update({
-      where: { id: budgetId },
-      data: {
-        currentSpend: {
-          increment: amount,
-        },
-      },
-    });
+    // Drizzle doesn't have increment, so we need to fetch and update
+    const [budget] = await db.select({ currentSpend: budgets.currentSpend })
+      .from(budgets)
+      .where(eq(budgets.id, budgetId))
+      .limit(1);
+    
+    if (budget) {
+      const newSpend = Number(budget.currentSpend) + amount;
+      await db.update(budgets)
+        .set({ currentSpend: newSpend.toString() })
+        .where(eq(budgets.id, budgetId));
+    }
   }
 
   /**
@@ -70,42 +77,37 @@ export class BudgetService {
     const startOfDay = new Date(now);
     startOfDay.setHours(0, 0, 0, 0);
     
-    await this.prisma.budget.updateMany({
-      where: {
-        period: 'daily',
-        updatedAt: {
-          lt: startOfDay,
-        },
-      },
-      data: {
-        currentSpend: 0,
+    await db.update(budgets)
+      .set({
+        currentSpend: '0',
         alert80Sent: false,
         alert100Sent: false,
-      },
-    });
+      })
+      .where(and(
+        eq(budgets.period, 'daily'),
+        lt(budgets.updatedAt, startOfDay)
+      ));
 
     // Reset weekly budgets (every Monday)
     if (now.getDay() === 1) {
-      await this.prisma.budget.updateMany({
-        where: { period: 'weekly' },
-        data: {
-          currentSpend: 0,
+      await db.update(budgets)
+        .set({
+          currentSpend: '0',
           alert80Sent: false,
           alert100Sent: false,
-        },
-      });
+        })
+        .where(eq(budgets.period, 'weekly'));
     }
 
     // Reset monthly budgets (1st of month)
     if (now.getDate() === 1) {
-      await this.prisma.budget.updateMany({
-        where: { period: 'monthly' },
-        data: {
-          currentSpend: 0,
+      await db.update(budgets)
+        .set({
+          currentSpend: '0',
           alert80Sent: false,
           alert100Sent: false,
-        },
-      });
+        })
+        .where(eq(budgets.period, 'monthly'));
     }
   }
 
@@ -122,29 +124,31 @@ export class BudgetService {
     hardLimit?: boolean;
     alertAt?: number;
   }): Promise<Budget> {
-    return this.prisma.budget.create({
-      data: {
+    const [budget] = await db.insert(budgets)
+      .values({
         userId: data.userId,
         name: data.name,
-        limitAmount: data.limitAmount,
+        limitAmount: data.limitAmount.toString(),
         period: data.period,
         scope: data.scope,
         scopeId: data.scopeId || null,
         hardLimit: data.hardLimit ?? true,
         alertAt: data.alertAt ?? 80,
         status: 'active',
-      },
-    });
+      })
+      .returning();
+    
+    return budget!;
   }
 
   /**
    * Get all budgets for a user
    */
   async getUserBudgets(userId: string): Promise<Budget[]> {
-    return this.prisma.budget.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
+    return db.select()
+      .from(budgets)
+      .where(eq(budgets.userId, userId))
+      .orderBy(sql`${budgets.createdAt} DESC`);
   }
 
   /**
@@ -155,28 +159,26 @@ export class BudgetService {
     userId: string,
     data: Partial<Budget>
   ): Promise<void> {
-    await this.prisma.budget.updateMany({
-      where: {
-        id: budgetId,
-        userId,
-      },
-      data,
-    });
+    await db.update(budgets)
+      .set(data)
+      .where(and(
+        eq(budgets.id, budgetId),
+        eq(budgets.userId, userId)
+      ));
   }
 
   /**
    * Delete a budget
    */
   async deleteBudget(budgetId: string, userId: string): Promise<void> {
-    await this.prisma.budget.deleteMany({
-      where: {
-        id: budgetId,
-        userId,
-      },
-    });
+    await db.delete(budgets)
+      .where(and(
+        eq(budgets.id, budgetId),
+        eq(budgets.userId, userId)
+      ));
   }
 }
 
-export function createBudgetService(prisma: PrismaClient): BudgetService {
-  return new BudgetService(prisma);
+export function createBudgetService(): BudgetService {
+  return new BudgetService();
 }

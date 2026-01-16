@@ -4,11 +4,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import rateLimit from 'express-rate-limit';
-import { prisma } from '../lib/prisma';
+import { db } from '../db';
+import { users, subscriptionLogs } from '../db/schema';
+import { eq, and, gte } from 'drizzle-orm';
 import { emailService } from '../services/EmailService';
 import { StripeService } from '../services/StripeService';
 
-const stripeService = new StripeService(prisma);
+const stripeService = new StripeService();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -60,7 +62,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (existingUser) {
       return res.status(409).json({ error: 'User already exists' });
     }
@@ -70,34 +72,38 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
     const verificationToken = randomBytes(32).toString('hex');
     const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        apiKey,
-        verificationToken,
-        verificationExpiry,
-        plan: 'free',
-        usageLimit: 100,
-        usageCount: 0,
-        // Onboarding defaults
-        hasCompletedOnboarding: false,
-        onboardingStep: 'welcome',
-        // Subscription status
-        subscriptionStatus: 'free',
-        // Free tier limits
-        maxAgents: 3,
-        logRetentionDays: 30,
-        // Login tracking
-        firstLoginAt: new Date(),
-        lastLoginAt: new Date(),
-      },
-    });
+    const userId = `user_${randomBytes(16).toString('hex')}`;
+    
+    const [user] = await db.insert(users).values({
+      id: userId,
+      email,
+      passwordHash,
+      apiKey,
+      verificationToken,
+      verificationExpiry,
+      plan: 'free',
+      usageLimit: 100,
+      usageCount: 0,
+      // Onboarding defaults
+      hasCompletedOnboarding: false,
+      onboardingStep: 'welcome',
+      // Subscription status
+      subscriptionStatus: 'free',
+      // Free tier limits
+      maxAgents: 3,
+      logRetentionDays: 30,
+      // Login tracking
+      lastLoginAt: new Date(),
+    }).returning();
 
     // Send verification email (non-blocking)
     emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
       console.error('Failed to send verification email:', error);
     });
+
+    if (!user) {
+      return res.status(500).json({ error: 'Failed to create user' });
+    }
 
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
@@ -127,7 +133,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -171,25 +177,25 @@ router.post('/verify-email', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Verification token required' });
     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        verificationToken: token,
-        verificationExpiry: { gte: new Date() }, // Token not expired
-      },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(and(
+        eq(users.verificationToken, token),
+        gte(users.verificationExpiry, new Date())
+      ))
+      .limit(1);
 
     if (!user) {
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
+    await db.update(users)
+      .set({
         emailVerified: true,
         verificationToken: null,
         verificationExpiry: null,
-      },
-    });
+      })
+      .where(eq(users.id, user.id));
 
     res.json({ success: true, message: 'Email verified successfully' });
   } catch (error) {
@@ -207,7 +213,7 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
       return res.status(400).json({ error: 'Email required' });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
     
     // Always return success to prevent email enumeration
     if (!user) {
@@ -217,13 +223,12 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
     const resetToken = randomBytes(32).toString('hex');
     const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
+    await db.update(users)
+      .set({
         resetToken,
         resetTokenExpiry,
-      },
-    });
+      })
+      .where(eq(users.id, user.id));
 
     // Send password reset email (non-blocking)
     emailService.sendPasswordResetEmail(user.email, resetToken).catch((error) => {
@@ -255,12 +260,13 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        resetToken: token,
-        resetTokenExpiry: { gte: new Date() },
-      },
-    });
+    const [user] = await db.select()
+      .from(users)
+      .where(and(
+        eq(users.resetToken, token),
+        gte(users.resetTokenExpiry, new Date())
+      ))
+      .limit(1);
 
     if (!user) {
       return res.status(400).json({ error: 'Invalid or expired reset token' });
@@ -268,14 +274,13 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
+    await db.update(users)
+      .set({
         passwordHash,
         resetToken: null,
         resetTokenExpiry: null,
-      },
-    });
+      })
+      .where(eq(users.id, user.id));
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
@@ -326,7 +331,7 @@ router.post('/update-plan', async (req: Request, res: Response) => {
     }
 
     // Get current user
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -340,50 +345,52 @@ router.post('/update-plan', async (req: Request, res: Response) => {
     }
 
     // Update user plan
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
+    const [updatedUser] = await db.update(users)
+      .set({
         plan,
         subscriptionStatus: plan === 'free' ? 'free' : user.subscriptionStatus,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        plan: true,
-        apiKey: true,
-        emailVerified: true,
-        usageCount: true,
-        usageLimit: true,
-        subscriptionStatus: true,
-        stripeCustomerId: true,
-        stripeSubscriptionId: true,
-        hasCompletedOnboarding: true,
-        onboardingStep: true,
-        trialStartedAt: true,
-        trialEndsAt: true,
-        maxAgents: true,
-        logRetentionDays: true,
-        createdAt: true,
-      },
-    });
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        plan: users.plan,
+        apiKey: users.apiKey,
+        emailVerified: users.emailVerified,
+        usageCount: users.usageCount,
+        usageLimit: users.usageLimit,
+        subscriptionStatus: users.subscriptionStatus,
+        stripeCustomerId: users.stripeCustomerId,
+        stripeSubscriptionId: users.stripeSubscriptionId,
+        hasCompletedOnboarding: users.hasCompletedOnboarding,
+        onboardingStep: users.onboardingStep,
+        trialStartedAt: users.trialStartedAt,
+        trialEndsAt: users.trialEndsAt,
+        maxAgents: users.maxAgents,
+        logRetentionDays: users.logRetentionDays,
+        createdAt: users.createdAt,
+      });
 
     // Log plan change
-    await prisma.subscriptionLog.create({
-      data: {
-        userId,
-        event: 'plan_updated',
-        metadata: {
-          oldPlan: user.plan,
-          newPlan: plan,
-          timestamp: new Date().toISOString(),
-        },
+    await db.insert(subscriptionLogs).values({
+      userId,
+      event: 'plan_updated',
+      metadata: {
+        oldPlan: user.plan,
+        newPlan: plan,
+        timestamp: new Date().toISOString(),
       },
     }).catch((error) => {
       console.error('Failed to log plan change:', error);
     });
 
     console.log(`✅ Plan updated for user ${user.email}: ${user.plan} → ${plan}`);
+
+    // Safety check (should never happen with .returning())
+    if (!updatedUser) {
+      return res.status(500).json({ error: 'Failed to update user plan' });
+    }
 
     // Calculate trial status for response
     const now = new Date();
@@ -457,35 +464,35 @@ router.get('/me', async (req: Request, res: Response) => {
     // Get user from database using userId from token
     const userId = decoded.userId || decoded.id;
     
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        plan: true,
-        apiKey: true,
-        emailVerified: true,
-        usageCount: true,
-        usageLimit: true,
-        stripeCustomerId: true,
-        stripeSubscriptionId: true,
-        createdAt: true,
-        // Onboarding fields
-        hasCompletedOnboarding: true,
-        onboardingStep: true,
-        // Trial fields
-        trialStartedAt: true,
-        trialEndsAt: true,
-        subscriptionStatus: true,
-        // Login tracking
-        firstLoginAt: true,
-        lastLoginAt: true,
-        // Free tier limits
-        maxAgents: true,
-        logRetentionDays: true,
-      },
-    });
+    const [user] = await db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      plan: users.plan,
+      apiKey: users.apiKey,
+      emailVerified: users.emailVerified,
+      usageCount: users.usageCount,
+      usageLimit: users.usageLimit,
+      stripeCustomerId: users.stripeCustomerId,
+      stripeSubscriptionId: users.stripeSubscriptionId,
+      createdAt: users.createdAt,
+      // Onboarding fields
+      hasCompletedOnboarding: users.hasCompletedOnboarding,
+      onboardingStep: users.onboardingStep,
+      // Trial fields
+      trialStartedAt: users.trialStartedAt,
+      trialEndsAt: users.trialEndsAt,
+      subscriptionStatus: users.subscriptionStatus,
+      // Login tracking
+      firstLoginAt: users.firstLoginAt,
+      lastLoginAt: users.lastLoginAt,
+      // Free tier limits
+      maxAgents: users.maxAgents,
+      logRetentionDays: users.logRetentionDays,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
     if (!user) {
       return res.status(404).json({
@@ -509,10 +516,9 @@ router.get('/me', async (req: Request, res: Response) => {
               stripeSubscription.status === 'past_due' ? 'past_due' :
               stripeSubscription.status === 'canceled' ? 'cancelled' : 'inactive';
             
-            await prisma.user.update({
-              where: { id: userId },
-              data: { subscriptionStatus: newStatus },
-            });
+            await db.update(users)
+              .set({ subscriptionStatus: newStatus })
+              .where(eq(users.id, userId));
             subscriptionStatus = newStatus;
           }
           currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
@@ -534,12 +540,12 @@ router.get('/me', async (req: Request, res: Response) => {
       (now.getTime() - new Date(user.createdAt).getTime() < 24 * 60 * 60 * 1000) : false;
 
     // Update lastLoginAt asynchronously (non-blocking)
-    prisma.user.update({
-      where: { id: userId },
-      data: { lastLoginAt: now },
-    }).catch((error) => {
-      console.error('Failed to update lastLoginAt:', error);
-    });
+    db.update(users)
+      .set({ lastLoginAt: now })
+      .where(eq(users.id, userId))
+      .catch((error) => {
+        console.error('Failed to update lastLoginAt:', error);
+      });
 
     // Return user info with enhanced subscription status
     res.json({

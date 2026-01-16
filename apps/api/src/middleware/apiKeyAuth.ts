@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { db } from '../db';
+import { organizations } from '../db/schema';
 import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
 
 /**
  * Extended request with organization context
@@ -52,18 +51,17 @@ export async function apiKeyAuth(
     }
 
     // Find organization by API key hash
-    const organizations = await prisma.organization.findMany({
-      select: {
-        id: true,
-        name: true,
-        apiKeyHash: true,
-        plan: true,
-        rateLimitPerMin: true,
-      },
-    });
+    const orgs = await db.select({
+      id: organizations.id,
+      name: organizations.name,
+      apiKeyHash: organizations.apiKeyHash,
+      plan: organizations.plan,
+      rateLimitPerMin: organizations.rateLimitPerMin,
+    })
+    .from(organizations);
 
     let matchedOrg = null;
-    for (const org of organizations) {
+    for (const org of orgs) {
       const matches = await bcrypt.compare(apiKey, org.apiKeyHash);
       if (matches) {
         matchedOrg = org;

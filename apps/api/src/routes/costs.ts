@@ -138,15 +138,21 @@ router.get('/budget', async (req, res) => {
       return;
     }
     
-    // Get user's active budget from Prisma
-    const budget = await req.prisma.budget.findFirst({
-      where: {
-        userId: (req.user as any)?.id,
-        status: 'active',
-        scope: 'user',
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Import Drizzle modules
+    const { db } = await import('../db/index.js');
+    const { budgets } = await import('../db/schema.js');
+    const { eq, and } = await import('drizzle-orm');
+    
+    // Get user's active budget from Drizzle
+    const [budget] = await db.select()
+      .from(budgets)
+      .where(and(
+        eq(budgets.userId, (req.user as any)?.id),
+        eq(budgets.status, 'active'),
+        eq(budgets.scope, 'user')
+      ))
+      .orderBy(budgets.createdAt)
+      .limit(1);
     
     if (!budget) {
       res.status(404).json({ error: 'No budget configured' });

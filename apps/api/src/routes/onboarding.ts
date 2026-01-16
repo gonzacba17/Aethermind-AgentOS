@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import type { Router as ExpressRouter } from 'express';
 import jwt from 'jsonwebtoken';
-import prisma from '../lib/prisma';
+import { db } from '../db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import logger from '../utils/logger';
 
 const router: ExpressRouter = Router();
@@ -52,14 +54,14 @@ router.get('/status', authenticateToken, async (req: Request, res: Response) => 
   try {
     const userId = (req as any).userId;
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        hasCompletedOnboarding: true,
-        onboardingStep: true,
-        createdAt: true,
-      },
-    });
+    const [user] = await db.select({
+      hasCompletedOnboarding: users.hasCompletedOnboarding,
+      onboardingStep: users.onboardingStep,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -102,17 +104,20 @@ router.patch('/step', authenticateToken, async (req: Request, res: Response) => 
       logger.warn('Invalid onboarding step provided', { step, userId });
     }
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
+    const [user] = await db.update(users)
+      .set({
         onboardingStep: step,
-      },
-      select: {
-        id: true,
-        hasCompletedOnboarding: true,
-        onboardingStep: true,
-      },
-    });
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        hasCompletedOnboarding: users.hasCompletedOnboarding,
+        onboardingStep: users.onboardingStep,
+      });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     logger.info('Onboarding step updated', { userId, step });
 
@@ -137,19 +142,22 @@ router.post('/complete', authenticateToken, async (req: Request, res: Response) 
   try {
     const userId = (req as any).userId;
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
+    const [user] = await db.update(users)
+      .set({
         hasCompletedOnboarding: true,
         onboardingStep: 'complete',
-      },
-      select: {
-        id: true,
-        email: true,
-        hasCompletedOnboarding: true,
-        onboardingStep: true,
-      },
-    });
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        email: users.email,
+        hasCompletedOnboarding: users.hasCompletedOnboarding,
+        onboardingStep: users.onboardingStep,
+      });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     logger.info('Onboarding completed', { userId, email: user.email });
 
@@ -174,19 +182,22 @@ router.post('/skip', authenticateToken, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: {
+    const [user] = await db.update(users)
+      .set({
         hasCompletedOnboarding: true,
         onboardingStep: 'skipped',
-      },
-      select: {
-        id: true,
-        email: true,
-        hasCompletedOnboarding: true,
-        onboardingStep: true,
-      },
-    });
+      })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        email: users.email,
+        hasCompletedOnboarding: users.hasCompletedOnboarding,
+        onboardingStep: users.onboardingStep,
+      });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
     logger.info('Onboarding skipped', { userId, email: user.email });
 
