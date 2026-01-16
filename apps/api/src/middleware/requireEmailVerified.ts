@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../lib/prisma';
+import { db } from '../db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production-min-32-chars';
 
@@ -47,10 +49,13 @@ export async function requireEmailVerified(
     const userId = decoded.userId || decoded.id;
 
     // Get user from database
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { emailVerified: true, email: true },
-    });
+    const [user] = await db.select({
+      emailVerified: users.emailVerified,
+      email: users.email,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
 
     if (!user) {
       res.status(404).json({

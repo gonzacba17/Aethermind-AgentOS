@@ -1,6 +1,8 @@
 import { Response, NextFunction } from 'express';
 import { AuthRequest } from './jwt-auth.js';
-import { prisma } from '../lib/prisma';
+import { db } from '../db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 const PLAN_LIMITS = {
   free: 100,
@@ -20,10 +22,14 @@ export async function usageLimiter(
       return;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.userId },
-      select: { usageCount: true, usageLimit: true, plan: true },
-    });
+    const [user] = await db.select({
+      usageCount: users.usageCount,
+      usageLimit: users.usageLimit,
+      plan: users.plan,
+    })
+    .from(users)
+    .where(eq(users.id, req.userId))
+    .limit(1);
 
     if (!user) {
       res.status(404).json({ error: 'User not found' });
@@ -49,17 +55,22 @@ export async function usageLimiter(
 }
 
 export async function incrementUsage(userId: string): Promise<void> {
-  await prisma.user.update({
-    where: { id: userId },
-    data: { usageCount: { increment: 1 } },
-  });
+  const [user] = await db.select({ usageCount: users.usageCount })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  
+  if (user) {
+    await db.update(users)
+      .set({ usageCount: user.usageCount + 1 })
+      .where(eq(users.id, userId));
+  }
 }
 
 export async function resetUsageForUser(userId: string): Promise<void> {
-  await prisma.user.update({
-    where: { id: userId },
-    data: { usageCount: 0 },
-  });
+  await db.update(users)
+    .set({ usageCount: 0 })
+    .where(eq(users.id, userId));
 }
 
 export async function updatePlan(
@@ -67,11 +78,10 @@ export async function updatePlan(
   plan: keyof typeof PLAN_LIMITS
 ): Promise<void> {
   const limit = PLAN_LIMITS[plan];
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
+  await db.update(users)
+    .set({
       plan,
       usageLimit: limit === -1 ? 999999999 : limit,
-    },
-  });
+    })
+    .where(eq(users.id, userId));
 }

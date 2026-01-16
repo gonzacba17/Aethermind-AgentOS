@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../lib/prisma';
+import { db } from '../db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 // Validate JWT_SECRET in production
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
@@ -34,16 +36,16 @@ export async function jwtAuthMiddleware(
     const apiKey = req.header('x-api-key');
 
     if (apiKey) {
-      const user = await prisma.user.findUnique({
-        where: { apiKey },
-        select: {
-          id: true,
-          email: true,
-          plan: true,
-          usageCount: true,
-          usageLimit: true,
-        },
-      });
+      const [user] = await db.select({
+        id: users.id,
+        email: users.email,
+        plan: users.plan,
+        usageCount: users.usageCount,
+        usageLimit: users.usageLimit,
+      })
+      .from(users)
+      .where(eq(users.apiKey, apiKey))
+      .limit(1);
 
       if (!user) {
         res.status(403).json({ error: 'Invalid API key' });
@@ -68,16 +70,16 @@ export async function jwtAuthMiddleware(
       email: string;
     };
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        plan: true,
-        usageCount: true,
-        usageLimit: true,
-      },
-    });
+    const [user] = await db.select({
+      id: users.id,
+      email: users.email,
+      plan: users.plan,
+      usageCount: users.usageCount,
+      usageLimit: users.usageLimit,
+    })
+    .from(users)
+    .where(eq(users.id, decoded.userId))
+    .limit(1);
 
     if (!user) {
       res.status(401).json({ error: 'User not found' });
