@@ -124,7 +124,7 @@ import session from "express-session";
 import passportConfig from "./config/passport";
 import { WebSocketManager } from "./websocket/WebSocketManager";
 import { InMemoryStore } from "./services/InMemoryStore";
-import { PrismaStore } from "./services/PrismaStore";
+import { DatabaseStore } from "./services/DatabaseStore";
 import redisCache, { RedisCache } from "./services/RedisCache";
 import { BudgetService } from "./services/BudgetService";
 import { AlertService } from "./services/AlertService";
@@ -232,7 +232,7 @@ const workflowEngine = createWorkflowEngine(orchestrator);
 const wsManager = new WebSocketManager(wss, verifyApiKey);
 
 let store: StoreInterface;
-let prismaStore: PrismaStore | null = null;
+let databaseStore: DatabaseStore | null = null;
 let budgetService: BudgetService | null = null;
 let alertService: AlertService | null = null;
 
@@ -249,16 +249,16 @@ async function initializeCache(): Promise<void> {
 async function initializeStore(): Promise<StoreInterface> {
   if (process.env["DATABASE_URL"]) {
     try {
-      logger.info("Attempting to connect to PostgreSQL via Prisma...");
-      prismaStore = new PrismaStore();
-      const connected = await prismaStore.connect();
+      logger.info("Attempting to connect to PostgreSQL via DatabaseStore...");
+      databaseStore = new DatabaseStore();
+      const connected = await databaseStore.connect();
       if (connected) {
-        logger.info("Using Prisma for data persistence");
-        return prismaStore;
+        logger.info("Using DatabaseStore (Drizzle) for data persistence");
+        return databaseStore;
       }
     } catch (error) {
       logger.warn(
-        "Failed to connect via Prisma, falling back to InMemoryStore:",
+        "Failed to connect via DatabaseStore, falling back to InMemoryStore:",
         error
       );
     }
@@ -272,7 +272,7 @@ async function startServer(): Promise<void> {
   store = await initializeStore();
 
   // Initialize Budget and Alert services
-  if (prismaStore) {
+  if (databaseStore) {
     budgetService = new BudgetService();
     alertService = new AlertService(
       process.env["SENDGRID_API_KEY"],
@@ -485,14 +485,14 @@ async function startServer(): Promise<void> {
     };
 
     const details: any = {
-      storage: prismaStore?.isConnected() ? "prisma" : "memory",
+      storage: databaseStore?.isConnected() ? "prisma" : "memory",
       queue: queueService ? "enabled" : "disabled",
     };
 
     // Check database connectivity
     try {
-      if (prismaStore) {
-        await prismaStore.getPrisma().$queryRaw`SELECT 1`;
+      if (databaseStore) {
+        await databaseStore.getPrisma().$queryRaw`SELECT 1`;
         checks.database = true;
         details.database = "connected";
       } else {
@@ -581,8 +581,8 @@ async function startServer(): Promise<void> {
     req.cache = authCache;
     req.budgetService = budgetService!;
     req.alertService = alertService!;
-    if (prismaStore) {
-      req.prisma = prismaStore.getPrisma();
+    if (databaseStore) {
+      req.prisma = databaseStore.getPrisma();
     }
     next();
   });
@@ -659,7 +659,7 @@ async function startServer(): Promise<void> {
       console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
       console.log(`Health check: http://localhost:${PORT}/health (public)`);
       console.log(
-        `Storage: ${prismaStore?.isConnected() ? "Prisma" : "InMemory"}`
+        `Storage: ${databaseStore?.isConnected() ? "Prisma" : "InMemory"}`
       );
       console.log(
         `Redis: ${authCache.isConnected() ? "Connected" : "Disconnected"}`
@@ -682,7 +682,7 @@ async function startServer(): Promise<void> {
       console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
       console.log(`Health check: http://localhost:${PORT}/health (public)`);
       console.log(
-        `Storage: ${prismaStore?.isConnected() ? "Prisma" : "InMemory"}`
+        `Storage: ${databaseStore?.isConnected() ? "Prisma" : "InMemory"}`
       );
       console.log(
         `Redis: ${authCache.isConnected() ? "Connected" : "Disconnected"}`
@@ -709,8 +709,8 @@ process.on("SIGINT", async () => {
       (error as Error).message
     );
   }
-  if (prismaStore) {
-    await prismaStore.close();
+  if (databaseStore) {
+    await databaseStore.close();
   }
   try {
     await authCache.close();
@@ -731,8 +731,8 @@ process.on("SIGTERM", async () => {
       (error as Error).message
     );
   }
-  if (prismaStore) {
-    await prismaStore.close();
+  if (databaseStore) {
+    await databaseStore.close();
   }
   try {
     await authCache.close();
