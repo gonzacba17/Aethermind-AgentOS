@@ -7,10 +7,6 @@ if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-import { initSentry, Sentry } from "./lib/sentry";
-
-initSentry();
-
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -210,9 +206,6 @@ const app = express();
 // Trust Railway proxy for X-Forwarded-For header (required for rate limiting)
 // Railway sits behind a proxy, so we need to trust the first proxy in the chain
 app.set('trust proxy', 1);
-
-app.use(Sentry.Handlers.requestHandler());
-app.use(Sentry.Handlers.tracingHandler());
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
@@ -596,8 +589,6 @@ async function startServer(): Promise<void> {
   app.use("/api/budgets", budgetRoutes);
   app.use("/api/onboarding", onboardingRoutes);
   app.use("/api/stripe", stripeRoutes); // Protected Stripe endpoints (checkout, portal)
-
-  app.use(Sentry.Handlers.errorHandler());
 
   app.use(
     (
