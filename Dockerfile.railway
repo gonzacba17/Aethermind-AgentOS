@@ -58,6 +58,8 @@ COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/package.json ./packa
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/package.json ./apps/api/
 COPY --from=builder --chown=nodejs:nodejs /app/apps/api/startup.js ./apps/api/startup.js
+COPY --from=builder --chown=nodejs:nodejs /app/apps/api/drizzle.config.ts ./apps/api/drizzle.config.ts
+COPY --from=builder --chown=nodejs:nodejs /app/apps/api/src/db ./apps/api/src/db
 COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/packages/core/node_modules ./packages/core/node_modules
 COPY --from=builder --chown=nodejs:nodejs /app/packages/sdk/node_modules ./packages/sdk/node_modules
