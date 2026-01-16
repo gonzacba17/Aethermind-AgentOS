@@ -5,21 +5,25 @@ import * as schema from './schema';
 // Create PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20, // Maximum number of connections in the pool
+  max: 25, // Maximum number of connections in the pool (increased for better concurrency)
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000, // Increased from 2s to 10s for Railway/network latency
 });
 
-// Log connection status in development
-if (process.env.NODE_ENV === 'development') {
-  pool.on('connect', () => {
-    console.log('✅ Database pool connection established');
-  });
+// Enhanced logging for connection diagnostics
+pool.on('connect', () => {
+  console.log('✅ Database pool connection established');
+});
 
-  pool.on('error', (err) => {
-    console.error('❌ Unexpected database pool error:', err);
-  });
-}
+pool.on('error', (err) => {
+  console.error('❌ Unexpected database pool error:', err);
+  console.error('   Error code:', (err as any).code);
+  console.error('   Error details:', err.message);
+});
+
+pool.on('remove', () => {
+  console.log('🔌 Database connection removed from pool');
+});
 
 // Create and export Drizzle instance
 export const db = drizzle(pool, { schema });

@@ -16,7 +16,6 @@ import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import https from "https";
 import fs from "fs";
-import { PrismaClient } from "@prisma/client";
 import { WebSocketServer } from "ws";
 import {
   createRuntime,
@@ -27,82 +26,6 @@ import {
   createConfigWatcher,
   TaskQueueService,
 } from "@aethermind/core";
-
-// Auto-apply database migrations on startup
-async function ensureDatabaseSchema() {
-  // Run in any environment if DATABASE_URL is configured
-  if (process.env.DATABASE_URL) {
-    console.log("🔄 Checking database schema...");
-    const prisma = new PrismaClient();
-
-    try {
-      await prisma.$connect();
-      console.log("✅ Connected to database");
-
-      // Try to query organizations table
-      try {
-        await prisma.organization.findFirst();
-        console.log("✅ Database schema verified - tables exist");
-      } catch (error: any) {
-        // If table doesn't exist, apply schema automatically
-        if (
-          error.code === "P2021" ||
-          error.message.includes("does not exist")
-        ) {
-          console.log(
-            "⚠️  Tables not found - applying schema automatically..."
-          );
-
-          try {
-            const { execSync } = require("child_process");
-            const path = require("path");
-
-            // Determine schema path (Railway runs from apps/api)
-            const schemaPath = path.join(
-              process.cwd(),
-              "../../prisma/schema.prisma"
-            );
-
-            // Apply schema using db push
-            console.log(
-              `🔧 Running: prisma db push with schema at ${schemaPath}...`
-            );
-            const output = execSync(
-              `npx prisma db push --schema=${schemaPath} --accept-data-loss --skip-generate`,
-              {
-                encoding: "utf-8",
-                cwd: process.cwd(),
-                env: { ...process.env, DATABASE_URL: process.env.DATABASE_URL },
-              }
-            );
-
-            console.log("✅ Schema applied successfully!");
-            console.log(output);
-
-            // Verify tables were created
-            await prisma.organization.findFirst();
-            console.log("✅ Database schema verified after creation");
-          } catch (applyError: any) {
-            console.error("❌ Failed to apply schema:", applyError.message);
-            console.log(
-              "💡 Manual fix: railway run npx prisma db push --schema=./prisma/schema.prisma"
-            );
-            // Don't crash the app, let it try to start anyway
-          }
-        } else {
-          // Other database error
-          throw error;
-        }
-      }
-    } catch (error: any) {
-      console.error("❌ Database connection failed:", error.message);
-      console.log("⚠️  API will start but database operations may fail");
-      // Don't crash the app
-    } finally {
-      await prisma.$disconnect();
-    }
-  }
-}
 
 import { agentRoutes } from "./routes/agents";
 import { executionRoutes } from "./routes/executions";
@@ -643,9 +566,7 @@ async function startServer(): Promise<void> {
     const credentials = { key: privateKey, cert: certificate };
 
     const httpsServer = https.createServer(credentials, app);
-    httpsServer.listen(PORT, async () => {
-      // Ensure database schema before accepting requests
-      await ensureDatabaseSchema();
+    httpsServer.listen(PORT, () => {
       console.log(`✅ HTTPS Server running on port ${PORT}`);
       console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
       console.log(`Health check: http://localhost:${PORT}/health (public)`);
@@ -666,9 +587,7 @@ async function startServer(): Promise<void> {
     });
   } else {
     // === HTTP Server (for development) ===
-    server.listen(PORT, async () => {
-      // Ensure database schema before accepting requests
-      await ensureDatabaseSchema();
+    server.listen(PORT, () => {
       console.log(`\n✅ Aethermind API server running on port ${PORT}`);
       console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
       console.log(`Health check: http://localhost:${PORT}/health (public)`);

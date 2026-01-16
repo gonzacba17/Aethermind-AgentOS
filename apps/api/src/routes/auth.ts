@@ -321,6 +321,16 @@ router.post('/update-plan', async (req: Request, res: Response) => {
     const userId = decoded.userId || decoded.id;
     const { plan } = req.body;
 
+    // CRITICAL: Reject temporary users (created when database was unavailable)
+    if (userId.startsWith('temp-')) {
+      console.error(`⚠️  Temporary user attempted plan update: ${userId}`);
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message: 'Database connection issue during login. Please log out and sign in again.',
+        code: 'TEMPORARY_USER_DETECTED'
+      });
+    }
+
     // Validate plan
     const validPlans = ['free', 'pro', 'enterprise'];
     if (!plan || !validPlans.includes(plan)) {
@@ -463,6 +473,17 @@ router.get('/me', async (req: Request, res: Response) => {
 
     // Get user from database using userId from token
     const userId = decoded.userId || decoded.id;
+    
+    // CRITICAL: Reject temporary users (created when database was unavailable)
+    if (userId.startsWith('temp-')) {
+      console.error(`⚠️  Temporary user attempted to access /auth/me: ${userId}`);
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message: 'Your session was created during a database outage. Please log out and sign in again.',
+        code: 'TEMPORARY_USER_DETECTED',
+        action: 'FORCE_LOGOUT'
+      });
+    }
     
     const [user] = await db.select({
       id: users.id,
