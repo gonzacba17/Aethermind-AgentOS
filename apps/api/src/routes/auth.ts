@@ -9,6 +9,8 @@ import { users, subscriptionLogs } from '../db/schema';
 import { eq, and, gte } from 'drizzle-orm';
 import { emailService } from '../services/EmailService';
 import { StripeService } from '../services/StripeService';
+import { convertTemporaryUser, getTemporaryUser } from '../services/OAuthService';
+
 
 const stripeService = new StripeService();
 
@@ -318,17 +320,40 @@ router.post('/update-plan', async (req: Request, res: Response) => {
       });
     }
 
-    const userId = decoded.userId || decoded.id;
+    let userId = decoded.userId || decoded.id;
     const { plan } = req.body;
 
-    // CRITICAL: Reject temporary users (created when database was unavailable)
+    // Handle temporary users: attempt to convert to permanent before rejecting
     if (userId.startsWith('temp-')) {
-      console.error(`⚠️  Temporary user attempted plan update: ${userId}`);
-      return res.status(503).json({
-        error: 'Service Unavailable',
-        message: 'Database connection issue during login. Please log out and sign in again.',
-        code: 'TEMPORARY_USER_DETECTED'
-      });
+      console.log(`🔄 Temporary user attempting plan update: ${userId}`);
+      
+      // Check if we have this user in memory
+      const tempUserData = getTemporaryUser(userId);
+      if (!tempUserData) {
+        console.error(`❌ Temporary user not found in memory: ${userId}`);
+        return res.status(503).json({
+          error: 'Service Unavailable',
+          message: 'Session expired. Please log out and sign in again.',
+          code: 'TEMPORARY_USER_NOT_FOUND'
+        });
+      }
+
+      // Attempt to convert temporary user to permanent
+      console.log(`🔄 Attempting to convert temporary user to permanent...`);
+      const convertedUser = await convertTemporaryUser(userId);
+      
+      if (convertedUser) {
+        console.log(`✅ Successfully converted temporary user to permanent: ${convertedUser.id}`);
+        userId = convertedUser.id; // Use the new permanent ID
+      } else {
+        console.error(`❌ Cannot convert temporary user - database still unavailable`);
+        return res.status(503).json({
+          error: 'Service Unavailable',
+          message: 'Database connection issue. Please try again in a few moments, or log out and sign in again.',
+          code: 'TEMPORARY_USER_DETECTED',
+          retryAfter: 30
+        });
+      }
     }
 
     // Validate plan
@@ -472,17 +497,53 @@ router.get('/me', async (req: Request, res: Response) => {
     }
 
     // Get user from database using userId from token
-    const userId = decoded.userId || decoded.id;
+    let userId = decoded.userId || decoded.id;
     
-    // CRITICAL: Reject temporary users (created when database was unavailable)
+    // Handle temporary users: attempt to convert or return cached data
     if (userId.startsWith('temp-')) {
-      console.error(`⚠️  Temporary user attempted to access /auth/me: ${userId}`);
-      return res.status(503).json({
-        error: 'Service Unavailable',
-        message: 'Your session was created during a database outage. Please log out and sign in again.',
-        code: 'TEMPORARY_USER_DETECTED',
-        action: 'FORCE_LOGOUT'
-      });
+      console.log(`🔄 Temporary user accessing /auth/me: ${userId}`);
+      
+      // Try to convert temporary user to permanent
+      const convertedUser = await convertTemporaryUser(userId);
+      
+      if (convertedUser) {
+        console.log(`✅ Temporary user converted during /auth/me: ${convertedUser.id}`);
+        userId = convertedUser.id;
+      } else {
+        // Return temporary user data from memory with warning flag
+        const tempUserData = getTemporaryUser(userId);
+        if (tempUserData) {
+          console.warn(`⚠️ Returning temporary user data for: ${userId}`);
+          return res.json({
+            id: tempUserData.tempId,
+            email: tempUserData.email,
+            name: tempUserData.name,
+            plan: tempUserData.plan,
+            usageCount: tempUserData.usageCount,
+            usageLimit: tempUserData.usageLimit,
+            emailVerified: true,
+            hasCompletedOnboarding: false,
+            isTemporaryUser: true,
+            temporaryUserWarning: 'Your account is temporarily stored in memory due to database issues. Please try refreshing in a few moments.',
+            subscription: {
+              status: 'free',
+              plan: 'free',
+              isTrialActive: false,
+              daysLeftInTrial: 0,
+            },
+            createdAt: tempUserData.createdAt,
+          });
+        }
+        
+        // Temp user not found in memory - force re-login
+        console.error(`❌ Temporary user not found in memory: ${userId}`);
+        return res.status(503).json({
+          error: 'Service Unavailable',
+          message: 'Session expired. Please log out and sign in again.',
+          code: 'TEMPORARY_USER_NOT_FOUND',
+          action: 'FORCE_LOGOUT'
+        });
+      }
     }
     
     const [user] = await db.select({

@@ -49,6 +49,8 @@ import { BudgetService } from "./services/BudgetService";
 import { AlertService } from "./services/AlertService";
 import type { StoreInterface } from "./services/PostgresStore";
 import { authMiddleware, configureAuth, verifyApiKey } from "./middleware/auth";
+import { verifyDatabaseOnStartup, measureDatabaseLatency, getDatabaseStatus } from "./middleware/database";
+import { getTemporaryUsersCount } from "./services/OAuthService";
 import { sanitizeLog, sanitizeObject } from "./utils/sanitizer";
 import logger, { stream } from "./utils/logger";
 import {
@@ -185,6 +187,14 @@ async function initializeStore(): Promise<StoreInterface> {
 
 async function startServer(): Promise<void> {
   await initializeCache();
+  
+  // Verify database connection with retries on startup
+  const dbConnected = await verifyDatabaseOnStartup();
+  if (!dbConnected) {
+    logger.warn("⚠️ Server starting with degraded database connectivity");
+    logger.warn("   OAuth users may be created as temporary (in-memory) users");
+  }
+  
   store = await initializeStore();
 
   // Initialize Budget and Alert services
@@ -401,24 +411,24 @@ async function startServer(): Promise<void> {
     };
 
     const details: any = {
-      storage: databaseStore?.isConnected() ? "prisma" : "memory",
+      storage: databaseStore?.isConnected() ? "drizzle" : "memory",
       queue: queueService ? "enabled" : "disabled",
     };
 
-    // Check database connectivity
-    try {
-      if (databaseStore) {
-        await databaseStore.getPrisma().$queryRaw`SELECT 1`;
-        checks.database = true;
-        details.database = "connected";
-      } else {
-        checks.database = false;
-        details.database = "in-memory mode";
-      }
-    } catch (error) {
+    // Check database connectivity with latency measurement
+    const dbLatency = await measureDatabaseLatency();
+    const dbStatus = getDatabaseStatus();
+    
+    if (dbLatency !== null) {
+      checks.database = true;
+      details.database = "connected";
+      details.databaseLatencyMs = dbLatency;
+    } else {
       checks.database = false;
-      details.database = "disconnected";
-      details.databaseError = (error as Error).message;
+      details.database = dbStatus.isConnected ? "connected" : "disconnected";
+      if (dbStatus.lastError) {
+        details.databaseError = dbStatus.lastError.message;
+      }
     }
 
     // Check Redis cache
@@ -450,6 +460,12 @@ async function startServer(): Promise<void> {
       details.emailError = (error as Error).message;
     }
 
+    // Get temporary users count
+    const temporaryUsersCount = getTemporaryUsersCount();
+    if (temporaryUsersCount > 0) {
+      details.temporaryUsersWarning = `${temporaryUsersCount} user(s) in temporary storage (database was unavailable during login)`;
+    }
+
     // Determine overall health status
     // NOTE: Always return 200 for Railway healthcheck compatibility
     // The app can run in degraded mode (InMemoryStore) without database
@@ -466,10 +482,12 @@ async function startServer(): Promise<void> {
 
     res.status(httpStatus).json({
       status,
+      version: "0.1.0",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       checks,
       details,
+      temporaryUsersCount,
     });
   });
 
