@@ -31,6 +31,11 @@ export class DatabaseStore implements StoreInterface {
     return this.connected;
   }
 
+  getDrizzle(): any {
+    return db;
+  }
+
+  // Legacy alias for backward compatibility
   getPrisma(): any {
     return db;
   }

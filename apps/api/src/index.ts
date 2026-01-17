@@ -516,7 +516,7 @@ async function startServer(): Promise<void> {
     req.budgetService = budgetService!;
     req.alertService = alertService!;
     if (databaseStore) {
-      req.prisma = databaseStore.getPrisma();
+      req.drizzle = databaseStore.getDrizzle();
     }
     next();
   });
@@ -589,7 +589,7 @@ async function startServer(): Promise<void> {
       console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
       console.log(`Health check: http://localhost:${PORT}/health (public)`);
       console.log(
-        `Storage: ${databaseStore?.isConnected() ? "Prisma" : "InMemory"}`
+        `Storage: ${databaseStore?.isConnected() ? "Drizzle" : "InMemory"}`
       );
       console.log(
         `Redis: ${authCache.isConnected() ? "Connected" : "Disconnected"}`
@@ -611,7 +611,7 @@ async function startServer(): Promise<void> {
       console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
       console.log(`Health check: http://localhost:${PORT}/health (public)`);
       console.log(
-        `Storage: ${databaseStore?.isConnected() ? "Prisma" : "InMemory"}`
+        `Storage: ${databaseStore?.isConnected() ? "Drizzle" : "InMemory"}`
       );
       console.log(
         `Redis: ${authCache.isConnected() ? "Connected" : "Disconnected"}`
@@ -688,7 +688,7 @@ declare global {
       cache: RedisCache;
       budgetService: BudgetService;
       alertService: AlertService;
-      prisma: any;
+      drizzle: any;
       // user is defined by @types/passport, use (req.user as any)?.id where needed
     }
   }
