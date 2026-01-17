@@ -9,12 +9,23 @@ import { eq } from 'drizzle-orm';
 
 // Configure Google OAuth Strategy (only if credentials are provided)
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  const callbackURL = process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/api/auth/google/callback';
+  
+  // Validate callback URL format
+  if (process.env.GOOGLE_CALLBACK_URL && !process.env.GOOGLE_CALLBACK_URL.includes('/api/auth/google/callback')) {
+    logger.error('❌ GOOGLE_CALLBACK_URL is misconfigured!');
+    logger.error(`   Current: ${process.env.GOOGLE_CALLBACK_URL}`);
+    logger.error('   Expected: Should contain "/api/auth/google/callback"');
+    logger.error('   Example: https://your-domain.com/api/auth/google/callback');
+    logger.error('   ⚠️  OAuth login will likely fail with 404 error');
+  }
+  
   passport.use(
     new GoogleStrategy(
       {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/api/auth/google/callback',
+        callbackURL,
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
@@ -39,8 +50,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     )
   );
   logger.info('✅ Google OAuth strategy configured');
+  logger.info(`   Callback URL: ${callbackURL}`);
 } else {
-  logger.warn('⚠️  Google OAuth not configured - missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
+  logger.error('❌ Google OAuth NOT CONFIGURED - missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
+  logger.error('   The /api/auth/google endpoint will not work');
 }
 
 // Configure GitHub OAuth Strategy (only if credentials are provided)
