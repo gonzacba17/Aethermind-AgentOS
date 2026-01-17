@@ -586,9 +586,10 @@ async function startServer(): Promise<void> {
       );
     });
   } else {
-    // === HTTP Server (for development) ===
-    server.listen(PORT, () => {
-      console.log(`\n✅ Aethermind API server running on port ${PORT}`);
+    // === HTTP Server (for development and production) ===
+    const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+    server.listen(PORT, HOST, () => {
+      console.log(`\n✅ Aethermind API server running on ${HOST}:${PORT}`);
       console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
       console.log(`Health check: http://localhost:${PORT}/health (public)`);
       console.log(
