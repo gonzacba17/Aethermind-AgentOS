@@ -9,7 +9,7 @@ import { users, subscriptionLogs } from '../db/schema';
 import { eq, and, gte } from 'drizzle-orm';
 import { emailService } from '../services/EmailService';
 import { StripeService } from '../services/StripeService';
-import { convertTemporaryUser, getTemporaryUser } from '../services/OAuthService';
+import { convertTemporaryUser, getTemporaryUser, removeTemporaryUser } from '../services/OAuthService';
 
 
 const stripeService = new StripeService();
@@ -499,21 +499,57 @@ router.get('/me', async (req: Request, res: Response) => {
     // Get user from database using userId from token
     let userId = decoded.userId || decoded.id;
     
-    // Handle temporary users: attempt to convert or return cached data
-    if (userId.startsWith('temp-')) {
+    // Handle temporary users: attempt auto-conversion with new token
+    if (userId.startsWith('temp-') || userId.startsWith('tmp-')) {
       console.log(`🔄 Temporary user accessing /auth/me: ${userId}`);
       
       // Try to convert temporary user to permanent
       const convertedUser = await convertTemporaryUser(userId);
       
       if (convertedUser) {
-        console.log(`✅ Temporary user converted during /auth/me: ${convertedUser.id}`);
-        userId = convertedUser.id;
+        console.log(`✅ Temporary user auto-converted during /auth/me: ${convertedUser.id}`);
+        
+        // Generate new JWT token with permanent user ID
+        const newToken = jwt.sign(
+          {
+            userId: convertedUser.id,
+            id: convertedUser.id,
+            email: convertedUser.email,
+            plan: convertedUser.plan,
+          },
+          JWT_SECRET,
+          { expiresIn: JWT_EXPIRES_IN }
+        );
+        
+        // Remove from temporary store
+        removeTemporaryUser(userId);
+        
+        // Return converted user data with new token
+        return res.json({
+          id: convertedUser.id,
+          email: convertedUser.email,
+          name: convertedUser.name,
+          plan: convertedUser.plan,
+          usageCount: convertedUser.usageCount,
+          usageLimit: convertedUser.usageLimit,
+          emailVerified: true,
+          hasCompletedOnboarding: false,
+          isTemporaryUser: false,
+          wasConverted: true,
+          newToken, // Frontend should use this token for future requests
+          subscription: {
+            status: 'free',
+            plan: convertedUser.plan || 'free',
+            isTrialActive: false,
+            daysLeftInTrial: 0,
+          },
+          createdAt: convertedUser.createdAt,
+        });
       } else {
         // Return temporary user data from memory with warning flag
         const tempUserData = getTemporaryUser(userId);
         if (tempUserData) {
-          console.warn(`⚠️ Returning temporary user data for: ${userId}`);
+          console.warn(`⚠️ Returning temporary user data for: ${userId} (conversion failed)`);
           return res.json({
             id: tempUserData.tempId,
             email: tempUserData.email,
@@ -524,6 +560,7 @@ router.get('/me', async (req: Request, res: Response) => {
             emailVerified: true,
             hasCompletedOnboarding: false,
             isTemporaryUser: true,
+            wasConverted: false,
             temporaryUserWarning: 'Your account is temporarily stored in memory due to database issues. Please try refreshing in a few moments.',
             subscription: {
               status: 'free',
@@ -545,6 +582,7 @@ router.get('/me', async (req: Request, res: Response) => {
         });
       }
     }
+    
     
     const [user] = await db.select({
       id: users.id,

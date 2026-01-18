@@ -45,6 +45,20 @@ export function getTemporaryUser(tempId: string) {
 }
 
 /**
+ * Remove temporary user from memory after successful conversion
+ * @param tempId - The temporary user ID to remove
+ * @returns true if user existed and was removed, false otherwise
+ */
+export function removeTemporaryUser(tempId: string): boolean {
+  const existed = temporaryUsersStore.has(tempId);
+  temporaryUsersStore.delete(tempId);
+  if (existed) {
+    console.log('🗑️ Removed temporary user from memory:', tempId);
+  }
+  return existed;
+}
+
+/**
  * Attempt to convert a temporary user to a permanent database user
  * @param tempId - The temporary user ID (starts with "temp-")
  * @returns The permanent user if conversion succeeded, null otherwise
