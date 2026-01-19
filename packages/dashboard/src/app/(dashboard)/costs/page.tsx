@@ -1,10 +1,21 @@
 "use client"
 
-import { DollarSign, TrendingUp, TrendingDown, Calendar, Download, CreditCard, Coins, PieChart } from "lucide-react"
+import { useState } from "react"
+import { DollarSign, TrendingUp, TrendingDown, Calendar, Download, CreditCard, Coins, PieChart, ChevronDown, Check } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useToast } from "@/hooks/use-toast"
+
+const timeRanges = [
+  { id: "today", label: "Today", shortLabel: "Today" },
+  { id: "week", label: "This Week", shortLabel: "This Week" },
+  { id: "month", label: "This Month", shortLabel: "This Month" },
+  { id: "quarter", label: "This Quarter", shortLabel: "Quarter" },
+  { id: "year", label: "This Year", shortLabel: "Year" },
+]
 
 const mockUsageByModel = [
   { model: "GPT-4", usage: 45, cost: "$234.50", tokens: "1.2M", color: "bg-violet-500" },
@@ -22,6 +33,49 @@ const mockDailyCosts = [
 ]
 
 export default function CostsPage() {
+  const { toast } = useToast()
+  const [selectedRange, setSelectedRange] = useState("month")
+
+  const handleRangeChange = (rangeId: string) => {
+    setSelectedRange(rangeId)
+    const range = timeRanges.find(r => r.id === rangeId)
+    toast({
+      title: "Time Range Updated",
+      description: `Now showing data for: ${range?.label}`,
+    })
+  }
+
+  const handleExport = () => {
+    toast({
+      title: "Export Started",
+      description: "Your cost report is being generated...",
+    })
+    
+    setTimeout(() => {
+      const csvContent = `Cost Report - ${timeRanges.find(r => r.id === selectedRange)?.label}\n\nModel Usage:\n` +
+        "model,usage_percent,cost,tokens\n" +
+        mockUsageByModel.map(m => `${m.model},${m.usage}%,${m.cost},${m.tokens}`).join("\n") +
+        "\n\nDaily Breakdown:\n" +
+        "date,cost,tokens,change\n" +
+        mockDailyCosts.map(d => `${d.date},${d.cost},${d.tokens},${d.change}`).join("\n")
+      
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `cost-report-${selectedRange}-${new Date().toISOString().split("T")[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      
+      toast({
+        title: "Export Complete",
+        description: "Your cost report has been downloaded.",
+      })
+    }, 1000)
+  }
+
+  const selectedRangeLabel = timeRanges.find(r => r.id === selectedRange)?.shortLabel || "This Month"
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -36,11 +90,30 @@ export default function CostsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2">
-            <Calendar className="h-4 w-4" />
-            This Month
-          </Button>
-          <Button variant="outline" className="gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Calendar className="h-4 w-4" />
+                {selectedRangeLabel}
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {timeRanges.map((range) => (
+                <DropdownMenuItem 
+                  key={range.id}
+                  onClick={() => handleRangeChange(range.id)}
+                  className="flex items-center justify-between"
+                >
+                  {range.label}
+                  {selectedRange === range.id && (
+                    <Check className="h-4 w-4 text-primary" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" className="gap-2" onClick={handleExport}>
             <Download className="h-4 w-4" />
             Export
           </Button>

@@ -1,10 +1,13 @@
 "use client"
 
-import { GitBranch, Search, Filter, Clock, CheckCircle2, XCircle, AlertCircle, ArrowRight } from "lucide-react"
+import { useState, useMemo } from "react"
+import { GitBranch, Search, Filter, Clock, CheckCircle2, XCircle, AlertCircle, ArrowRight, Download, X } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu"
+import { useToast } from "@/hooks/use-toast"
 
 const mockTraces = [
   {
@@ -62,6 +65,79 @@ const statusConfig = {
 }
 
 export default function TracesPage() {
+  const { toast } = useToast()
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilters, setStatusFilters] = useState<string[]>([])
+  const [agentFilters, setAgentFilters] = useState<string[]>([])
+
+  const agents = [...new Set(mockTraces.map(t => t.agent))]
+
+  const filteredTraces = useMemo(() => {
+    return mockTraces.filter((trace) => {
+      const matchesSearch = trace.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        trace.agent.toLowerCase().includes(searchQuery.toLowerCase())
+      
+      const matchesStatus = statusFilters.length === 0 || statusFilters.includes(trace.status)
+      const matchesAgent = agentFilters.length === 0 || agentFilters.includes(trace.agent)
+      
+      return matchesSearch && matchesStatus && matchesAgent
+    })
+  }, [searchQuery, statusFilters, agentFilters])
+
+  const toggleStatusFilter = (status: string) => {
+    setStatusFilters(prev => 
+      prev.includes(status) 
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    )
+  }
+
+  const toggleAgentFilter = (agent: string) => {
+    setAgentFilters(prev => 
+      prev.includes(agent) 
+        ? prev.filter(a => a !== agent)
+        : [...prev, agent]
+    )
+  }
+
+  const clearFilters = () => {
+    setStatusFilters([])
+    setAgentFilters([])
+    setSearchQuery("")
+  }
+
+  const hasActiveFilters = statusFilters.length > 0 || agentFilters.length > 0
+
+  const handleExport = () => {
+    toast({
+      title: "Export Started",
+      description: "Your traces are being exported to CSV. Download will start shortly.",
+    })
+    // Simulate download
+    setTimeout(() => {
+      const csvContent = "id,name,agent,status,duration,timestamp,steps\n" + 
+        filteredTraces.map(t => `${t.id},${t.name},${t.agent},${t.status},${t.duration},${t.timestamp},${t.steps}`).join("\n")
+      const blob = new Blob([csvContent], { type: "text/csv" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `traces-export-${new Date().toISOString().split("T")[0]}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast({
+        title: "Export Complete",
+        description: `Successfully exported ${filteredTraces.length} traces.`,
+      })
+    }, 1000)
+  }
+
+  const handleTraceClick = (trace: typeof mockTraces[0]) => {
+    toast({
+      title: "Trace Details",
+      description: `Viewing trace: ${trace.name} (${trace.steps} steps)`,
+    })
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -76,7 +152,10 @@ export default function TracesPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">Export Traces</Button>
+          <Button variant="outline" onClick={handleExport} className="gap-2">
+            <Download className="h-4 w-4" />
+            Export Traces
+          </Button>
         </div>
       </div>
 
@@ -87,12 +166,80 @@ export default function TracesPage() {
           <Input 
             placeholder="Search traces..." 
             className="pl-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-        <Button variant="outline" className="gap-2">
-          <Filter className="h-4 w-4" />
-          Filters
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="gap-2">
+              <Filter className="h-4 w-4" />
+              Filters
+              {hasActiveFilters && (
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-xs">
+                  {statusFilters.length + agentFilters.length}
+                </Badge>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel>Status</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem 
+              checked={statusFilters.includes("success")}
+              onCheckedChange={() => toggleStatusFilter("success")}
+            >
+              <span className="flex items-center gap-2">
+                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                Success
+              </span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem 
+              checked={statusFilters.includes("running")}
+              onCheckedChange={() => toggleStatusFilter("running")}
+            >
+              <span className="flex items-center gap-2">
+                <Clock className="h-3 w-3 text-blue-500" />
+                Running
+              </span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem 
+              checked={statusFilters.includes("error")}
+              onCheckedChange={() => toggleStatusFilter("error")}
+            >
+              <span className="flex items-center gap-2">
+                <XCircle className="h-3 w-3 text-red-500" />
+                Error
+              </span>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Agent</DropdownMenuLabel>
+            {agents.map(agent => (
+              <DropdownMenuCheckboxItem 
+                key={agent}
+                checked={agentFilters.includes(agent)}
+                onCheckedChange={() => toggleAgentFilter(agent)}
+              >
+                {agent}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {hasActiveFilters && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={clearFilters} className="text-muted-foreground">
+                  Clear all filters
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Stats */}
@@ -155,45 +302,61 @@ export default function TracesPage() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Traces</CardTitle>
-          <CardDescription>View detailed execution traces from your agents</CardDescription>
+          <CardDescription>
+            {filteredTraces.length === mockTraces.length 
+              ? "View detailed execution traces from your agents"
+              : `Showing ${filteredTraces.length} of ${mockTraces.length} traces`
+            }
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {mockTraces.map((trace) => {
-              const config = statusConfig[trace.status as keyof typeof statusConfig]
-              const StatusIcon = config.icon
-              
-              return (
-                <div
-                  key={trace.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg ${config.bg}`}>
-                      <StatusIcon className={`h-4 w-4 ${config.color}`} />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-foreground">{trace.name}</h3>
-                        <Badge variant="outline" className={`${config.bg} ${config.color} ${config.border}`}>
-                          {trace.status}
-                        </Badge>
+            {filteredTraces.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <GitBranch className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p>No traces found matching your criteria</p>
+                <Button variant="link" onClick={clearFilters} className="mt-2">
+                  Clear filters
+                </Button>
+              </div>
+            ) : (
+              filteredTraces.map((trace) => {
+                const config = statusConfig[trace.status as keyof typeof statusConfig]
+                const StatusIcon = config.icon
+                
+                return (
+                  <div
+                    key={trace.id}
+                    onClick={() => handleTraceClick(trace)}
+                    className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`p-2 rounded-lg ${config.bg}`}>
+                        <StatusIcon className={`h-4 w-4 ${config.color}`} />
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {trace.agent} • {trace.steps} steps • {trace.timestamp}
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-foreground">{trace.name}</h3>
+                          <Badge variant="outline" className={`${config.bg} ${config.color} ${config.border}`}>
+                            {trace.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {trace.agent} • {trace.steps} steps • {trace.timestamp}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-medium text-foreground">{trace.duration}</p>
+                        <p className="text-xs text-muted-foreground">Duration</p>
+                      </div>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-sm font-medium text-foreground">{trace.duration}</p>
-                      <p className="text-xs text-muted-foreground">Duration</p>
-                    </div>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </CardContent>
       </Card>
