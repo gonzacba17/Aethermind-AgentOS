@@ -1,7 +1,33 @@
-import { getAuthToken, clearAuthToken } from './auth-utils';
+import { getAuthToken, clearAuthToken, setAuthToken } from './auth-utils';
 import { LANDING_PAGE_URL } from './config';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+
+// Retry configuration
+const DEFAULT_RETRIES = 3;
+const RETRY_DELAY_BASE = 1000; // 1 second
+const MAX_RETRY_DELAY = 30000; // 30 seconds
+
+// Track if we're currently refreshing the token
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+/**
+ * Calculate delay for retry with exponential backoff
+ */
+function getRetryDelay(attempt: number): number {
+  const delay = RETRY_DELAY_BASE * Math.pow(2, attempt);
+  // Add some jitter to prevent thundering herd
+  const jitter = Math.random() * 1000;
+  return Math.min(delay + jitter, MAX_RETRY_DELAY);
+}
+
+/**
+ * Sleep for a given number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // Helper to include JWT token in headers
 function getHeaders(additionalHeaders?: Record<string, string>): HeadersInit {
@@ -18,6 +44,50 @@ function getHeaders(additionalHeaders?: Record<string, string>): HeadersInit {
   }
   
   return headers;
+}
+
+/**
+ * Attempt to refresh the authentication token
+ */
+async function refreshToken(): Promise<string | null> {
+  // If already refreshing, wait for that to complete
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+  
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const currentToken = getAuthToken();
+      if (!currentToken) return null;
+      
+      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentToken}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.token) {
+          setAuthToken(data.token);
+          return data.token;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[API] Token refresh failed:', error);
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+  
+  return refreshPromise;
 }
 
 // Helper to handle API errors
@@ -42,15 +112,90 @@ async function handleApiError(response: Response, endpoint: string): Promise<nev
   
   // Try to parse error message from response
   let errorMessage = `API request failed: ${status}`;
+  let errorCode = 'API_ERROR';
+  
   try {
     const errorData = await response.json();
     errorMessage = errorData.message || errorData.error || errorMessage;
+    errorCode = errorData.code || errorCode;
   } catch {
     // Use default error message if JSON parsing fails
   }
   
-  throw new Error(errorMessage);
+  const error = new Error(errorMessage) as Error & { status: number; code: string };
+  error.status = status;
+  error.code = errorCode;
+  throw error;
 }
+
+/**
+ * Make an API request with automatic retry and token refresh
+ */
+async function apiRequest<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  retries: number = DEFAULT_RETRIES
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers: getHeaders(options.headers as Record<string, string>),
+      });
+      
+      // Handle 401 - try to refresh token once
+      if (response.status === 401 && attempt === 0) {
+        const newToken = await refreshToken();
+        if (newToken) {
+          // Retry with new token
+          const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
+            headers: {
+              ...getHeaders(options.headers as Record<string, string>),
+              'Authorization': `Bearer ${newToken}`,
+            },
+          });
+          
+          if (retryResponse.ok) {
+            return retryResponse.json();
+          }
+        }
+      }
+      
+      if (!response.ok) {
+        await handleApiError(response, endpoint);
+      }
+      
+      // Handle empty responses
+      const text = await response.text();
+      if (!text) return {} as T;
+      
+      return JSON.parse(text);
+    } catch (error) {
+      lastError = error as Error;
+      
+      // Don't retry auth errors or client errors (4xx except 429)
+      const status = (error as any).status;
+      if (status && status >= 400 && status < 500 && status !== 429) {
+        throw error;
+      }
+      
+      // Don't retry on last attempt
+      if (attempt < retries) {
+        const delay = getRetryDelay(attempt);
+        console.log(`[API] Retrying ${endpoint} in ${delay}ms (attempt ${attempt + 1}/${retries})`);
+        await sleep(delay);
+      }
+    }
+  }
+  
+  throw lastError || new Error('API request failed after retries');
+}
+
+// Export apiRequest for use in hooks
+export { apiRequest, API_BASE }
 
 export interface Agent {
   id: string;

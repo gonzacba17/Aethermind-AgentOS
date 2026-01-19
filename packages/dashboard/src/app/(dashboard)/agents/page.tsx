@@ -1,113 +1,243 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Bot, Plus, Search, Filter, MoreVertical, Activity, Clock, Zap, X } from "lucide-react"
+import { useState, useMemo, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { Bot, Plus, Search, Filter, MoreVertical, Activity, Clock, Zap, X, Loader2, RefreshCw, Trash2, Pause, Play, Eye, Settings } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-
-const mockAgents = [
-  {
-    id: "agent-001",
-    name: "Customer Support Agent",
-    status: "active",
-    model: "GPT-4",
-    lastActive: "2 min ago",
-    tasksCompleted: 1247,
-    avgResponseTime: "1.2s",
-  },
-  {
-    id: "agent-002",
-    name: "Data Analysis Agent",
-    status: "active",
-    model: "Claude 3",
-    lastActive: "5 min ago",
-    tasksCompleted: 892,
-    avgResponseTime: "2.8s",
-  },
-  {
-    id: "agent-003",
-    name: "Content Writer Agent",
-    status: "idle",
-    model: "GPT-4",
-    lastActive: "1 hour ago",
-    tasksCompleted: 456,
-    avgResponseTime: "3.5s",
-  },
-  {
-    id: "agent-004",
-    name: "Code Review Agent",
-    status: "error",
-    model: "Claude 3",
-    lastActive: "15 min ago",
-    tasksCompleted: 234,
-    avgResponseTime: "4.1s",
-  },
-]
+import { useAgents, useCreateAgent, useDeleteAgent, useMetrics } from "@/hooks"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
+import type { Agent } from "@/lib/api"
 
 const statusColors = {
   active: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+  running: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
   idle: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+  completed: "bg-blue-500/10 text-blue-500 border-blue-500/20",
   error: "bg-red-500/10 text-red-500 border-red-500/20",
+  failed: "bg-red-500/10 text-red-500 border-red-500/20",
+  timeout: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+}
+
+// Available models
+const AVAILABLE_MODELS = [
+  { value: "gpt-4", label: "GPT-4" },
+  { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+  { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+  { value: "claude-3-opus", label: "Claude 3 Opus" },
+  { value: "claude-3-sonnet", label: "Claude 3 Sonnet" },
+  { value: "claude-3-haiku", label: "Claude 3 Haiku" },
+]
+
+interface CreateAgentFormData {
+  name: string;
+  model: string;
+  systemPrompt: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+const defaultFormData: CreateAgentFormData = {
+  name: "",
+  model: "gpt-4",
+  systemPrompt: "",
+  maxTokens: 4096,
+  temperature: 0.7,
 }
 
 export default function AgentsPage() {
+  const router = useRouter()
   const { toast } = useToast()
+  
+  // Filters state
   const [searchQuery, setSearchQuery] = useState("")
-  const [isNewAgentOpen, setIsNewAgentOpen] = useState(false)
   const [statusFilters, setStatusFilters] = useState<string[]>([])
   const [modelFilters, setModelFilters] = useState<string[]>([])
-
-  // Filter agents based on search and filters
-  const filteredAgents = useMemo(() => {
-    return mockAgents.filter((agent) => {
-      const matchesSearch = agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        agent.model.toLowerCase().includes(searchQuery.toLowerCase())
-      
-      const matchesStatus = statusFilters.length === 0 || statusFilters.includes(agent.status)
-      const matchesModel = modelFilters.length === 0 || modelFilters.includes(agent.model)
-      
-      return matchesSearch && matchesStatus && matchesModel
-    })
-  }, [searchQuery, statusFilters, modelFilters])
-
-  const activeAgentsCount = mockAgents.filter(a => a.status === "active").length
-
-  const handleNewAgent = () => {
-    setIsNewAgentOpen(false)
-    toast({
-      title: "Agent Created",
-      description: "Your new AI agent has been configured successfully.",
-    })
-  }
-
-  const toggleStatusFilter = (status: string) => {
+  
+  // Dialog states
+  const [isNewAgentOpen, setIsNewAgentOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null)
+  
+  // Form state
+  const [formData, setFormData] = useState<CreateAgentFormData>(defaultFormData)
+  
+  // Data fetching
+  const { data, isLoading, error, refetch } = useAgents({
+    search: searchQuery,
+    status: statusFilters,
+    model: modelFilters,
+  })
+  const { data: metrics } = useMetrics()
+  const createAgent = useCreateAgent()
+  const deleteAgent = useDeleteAgent()
+  
+  const agents = data?.data || []
+  const totalAgents = data?.total || agents.length
+  
+  // Compute available models from actual data
+  const uniqueModels = useMemo(() => {
+    const models = new Set(agents.map(a => a.model))
+    return Array.from(models)
+  }, [agents])
+  
+  // Stats
+  const activeAgentsCount = agents.filter(a => a.status === "running" || a.status === "idle").length
+  const avgResponseTime = metrics?.avgResponseTime ? `${metrics.avgResponseTime.toFixed(1)}s` : "N/A"
+  const totalTasks = metrics?.totalExecutions24h || 0
+  
+  // Filter helpers
+  const toggleStatusFilter = useCallback((status: string) => {
     setStatusFilters(prev => 
       prev.includes(status) 
         ? prev.filter(s => s !== status)
         : [...prev, status]
     )
-  }
+  }, [])
 
-  const toggleModelFilter = (model: string) => {
+  const toggleModelFilter = useCallback((model: string) => {
     setModelFilters(prev => 
       prev.includes(model) 
         ? prev.filter(m => m !== model)
         : [...prev, model]
     )
-  }
+  }, [])
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setStatusFilters([])
     setModelFilters([])
     setSearchQuery("")
-  }
+  }, [])
 
   const hasActiveFilters = statusFilters.length > 0 || modelFilters.length > 0
+  
+  // Handlers
+  const handleCreateAgent = async () => {
+    if (!formData.name.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Agent name is required",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    try {
+      await createAgent.mutateAsync({
+        name: formData.name,
+        model: formData.model,
+        systemPrompt: formData.systemPrompt,
+        maxTokens: formData.maxTokens,
+        temperature: formData.temperature,
+      })
+      
+      setIsNewAgentOpen(false)
+      setFormData(defaultFormData)
+      toast({
+        title: "Agent Created",
+        description: `${formData.name} has been created successfully.`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error Creating Agent",
+        description: error instanceof Error ? error.message : "Failed to create agent",
+        variant: "destructive",
+      })
+    }
+  }
+  
+  const handleDeleteAgent = async () => {
+    if (!agentToDelete) return
+    
+    try {
+      await deleteAgent.mutateAsync(agentToDelete.id)
+      setIsDeleteDialogOpen(false)
+      setAgentToDelete(null)
+      toast({
+        title: "Agent Deleted",
+        description: `${agentToDelete.name} has been deleted.`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error Deleting Agent",
+        description: error instanceof Error ? error.message : "Failed to delete agent",
+        variant: "destructive",
+      })
+    }
+  }
+  
+  const handleViewDetails = (agent: Agent) => {
+    router.push(`/agents/${agent.id}`)
+  }
+  
+  const handleViewLogs = (agent: Agent) => {
+    router.push(`/logs?agentId=${agent.id}`)
+  }
+  
+  const confirmDelete = (agent: Agent) => {
+    setAgentToDelete(agent)
+    setIsDeleteDialogOpen(true)
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-12 w-12 rounded-xl" />
+            <div>
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-48 mt-1" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-violet-500/10">
+            <Bot className="h-6 w-6 text-violet-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Agents</h1>
+            <p className="text-muted-foreground">Manage and configure your AI agents</p>
+          </div>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="text-destructive mb-4">Failed to load agents</div>
+            <Button onClick={() => refetch()} variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -122,10 +252,16 @@ export default function AgentsPage() {
             <p className="text-muted-foreground">Manage and configure your AI agents</p>
           </div>
         </div>
-        <Button className="gap-2" onClick={() => setIsNewAgentOpen(true)}>
-          <Plus className="h-4 w-4" />
-          New Agent
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => refetch()} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button className="gap-2" onClick={() => setIsNewAgentOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New Agent
+          </Button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -162,12 +298,12 @@ export default function AgentsPage() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Status</DropdownMenuLabel>
             <DropdownMenuCheckboxItem 
-              checked={statusFilters.includes("active")}
-              onCheckedChange={() => toggleStatusFilter("active")}
+              checked={statusFilters.includes("running")}
+              onCheckedChange={() => toggleStatusFilter("running")}
             >
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                Active
+                Running
               </span>
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem 
@@ -180,28 +316,29 @@ export default function AgentsPage() {
               </span>
             </DropdownMenuCheckboxItem>
             <DropdownMenuCheckboxItem 
-              checked={statusFilters.includes("error")}
-              onCheckedChange={() => toggleStatusFilter("error")}
+              checked={statusFilters.includes("failed")}
+              onCheckedChange={() => toggleStatusFilter("failed")}
             >
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-red-500" />
-                Error
+                Failed
               </span>
             </DropdownMenuCheckboxItem>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Model</DropdownMenuLabel>
-            <DropdownMenuCheckboxItem 
-              checked={modelFilters.includes("GPT-4")}
-              onCheckedChange={() => toggleModelFilter("GPT-4")}
-            >
-              GPT-4
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem 
-              checked={modelFilters.includes("Claude 3")}
-              onCheckedChange={() => toggleModelFilter("Claude 3")}
-            >
-              Claude 3
-            </DropdownMenuCheckboxItem>
+            {uniqueModels.length > 0 ? uniqueModels.map(model => (
+              <DropdownMenuCheckboxItem 
+                key={model}
+                checked={modelFilters.includes(model)}
+                onCheckedChange={() => toggleModelFilter(model)}
+              >
+                {model}
+              </DropdownMenuCheckboxItem>
+            )) : (
+              <DropdownMenuItem disabled className="text-muted-foreground text-sm">
+                No models available
+              </DropdownMenuItem>
+            )}
             {hasActiveFilters && (
               <>
                 <DropdownMenuSeparator />
@@ -234,7 +371,7 @@ export default function AgentsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Avg Response Time</p>
-                <p className="text-2xl font-bold text-foreground">2.4s</p>
+                <p className="text-2xl font-bold text-foreground">{avgResponseTime}</p>
               </div>
               <div className="p-2 rounded-lg bg-blue-500/10">
                 <Clock className="h-5 w-5 text-blue-500" />
@@ -246,8 +383,8 @@ export default function AgentsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Tasks Today</p>
-                <p className="text-2xl font-bold text-foreground">2,829</p>
+                <p className="text-sm text-muted-foreground">Tasks Today</p>
+                <p className="text-2xl font-bold text-foreground">{totalTasks.toLocaleString()}</p>
               </div>
               <div className="p-2 rounded-lg bg-violet-500/10">
                 <Zap className="h-5 w-5 text-violet-500" />
@@ -262,27 +399,26 @@ export default function AgentsPage() {
         <CardHeader>
           <CardTitle>All Agents</CardTitle>
           <CardDescription>
-            {filteredAgents.length === mockAgents.length 
-              ? "View and manage all configured AI agents"
-              : `Showing ${filteredAgents.length} of ${mockAgents.length} agents`
+            {agents.length === totalAgents 
+              ? `${totalAgents} agent${totalAgents !== 1 ? 's' : ''} total`
+              : `Showing ${agents.length} of ${totalAgents} agents`
             }
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {filteredAgents.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Bot className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No agents found matching your criteria</p>
-                <Button variant="link" onClick={clearFilters} className="mt-2">
-                  Clear filters
-                </Button>
-              </div>
-            ) : (
-              filteredAgents.map((agent) => (
+          {agents.length === 0 ? (
+            <EmptyState
+              preset="agents"
+              actionLabel="Create First Agent"
+              onAction={() => setIsNewAgentOpen(true)}
+            />
+          ) : (
+            <div className="space-y-4">
+              {agents.map((agent) => (
                 <div
                   key={agent.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
+                  onClick={() => handleViewDetails(agent)}
                 >
                   <div className="flex items-center gap-4">
                     <div className="p-2.5 rounded-lg bg-gradient-to-br from-violet-500/20 to-violet-600/20">
@@ -291,57 +427,62 @@ export default function AgentsPage() {
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-medium text-foreground">{agent.name}</h3>
-                        <Badge variant="outline" className={statusColors[agent.status as keyof typeof statusColors]}>
+                        <Badge 
+                          variant="outline" 
+                          className={statusColors[agent.status as keyof typeof statusColors] || statusColors.idle}
+                        >
                           {agent.status}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {agent.model} • Last active {agent.lastActive}
+                        {agent.model}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-6">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-sm font-medium text-foreground">{agent.tasksCompleted.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">Tasks completed</p>
-                    </div>
-                    <div className="text-right hidden sm:block">
-                      <p className="text-sm font-medium text-foreground">{agent.avgResponseTime}</p>
-                      <p className="text-xs text-muted-foreground">Avg. response</p>
-                    </div>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon">
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => toast({ title: "View Details", description: `Opening details for ${agent.name}` })}>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewDetails(agent); }}>
+                          <Eye className="h-4 w-4 mr-2" />
                           View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast({ title: "Edit Agent", description: `Editing ${agent.name}` })}>
+                        <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleViewLogs(agent); }}>
+                          <Activity className="h-4 w-4 mr-2" />
+                          View Logs
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => { 
+                          e.stopPropagation(); 
+                          toast({ title: "Coming Soon", description: "Edit functionality will be available soon" }); 
+                        }}>
+                          <Settings className="h-4 w-4 mr-2" />
                           Edit Configuration
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
-                          className="text-red-500"
-                          onClick={() => toast({ title: "Agent Stopped", description: `${agent.name} has been stopped` })}
+                          className="text-red-500 focus:text-red-500"
+                          onClick={(e) => { e.stopPropagation(); confirmDelete(agent); }}
                         >
-                          Stop Agent
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Agent
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* New Agent Dialog */}
       <Dialog open={isNewAgentOpen} onOpenChange={setIsNewAgentOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Create New Agent</DialogTitle>
             <DialogDescription>
@@ -350,35 +491,102 @@ export default function AgentsPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Agent Name</label>
-              <Input placeholder="e.g., Customer Support Agent" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Model</label>
-              <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-foreground">
-                <option value="gpt-4">GPT-4</option>
-                <option value="claude-3">Claude 3</option>
-                <option value="gpt-3.5">GPT-3.5 Turbo</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">System Prompt</label>
-              <textarea 
-                className="w-full h-24 px-3 py-2 rounded-md border border-input bg-background text-foreground resize-none"
-                placeholder="Describe the agent's role and behavior..."
+              <Label htmlFor="name">Agent Name *</Label>
+              <Input 
+                id="name"
+                placeholder="e.g., Customer Support Agent" 
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="model">Model</Label>
+              <Select 
+                value={formData.model} 
+                onValueChange={(value) => setFormData(prev => ({ ...prev, model: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABLE_MODELS.map(model => (
+                    <SelectItem key={model.value} value={model.value}>
+                      {model.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="systemPrompt">System Prompt</Label>
+              <Textarea 
+                id="systemPrompt"
+                className="h-24 resize-none"
+                placeholder="Describe the agent's role and behavior..."
+                value={formData.systemPrompt}
+                onChange={(e) => setFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="maxTokens">Max Tokens</Label>
+                <Input 
+                  id="maxTokens"
+                  type="number"
+                  value={formData.maxTokens}
+                  onChange={(e) => setFormData(prev => ({ ...prev, maxTokens: parseInt(e.target.value) || 4096 }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="temperature">Temperature</Label>
+                <Input 
+                  id="temperature"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="2"
+                  value={formData.temperature}
+                  onChange={(e) => setFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) || 0.7 }))}
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsNewAgentOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleNewAgent}>
+            <Button onClick={handleCreateAgent} disabled={createAgent.isPending}>
+              {createAgent.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Agent
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Agent</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{agentToDelete?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setAgentToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteAgent}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteAgent.isPending}
+            >
+              {deleteAgent.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

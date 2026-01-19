@@ -1,61 +1,17 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { GitBranch, Search, Filter, Clock, CheckCircle2, XCircle, AlertCircle, ArrowRight, Download, X } from "lucide-react"
+import { useState, useMemo, useCallback } from "react"
+import { useRouter } from "next/navigation"
+import { GitBranch, Search, Filter, Clock, CheckCircle2, XCircle, AlertCircle, Download, X, RefreshCw, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-
-const mockTraces = [
-  {
-    id: "trace-001",
-    name: "Customer inquiry processing",
-    agent: "Customer Support Agent",
-    status: "success",
-    duration: "1.2s",
-    timestamp: "2 min ago",
-    steps: 5,
-  },
-  {
-    id: "trace-002",
-    name: "Data extraction pipeline",
-    agent: "Data Analysis Agent",
-    status: "success",
-    duration: "3.4s",
-    timestamp: "5 min ago",
-    steps: 8,
-  },
-  {
-    id: "trace-003",
-    name: "Content generation task",
-    agent: "Content Writer Agent",
-    status: "running",
-    duration: "ongoing",
-    timestamp: "1 min ago",
-    steps: 3,
-  },
-  {
-    id: "trace-004",
-    name: "Code review analysis",
-    agent: "Code Review Agent",
-    status: "error",
-    duration: "2.1s",
-    timestamp: "10 min ago",
-    steps: 4,
-  },
-  {
-    id: "trace-005",
-    name: "Report compilation",
-    agent: "Data Analysis Agent",
-    status: "success",
-    duration: "5.2s",
-    timestamp: "15 min ago",
-    steps: 12,
-  },
-]
+import { useTraces, useTraceStats, exportTraces, TraceListItem } from "@/hooks"
+import { EmptyState } from "@/components/ui/empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 const statusConfig = {
   success: { icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
@@ -65,77 +21,140 @@ const statusConfig = {
 }
 
 export default function TracesPage() {
+  const router = useRouter()
   const { toast } = useToast()
+  
+  // Filter state
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilters, setStatusFilters] = useState<string[]>([])
   const [agentFilters, setAgentFilters] = useState<string[]>([])
-
-  const agents = [...new Set(mockTraces.map(t => t.agent))]
-
+  const [isExporting, setIsExporting] = useState(false)
+  
+  // Data fetching
+  const { data, isLoading, error, refetch } = useTraces({
+    status: statusFilters,
+    agentId: agentFilters[0], // API might only support single agent filter
+  })
+  const { data: stats } = useTraceStats()
+  
+  const traces = data?.data || []
+  const totalTraces = data?.total || traces.length
+  
+  // Compute unique agents for filter dropdown
+  const uniqueAgents = useMemo(() => {
+    const agents = new Set(traces.map(t => t.agent))
+    return Array.from(agents).filter(Boolean)
+  }, [traces])
+  
+  // Client-side filtering for search (API might not support it)
   const filteredTraces = useMemo(() => {
-    return mockTraces.filter((trace) => {
-      const matchesSearch = trace.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        trace.agent.toLowerCase().includes(searchQuery.toLowerCase())
-      
-      const matchesStatus = statusFilters.length === 0 || statusFilters.includes(trace.status)
-      const matchesAgent = agentFilters.length === 0 || agentFilters.includes(trace.agent)
-      
-      return matchesSearch && matchesStatus && matchesAgent
-    })
-  }, [searchQuery, statusFilters, agentFilters])
-
-  const toggleStatusFilter = (status: string) => {
+    if (!searchQuery) return traces
+    const query = searchQuery.toLowerCase()
+    return traces.filter(trace => 
+      trace.name.toLowerCase().includes(query) ||
+      trace.agent.toLowerCase().includes(query) ||
+      trace.id.toLowerCase().includes(query)
+    )
+  }, [traces, searchQuery])
+  
+  // Filter helpers
+  const toggleStatusFilter = useCallback((status: string) => {
     setStatusFilters(prev => 
       prev.includes(status) 
         ? prev.filter(s => s !== status)
         : [...prev, status]
     )
-  }
+  }, [])
 
-  const toggleAgentFilter = (agent: string) => {
+  const toggleAgentFilter = useCallback((agent: string) => {
     setAgentFilters(prev => 
       prev.includes(agent) 
         ? prev.filter(a => a !== agent)
         : [...prev, agent]
     )
-  }
+  }, [])
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setStatusFilters([])
     setAgentFilters([])
     setSearchQuery("")
-  }
+  }, [])
 
   const hasActiveFilters = statusFilters.length > 0 || agentFilters.length > 0
-
-  const handleExport = () => {
-    toast({
-      title: "Export Started",
-      description: "Your traces are being exported to CSV. Download will start shortly.",
-    })
-    // Simulate download
-    setTimeout(() => {
-      const csvContent = "id,name,agent,status,duration,timestamp,steps\n" + 
-        filteredTraces.map(t => `${t.id},${t.name},${t.agent},${t.status},${t.duration},${t.timestamp},${t.steps}`).join("\n")
-      const blob = new Blob([csvContent], { type: "text/csv" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `traces-export-${new Date().toISOString().split("T")[0]}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
+  
+  // Handlers
+  const handleExport = async (format: 'csv' | 'json') => {
+    setIsExporting(true)
+    try {
+      await exportTraces(filteredTraces, format)
       toast({
         title: "Export Complete",
-        description: `Successfully exported ${filteredTraces.length} traces.`,
+        description: `Traces exported as ${format.toUpperCase()}`,
       })
-    }, 1000)
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : "Failed to export traces",
+        variant: "destructive",
+      })
+    } finally {
+      setIsExporting(false)
+    }
+  }
+  
+  const handleTraceClick = (trace: TraceListItem) => {
+    // Navigate to trace detail page (will be created)
+    router.push(`/traces/${trace.id}`)
   }
 
-  const handleTraceClick = (trace: typeof mockTraces[0]) => {
-    toast({
-      title: "Trace Details",
-      description: `Viewing trace: ${trace.name} (${trace.steps} steps)`,
-    })
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-12 w-12 rounded-xl" />
+            <div>
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-48 mt-1" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-500/10">
+            <GitBranch className="h-6 w-6 text-blue-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Traces</h1>
+            <p className="text-muted-foreground">Monitor agent execution traces</p>
+          </div>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="text-destructive mb-4">Failed to load traces</div>
+            <Button onClick={() => refetch()} variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -143,20 +162,96 @@ export default function TracesPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-500/10">
-            <GitBranch className="h-6 w-6 text-emerald-500" />
+          <div className="p-2.5 rounded-xl bg-blue-500/10">
+            <GitBranch className="h-6 w-6 text-blue-500" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">Traces</h1>
-            <p className="text-muted-foreground">Analyze agent execution traces and workflows</p>
+            <p className="text-muted-foreground">Monitor agent execution traces</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={handleExport} className="gap-2">
-            <Download className="h-4 w-4" />
-            Export Traces
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => refetch()} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button className="gap-2" disabled={isExporting || filteredTraces.length === 0}>
+                {isExporting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport('csv')}>
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport('json')}>
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Total (24h)</p>
+                <p className="text-2xl font-bold text-foreground">{stats?.total || 0}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-blue-500/10">
+                <GitBranch className="h-5 w-5 text-blue-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Successful</p>
+                <p className="text-2xl font-bold text-emerald-500">{stats?.success || 0}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-emerald-500/10">
+                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Running</p>
+                <p className="text-2xl font-bold text-blue-500">{stats?.running || 0}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-blue-500/10">
+                <Clock className="h-5 w-5 text-blue-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Failed</p>
+                <p className="text-2xl font-bold text-red-500">{stats?.error || 0}</p>
+              </div>
+              <div className="p-2 rounded-lg bg-red-500/10">
+                <XCircle className="h-5 w-5 text-red-500" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search and Filters */}
@@ -190,14 +285,14 @@ export default function TracesPage() {
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Status</DropdownMenuLabel>
             <DropdownMenuCheckboxItem 
               checked={statusFilters.includes("success")}
               onCheckedChange={() => toggleStatusFilter("success")}
             >
               <span className="flex items-center gap-2">
-                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 Success
               </span>
             </DropdownMenuCheckboxItem>
@@ -206,7 +301,7 @@ export default function TracesPage() {
               onCheckedChange={() => toggleStatusFilter("running")}
             >
               <span className="flex items-center gap-2">
-                <Clock className="h-3 w-3 text-blue-500" />
+                <Clock className="h-4 w-4 text-blue-500" />
                 Running
               </span>
             </DropdownMenuCheckboxItem>
@@ -215,21 +310,25 @@ export default function TracesPage() {
               onCheckedChange={() => toggleStatusFilter("error")}
             >
               <span className="flex items-center gap-2">
-                <XCircle className="h-3 w-3 text-red-500" />
+                <XCircle className="h-4 w-4 text-red-500" />
                 Error
               </span>
             </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Agent</DropdownMenuLabel>
-            {agents.map(agent => (
-              <DropdownMenuCheckboxItem 
-                key={agent}
-                checked={agentFilters.includes(agent)}
-                onCheckedChange={() => toggleAgentFilter(agent)}
-              >
-                {agent}
-              </DropdownMenuCheckboxItem>
-            ))}
+            {uniqueAgents.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Agent</DropdownMenuLabel>
+                {uniqueAgents.map(agent => (
+                  <DropdownMenuCheckboxItem 
+                    key={agent}
+                    checked={agentFilters.includes(agent)}
+                    onCheckedChange={() => toggleAgentFilter(agent)}
+                  >
+                    {agent}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </>
+            )}
             {hasActiveFilters && (
               <>
                 <DropdownMenuSeparator />
@@ -242,97 +341,39 @@ export default function TracesPage() {
         </DropdownMenu>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Traces</p>
-                <p className="text-2xl font-bold text-foreground">12,847</p>
-              </div>
-              <div className="p-2 rounded-lg bg-primary/10">
-                <GitBranch className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Success Rate</p>
-                <p className="text-2xl font-bold text-emerald-500">98.5%</p>
-              </div>
-              <div className="p-2 rounded-lg bg-emerald-500/10">
-                <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Duration</p>
-                <p className="text-2xl font-bold text-foreground">2.3s</p>
-              </div>
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <Clock className="h-5 w-5 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Error Rate</p>
-                <p className="text-2xl font-bold text-red-500">1.5%</p>
-              </div>
-              <div className="p-2 rounded-lg bg-red-500/10">
-                <XCircle className="h-5 w-5 text-red-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Traces List */}
       <Card>
         <CardHeader>
-          <CardTitle>Recent Traces</CardTitle>
+          <CardTitle>Execution Traces</CardTitle>
           <CardDescription>
-            {filteredTraces.length === mockTraces.length 
-              ? "View detailed execution traces from your agents"
-              : `Showing ${filteredTraces.length} of ${mockTraces.length} traces`
+            {filteredTraces.length === totalTraces 
+              ? `${totalTraces} trace${totalTraces !== 1 ? 's' : ''} in the last 24 hours`
+              : `Showing ${filteredTraces.length} of ${totalTraces} traces`
             }
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {filteredTraces.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <GitBranch className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p>No traces found matching your criteria</p>
-                <Button variant="link" onClick={clearFilters} className="mt-2">
-                  Clear filters
-                </Button>
-              </div>
-            ) : (
-              filteredTraces.map((trace) => {
-                const config = statusConfig[trace.status as keyof typeof statusConfig]
+          {filteredTraces.length === 0 ? (
+            <EmptyState
+              preset="traces"
+              actionLabel={hasActiveFilters ? "Clear Filters" : undefined}
+              onAction={hasActiveFilters ? clearFilters : undefined}
+            />
+          ) : (
+            <div className="space-y-3">
+              {filteredTraces.map((trace) => {
+                const config = statusConfig[trace.status as keyof typeof statusConfig] || statusConfig.running
                 const StatusIcon = config.icon
                 
                 return (
                   <div
                     key={trace.id}
                     onClick={() => handleTraceClick(trace)}
-                    className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors cursor-pointer group"
+                    className="flex items-center justify-between p-4 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-4">
                       <div className={`p-2 rounded-lg ${config.bg}`}>
-                        <StatusIcon className={`h-4 w-4 ${config.color}`} />
+                        <StatusIcon className={`h-5 w-5 ${config.color}`} />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
@@ -342,22 +383,25 @@ export default function TracesPage() {
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {trace.agent} • {trace.steps} steps • {trace.timestamp}
+                          {trace.agent} • {trace.timestamp}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-6">
                       <div className="text-right hidden sm:block">
                         <p className="text-sm font-medium text-foreground">{trace.duration}</p>
                         <p className="text-xs text-muted-foreground">Duration</p>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-medium text-foreground">{trace.steps}</p>
+                        <p className="text-xs text-muted-foreground">Steps</p>
+                      </div>
                     </div>
                   </div>
                 )
-              })
-            )}
-          </div>
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

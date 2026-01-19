@@ -85,6 +85,41 @@ export function redirectToLogin(returnUrl?: string): void {
 }
 
 /**
+ * Decodes a JWT token and extracts basic user info
+ * Note: This only decodes, it does not verify the signature
+ * @param token - JWT token to decode
+ * @returns Decoded user info or null if invalid
+ */
+export function getUserFromToken(token: string): { id: string; email: string } | null {
+  if (!token) return null;
+  
+  try {
+    // JWT structure: header.payload.signature
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    
+    // Decode the payload (base64url)
+    const payload = parts[1];
+    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    const data = JSON.parse(decoded);
+    
+    // Check expiration
+    if (data.exp && data.exp * 1000 < Date.now()) {
+      console.log('[Auth] Token expired');
+      return null;
+    }
+    
+    return {
+      id: data.sub || data.userId || data.id || '',
+      email: data.email || '',
+    };
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    return null;
+  }
+}
+
+/**
  * User information from /auth/me endpoint
  */
 export interface AuthUser {
