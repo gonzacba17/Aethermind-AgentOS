@@ -498,12 +498,65 @@ router.get('/me', async (req: Request, res: Response) => {
 
     // Get user from database using userId from token
     let userId = decoded.userId || decoded.id;
+    const emailFromToken = decoded.email;
     
     // Handle temporary users: attempt auto-conversion with new token
     if (userId.startsWith('temp-') || userId.startsWith('tmp-')) {
-      console.log(`🔄 Temporary user accessing /auth/me: ${userId}`);
+      console.log(`🔄 Temporary user accessing /auth/me: ${userId}, email: ${emailFromToken}`);
       
-      // Try to convert temporary user to permanent
+      // First, try to find if this user already exists in DB by email
+      if (emailFromToken) {
+        try {
+          const [existingUser] = await db.select()
+            .from(users)
+            .where(eq(users.email, emailFromToken))
+            .limit(1);
+          
+          if (existingUser) {
+            console.log(`✅ User already exists in DB with this email: ${existingUser.id}`);
+            
+            // Generate new JWT token with permanent user ID
+            const newToken = jwt.sign(
+              {
+                userId: existingUser.id,
+                id: existingUser.id,
+                email: existingUser.email,
+                plan: existingUser.plan,
+              },
+              JWT_SECRET,
+              { expiresIn: JWT_EXPIRES_IN }
+            );
+            
+            // Remove from temporary store if exists
+            removeTemporaryUser(userId);
+            
+            return res.json({
+              id: existingUser.id,
+              email: existingUser.email,
+              name: existingUser.name,
+              plan: existingUser.plan,
+              usageCount: existingUser.usageCount,
+              usageLimit: existingUser.usageLimit,
+              emailVerified: existingUser.emailVerified,
+              hasCompletedOnboarding: existingUser.hasCompletedOnboarding,
+              isTemporaryUser: false,
+              wasConverted: true,
+              newToken,
+              subscription: {
+                status: existingUser.subscriptionStatus || 'free',
+                plan: existingUser.plan || 'free',
+                isTrialActive: false,
+                daysLeftInTrial: 0,
+              },
+              createdAt: existingUser.createdAt,
+            });
+          }
+        } catch (dbError) {
+          console.error('❌ DB lookup failed:', (dbError as Error).message);
+        }
+      }
+      
+      // Try to convert using the temporary store data
       const convertedUser = await convertTemporaryUser(userId);
       
       if (convertedUser) {
@@ -524,7 +577,6 @@ router.get('/me', async (req: Request, res: Response) => {
         // Remove from temporary store
         removeTemporaryUser(userId);
         
-        // Return converted user data with new token
         return res.json({
           id: convertedUser.id,
           email: convertedUser.email,
@@ -536,7 +588,7 @@ router.get('/me', async (req: Request, res: Response) => {
           hasCompletedOnboarding: false,
           isTemporaryUser: false,
           wasConverted: true,
-          newToken, // Frontend should use this token for future requests
+          newToken,
           subscription: {
             status: 'free',
             plan: convertedUser.plan || 'free',
@@ -545,44 +597,117 @@ router.get('/me', async (req: Request, res: Response) => {
           },
           createdAt: convertedUser.createdAt,
         });
-      } else {
-        // Return temporary user data from memory with warning flag
-        const tempUserData = getTemporaryUser(userId);
-        if (tempUserData) {
-          console.warn(`⚠️ Returning temporary user data for: ${userId} (conversion failed)`);
+      }
+      
+      // If not in memory store, try to create user directly from JWT data
+      if (emailFromToken) {
+        console.log(`🔄 Creating new permanent user directly from JWT data: ${emailFromToken}`);
+        
+        try {
+          const newUserId = `user_${randomBytes(16).toString('hex')}`;
+          const nameFromEmail = emailFromToken.split('@')[0];
+          
+          const [newUser] = await db.insert(users)
+            .values({
+              id: newUserId,
+              email: emailFromToken,
+              name: decoded.name || nameFromEmail,
+              plan: 'free',
+              usageLimit: 100,
+              usageCount: 0,
+              apiKey: `aethermind_${randomBytes(16).toString('hex')}`,
+              emailVerified: true,
+              hasCompletedOnboarding: false,
+              onboardingStep: 'welcome',
+              subscriptionStatus: 'free',
+              maxAgents: 3,
+              logRetentionDays: 30,
+              firstLoginAt: new Date(),
+              lastLoginAt: new Date(),
+            })
+            .returning();
+          
+          if (!newUser) {
+            throw new Error('Failed to create user in database');
+          }
+          
+          console.log(`✅ Created new permanent user from JWT: ${newUser.id}`);
+          
+          // Generate new token
+          const newToken = jwt.sign(
+            {
+              userId: newUser.id,
+              id: newUser.id,
+              email: newUser.email,
+              plan: newUser.plan,
+            },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRES_IN }
+          );
+          
+          // Remove from temporary store if exists
+          removeTemporaryUser(userId);
+          
           return res.json({
-            id: tempUserData.tempId,
-            email: tempUserData.email,
-            name: tempUserData.name,
-            plan: tempUserData.plan,
-            usageCount: tempUserData.usageCount,
-            usageLimit: tempUserData.usageLimit,
+            id: newUser.id,
+            email: newUser.email,
+            name: newUser.name,
+            plan: newUser.plan,
+            usageCount: newUser.usageCount,
+            usageLimit: newUser.usageLimit,
             emailVerified: true,
             hasCompletedOnboarding: false,
-            isTemporaryUser: true,
-            wasConverted: false,
-            temporaryUserWarning: 'Your account is temporarily stored in memory due to database issues. Please try refreshing in a few moments.',
+            isTemporaryUser: false,
+            wasConverted: true,
+            newToken,
             subscription: {
               status: 'free',
               plan: 'free',
               isTrialActive: false,
               daysLeftInTrial: 0,
             },
-            createdAt: tempUserData.createdAt,
+            createdAt: newUser.createdAt,
           });
+        } catch (createError) {
+          console.error('❌ Failed to create permanent user from JWT:', (createError as Error).message);
         }
-        
-        // Temp user not found in memory - force re-login
-        console.error(`❌ Temporary user not found in memory: ${userId}`);
-        return res.status(503).json({
-          error: 'Service Unavailable',
-          message: 'Session expired. Please log out and sign in again.',
-          code: 'TEMPORARY_USER_NOT_FOUND',
-          action: 'FORCE_LOGOUT'
+      }
+      
+      // All conversion attempts failed - return temporary data or force logout
+      const tempUserData = getTemporaryUser(userId);
+      if (tempUserData) {
+        console.warn(`⚠️ Returning temporary user data for: ${userId} (all conversions failed)`);
+        return res.json({
+          id: tempUserData.tempId,
+          email: tempUserData.email,
+          name: tempUserData.name,
+          plan: tempUserData.plan,
+          usageCount: tempUserData.usageCount,
+          usageLimit: tempUserData.usageLimit,
+          emailVerified: true,
+          hasCompletedOnboarding: false,
+          isTemporaryUser: true,
+          wasConverted: false,
+          temporaryUserWarning: 'Database issues persist. Please try again later.',
+          subscription: {
+            status: 'free',
+            plan: 'free',
+            isTrialActive: false,
+            daysLeftInTrial: 0,
+          },
+          createdAt: tempUserData.createdAt,
         });
       }
+      
+      // No data anywhere - force re-login
+      console.error(`❌ Temporary user not in memory and no email in JWT: ${userId}`);
+      return res.status(503).json({
+        error: 'Service Unavailable',
+        message: 'Session expired. Please log out and sign in again.',
+        code: 'TEMPORARY_USER_NOT_FOUND',
+        action: 'FORCE_LOGOUT'
+      });
     }
-    
     
     const [user] = await db.select({
       id: users.id,

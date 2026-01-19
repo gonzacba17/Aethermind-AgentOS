@@ -11,22 +11,22 @@ const navGroups = [
   {
     label: "Overview",
     items: [
-      { icon: Home, label: "Home", href: "/" },
+      { icon: Home, label: "Home", href: "/home" },
       { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
     ],
   },
   {
     label: "AI Operations",
     items: [
-      { icon: Bot, label: "Agents", href: "/dashboard/agents" },
-      { icon: GitBranch, label: "Traces", href: "/dashboard/traces" },
+      { icon: Bot, label: "Agents", href: "/agents" },
+      { icon: GitBranch, label: "Traces", href: "/traces" },
     ],
   },
   {
     label: "Monitoring",
     items: [
-      { icon: FileText, label: "Logs", href: "/dashboard/logs" },
-      { icon: DollarSign, label: "Costs", href: "/dashboard/costs" },
+      { icon: FileText, label: "Logs", href: "/logs" },
+      { icon: DollarSign, label: "Costs", href: "/costs" },
     ],
   },
 ]
