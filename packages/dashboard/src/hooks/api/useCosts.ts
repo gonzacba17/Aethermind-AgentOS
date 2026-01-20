@@ -61,10 +61,17 @@ export function useCostSummary(
       if (shouldUseMockData()) {
         return MOCK_COST_SUMMARY;
       }
-      return fetchCostSummary();
+      
+      try {
+        return await fetchCostSummary();
+      } catch (error) {
+        console.warn('[useCostSummary] API request failed, using mock data:', error);
+        return MOCK_COST_SUMMARY;
+      }
     },
-    staleTime: 60 * 1000, // 1 minute
-    refetchInterval: shouldUseMockData() ? false : 2 * 60 * 1000, // Don't refetch mock data
+    staleTime: 60 * 1000,
+    refetchInterval: shouldUseMockData() ? false : 2 * 60 * 1000,
+    retry: 1,
     ...options,
   });
 }

@@ -51,45 +51,58 @@ export function useTraces(
   return useQuery({
     queryKey: traceKeys.list(filters),
     queryFn: async () => {
-      // Use mock data if API is not configured (demo mode)
-      const traces = shouldUseMockData() ? MOCK_TRACES : await fetchTraces();
-      
-      // Transform API response to list format
-      const transformedTraces: TraceListItem[] = traces.map(trace => ({
-        id: trace.id,
-        name: trace.rootNode?.name || 'Unknown',
-        agent: trace.rootNode?.type === 'agent' ? trace.rootNode.name : 'System',
-        status: trace.rootNode?.error ? 'error' : 
-                trace.rootNode?.completedAt ? 'success' : 'running',
-        duration: trace.rootNode?.duration 
-          ? `${(trace.rootNode.duration / 1000).toFixed(1)}s` 
-          : 'ongoing',
-        timestamp: new Date(trace.createdAt).toLocaleString(),
-        steps: countNodes(trace.rootNode),
-      }));
-      
-      // Apply filters client-side if API doesn't support them
-      let filteredTraces = transformedTraces;
-      
-      if (filters.status && filters.status.length > 0) {
-        filteredTraces = filteredTraces.filter(
-          trace => filters.status!.includes(trace.status)
-        );
-      }
-      
-      if (filters.agentId) {
-        filteredTraces = filteredTraces.filter(
-          trace => trace.agent.toLowerCase().includes(filters.agentId!.toLowerCase())
-        );
-      }
-      
-      return {
-        data: filteredTraces,
-        total: filteredTraces.length,
+      // Helper to transform traces
+      const transformTraces = (traces: typeof MOCK_TRACES) => {
+        const transformedTraces: TraceListItem[] = traces.map(trace => ({
+          id: trace.id,
+          name: trace.rootNode?.name || 'Unknown',
+          agent: trace.rootNode?.type === 'agent' ? trace.rootNode.name : 'System',
+          status: trace.rootNode?.error ? 'error' : 
+                  trace.rootNode?.completedAt ? 'success' : 'running',
+          duration: trace.rootNode?.duration 
+            ? `${(trace.rootNode.duration / 1000).toFixed(1)}s` 
+            : 'ongoing',
+          timestamp: new Date(trace.createdAt).toLocaleString(),
+          steps: countNodes(trace.rootNode),
+        }));
+        
+        let filteredTraces = transformedTraces;
+        
+        if (filters.status && filters.status.length > 0) {
+          filteredTraces = filteredTraces.filter(
+            trace => filters.status!.includes(trace.status)
+          );
+        }
+        
+        if (filters.agentId) {
+          filteredTraces = filteredTraces.filter(
+            trace => trace.agent.toLowerCase().includes(filters.agentId!.toLowerCase())
+          );
+        }
+        
+        return {
+          data: filteredTraces,
+          total: filteredTraces.length,
+        };
       };
+
+      // Use mock data if API is not configured (demo mode)
+      if (shouldUseMockData()) {
+        return transformTraces(MOCK_TRACES);
+      }
+      
+      // Try to fetch from API, fallback to mock data on error
+      try {
+        const traces = await fetchTraces();
+        return transformTraces(traces);
+      } catch (error) {
+        console.warn('[useTraces] API request failed, using mock data:', error);
+        return transformTraces(MOCK_TRACES);
+      }
     },
-    staleTime: 15 * 1000, // 15 seconds - traces update more frequently
-    refetchInterval: 30 * 1000, // Refetch every 30 seconds
+    staleTime: 15 * 1000,
+    refetchInterval: shouldUseMockData() ? false : 30 * 1000,
+    retry: 1,
     ...options,
   });
 }

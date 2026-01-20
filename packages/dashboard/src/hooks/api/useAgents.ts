@@ -51,8 +51,8 @@ export function useAgents(
   return useQuery({
     queryKey: agentKeys.list(filters),
     queryFn: async () => {
-      // Use mock data if API is not configured (demo mode)
-      if (shouldUseMockData()) {
+      // Helper function to return filtered mock data
+      const getMockData = () => {
         let filteredAgents = [...MOCK_AGENTS];
         
         if (filters.search) {
@@ -77,49 +77,60 @@ export function useAgents(
           limit: filters.limit || 20,
           hasMore: false,
         };
+      };
+
+      // Use mock data if API is not configured (demo mode)
+      if (shouldUseMockData()) {
+        return getMockData();
       }
       
-      const result = await fetchAgents();
-      
-      // Handle legacy API response (array) vs new paginated response
-      if (Array.isArray(result)) {
-        let filteredAgents = result;
+      // Try to fetch from API, fallback to mock data on error
+      try {
+        const result = await fetchAgents();
         
-        // Apply client-side filtering if API doesn't support it
-        if (filters.search) {
-          const searchLower = filters.search.toLowerCase();
-          filteredAgents = filteredAgents.filter(
-            agent => 
-              agent.name.toLowerCase().includes(searchLower) ||
-              agent.model.toLowerCase().includes(searchLower)
-          );
+        // Handle legacy API response (array) vs new paginated response
+        if (Array.isArray(result)) {
+          let filteredAgents = result;
+          
+          if (filters.search) {
+            const searchLower = filters.search.toLowerCase();
+            filteredAgents = filteredAgents.filter(
+              agent => 
+                agent.name.toLowerCase().includes(searchLower) ||
+                agent.model.toLowerCase().includes(searchLower)
+            );
+          }
+          
+          if (filters.status && filters.status.length > 0) {
+            filteredAgents = filteredAgents.filter(
+              agent => filters.status!.includes(agent.status)
+            );
+          }
+          
+          if (filters.model && filters.model.length > 0) {
+            filteredAgents = filteredAgents.filter(
+              agent => filters.model!.includes(agent.model)
+            );
+          }
+          
+          return {
+            data: filteredAgents,
+            total: result.length,
+            offset: filters.offset || 0,
+            limit: filters.limit || 20,
+            hasMore: false,
+          };
         }
         
-        if (filters.status && filters.status.length > 0) {
-          filteredAgents = filteredAgents.filter(
-            agent => filters.status!.includes(agent.status)
-          );
-        }
-        
-        if (filters.model && filters.model.length > 0) {
-          filteredAgents = filteredAgents.filter(
-            agent => filters.model!.includes(agent.model)
-          );
-        }
-        
-        return {
-          data: filteredAgents,
-          total: result.length,
-          offset: filters.offset || 0,
-          limit: filters.limit || 20,
-          hasMore: false,
-        };
+        return result as AgentsResponse;
+      } catch (error) {
+        console.warn('[useAgents] API request failed, using mock data:', error);
+        return getMockData();
       }
-      
-      return result as AgentsResponse;
     },
-    staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: shouldUseMockData() ? false : 60 * 1000, // Don't refetch mock data
+    staleTime: 30 * 1000,
+    refetchInterval: shouldUseMockData() ? false : 60 * 1000,
+    retry: 1, // Only retry once, then fallback to mock
     ...options,
   });
 }

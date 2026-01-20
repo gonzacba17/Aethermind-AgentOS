@@ -47,14 +47,50 @@ export function useLogs(
   return useQuery({
     queryKey: logKeys.list(filters),
     queryFn: async () => {
+      // Helper to process logs
+      const processLogs = (rawLogs: LogEntry[], totalCount: number) => {
+        let logs = [...rawLogs];
+        
+        // Apply additional client-side filters
+        if (filters.level && filters.level.length > 0) {
+          logs = logs.filter(log => filters.level!.includes(log.level));
+        }
+        
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase();
+          logs = logs.filter(log => 
+            log.message.toLowerCase().includes(searchLower) ||
+            (log.agentId && log.agentId.toLowerCase().includes(searchLower))
+          );
+        }
+        
+        // Add source from metadata or agentId
+        const enhancedLogs: EnhancedLogEntry[] = logs.map(log => ({
+          ...log,
+          source: log.metadata?.source as string || log.agentId || 'system',
+        }));
+        
+        // Filter by source if specified
+        if (filters.source && filters.source.length > 0) {
+          return {
+            logs: enhancedLogs.filter(log => filters.source!.includes(log.source || '')),
+            total: totalCount,
+          };
+        }
+        
+        return {
+          logs: enhancedLogs,
+          total: totalCount,
+        };
+      };
+
       // Use mock data if API is not configured (demo mode)
-      let logs: LogEntry[];
-      let total: number;
-      
       if (shouldUseMockData()) {
-        logs = [...MOCK_LOGS];
-        total = MOCK_LOGS.length;
-      } else {
+        return processLogs(MOCK_LOGS, MOCK_LOGS.length);
+      }
+      
+      // Try to fetch from API, fallback to mock data on error
+      try {
         const response = await fetchLogs({
           level: filters.level?.[0],
           agentId: filters.agentId,
@@ -62,44 +98,15 @@ export function useLogs(
           limit: filters.limit || 100,
           offset: filters.offset || 0,
         });
-        logs = response.logs || [];
-        total = response.total;
+        return processLogs(response.logs || [], response.total);
+      } catch (error) {
+        console.warn('[useLogs] API request failed, using mock data:', error);
+        return processLogs(MOCK_LOGS, MOCK_LOGS.length);
       }
-      
-      // Apply additional client-side filters
-      if (filters.level && filters.level.length > 0) {
-        logs = logs.filter(log => filters.level!.includes(log.level));
-      }
-      
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        logs = logs.filter(log => 
-          log.message.toLowerCase().includes(searchLower) ||
-          (log.agentId && log.agentId.toLowerCase().includes(searchLower))
-        );
-      }
-      
-      // Add source from metadata or agentId
-      const enhancedLogs: EnhancedLogEntry[] = logs.map(log => ({
-        ...log,
-        source: log.metadata?.source as string || log.agentId || 'system',
-      }));
-      
-      // Filter by source if specified
-      if (filters.source && filters.source.length > 0) {
-        return {
-          logs: enhancedLogs.filter(log => filters.source!.includes(log.source || '')),
-          total,
-        };
-      }
-      
-      return {
-        logs: enhancedLogs,
-        total,
-      };
     },
-    staleTime: 10 * 1000, // 10 seconds - logs are more real-time
-    refetchInterval: shouldUseMockData() ? false : 15 * 1000, // Don't refetch mock data
+    staleTime: 10 * 1000,
+    refetchInterval: shouldUseMockData() ? false : 15 * 1000,
+    retry: 1,
     ...options,
   });
 }
