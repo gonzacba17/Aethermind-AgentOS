@@ -229,6 +229,29 @@ export const alertLogs = pgTable('alert_logs', {
 }));
 
 // ============================================
+// USER API KEYS TABLE
+// Stores encrypted API keys that users configure
+// ============================================
+export const userApiKeys = pgTable('user_api_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  provider: varchar('provider', { length: 50 }).notNull(), // openai, anthropic, cohere, etc.
+  name: varchar('name', { length: 100 }).notNull(), // User-friendly name
+  encryptedKey: text('encrypted_key').notNull(), // AES-256 encrypted
+  maskedKey: varchar('masked_key', { length: 20 }).notNull(), // sk-...abc
+  isValid: boolean('is_valid').default(true).notNull(),
+  lastValidated: timestamp('last_validated', { withTimezone: true, precision: 6 }),
+  lastUsed: timestamp('last_used', { withTimezone: true, precision: 6 }),
+  usageCount: integer('usage_count').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  userIdIdx: index('idx_user_api_keys_user_id').on(table.userId),
+  providerIdx: index('idx_user_api_keys_provider').on(table.provider),
+  userProviderIdx: index('idx_user_api_keys_user_provider').on(table.userId, table.provider),
+}));
+
+// ============================================
 // TELEMETRY EVENTS TABLE
 // ============================================
 export const telemetryEvents = pgTable('telemetry_events', {
@@ -305,3 +328,6 @@ export type NewTelemetryEvent = typeof telemetryEvents.$inferInsert;
 
 export type SubscriptionLog = typeof subscriptionLogs.$inferSelect;
 export type NewSubscriptionLog = typeof subscriptionLogs.$inferInsert;
+
+export type UserApiKey = typeof userApiKeys.$inferSelect;
+export type NewUserApiKey = typeof userApiKeys.$inferInsert;

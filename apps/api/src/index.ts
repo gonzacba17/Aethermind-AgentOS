@@ -39,6 +39,7 @@ import authRoutes from "./routes/auth";
 import oauthRoutes from "./routes/oauth";
 import onboardingRoutes from "./routes/onboarding";
 import stripeRoutes from "./routes/stripe";
+import userApiKeysRoutes from "./routes/user-api-keys";
 import session from "express-session";
 import passportConfig from "./config/passport";
 import { WebSocketManager } from "./websocket/WebSocketManager";
@@ -530,6 +531,7 @@ async function startServer(): Promise<void> {
   app.use("/api/budgets", budgetRoutes);
   app.use("/api/onboarding", onboardingRoutes);
   app.use("/api/stripe", stripeRoutes); // Protected Stripe endpoints (checkout, portal)
+  app.use("/api/user/api-keys", userApiKeysRoutes); // User API keys management
 
   app.use(
     (
