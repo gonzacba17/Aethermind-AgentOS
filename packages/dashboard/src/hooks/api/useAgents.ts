@@ -6,6 +6,7 @@ import {
   executeAgent,
   Agent 
 } from '@/lib/api';
+import { MOCK_AGENTS, shouldUseMockData } from '@/lib/mock-data';
 
 /**
  * Query key factory for agents
@@ -38,6 +39,7 @@ interface AgentsResponse {
 
 /**
  * Hook to fetch list of agents
+ * Falls back to mock data if API is not configured
  * 
  * @param filters - Optional filters for the agent list
  * @param options - Additional React Query options
@@ -49,6 +51,34 @@ export function useAgents(
   return useQuery({
     queryKey: agentKeys.list(filters),
     queryFn: async () => {
+      // Use mock data if API is not configured (demo mode)
+      if (shouldUseMockData()) {
+        let filteredAgents = [...MOCK_AGENTS];
+        
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase();
+          filteredAgents = filteredAgents.filter(
+            agent => 
+              agent.name.toLowerCase().includes(searchLower) ||
+              agent.model.toLowerCase().includes(searchLower)
+          );
+        }
+        
+        if (filters.status && filters.status.length > 0) {
+          filteredAgents = filteredAgents.filter(
+            agent => filters.status!.includes(agent.status)
+          );
+        }
+        
+        return {
+          data: filteredAgents,
+          total: MOCK_AGENTS.length,
+          offset: filters.offset || 0,
+          limit: filters.limit || 20,
+          hasMore: false,
+        };
+      }
+      
       const result = await fetchAgents();
       
       // Handle legacy API response (array) vs new paginated response
@@ -89,7 +119,7 @@ export function useAgents(
       return result as AgentsResponse;
     },
     staleTime: 30 * 1000, // 30 seconds
-    refetchInterval: 60 * 1000, // Refetch every minute
+    refetchInterval: shouldUseMockData() ? false : 60 * 1000, // Don't refetch mock data
     ...options,
   });
 }

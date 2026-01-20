@@ -1,5 +1,6 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 import { fetchLogs, LogEntry } from '@/lib/api';
+import { MOCK_LOGS, shouldUseMockData } from '@/lib/mock-data';
 
 /**
  * Query key factory for logs
@@ -34,6 +35,7 @@ interface LogsResponse {
 
 /**
  * Hook to fetch logs
+ * Falls back to mock data if API is not configured
  * 
  * @param filters - Optional filters for the log list
  * @param options - Additional React Query options
@@ -45,15 +47,24 @@ export function useLogs(
   return useQuery({
     queryKey: logKeys.list(filters),
     queryFn: async () => {
-      const response = await fetchLogs({
-        level: filters.level?.[0],
-        agentId: filters.agentId,
-        executionId: filters.executionId,
-        limit: filters.limit || 100,
-        offset: filters.offset || 0,
-      });
+      // Use mock data if API is not configured (demo mode)
+      let logs: LogEntry[];
+      let total: number;
       
-      let logs = response.logs || [];
+      if (shouldUseMockData()) {
+        logs = [...MOCK_LOGS];
+        total = MOCK_LOGS.length;
+      } else {
+        const response = await fetchLogs({
+          level: filters.level?.[0],
+          agentId: filters.agentId,
+          executionId: filters.executionId,
+          limit: filters.limit || 100,
+          offset: filters.offset || 0,
+        });
+        logs = response.logs || [];
+        total = response.total;
+      }
       
       // Apply additional client-side filters
       if (filters.level && filters.level.length > 0) {
@@ -78,17 +89,17 @@ export function useLogs(
       if (filters.source && filters.source.length > 0) {
         return {
           logs: enhancedLogs.filter(log => filters.source!.includes(log.source || '')),
-          total: response.total,
+          total,
         };
       }
       
       return {
         logs: enhancedLogs,
-        total: response.total,
+        total,
       };
     },
     staleTime: 10 * 1000, // 10 seconds - logs are more real-time
-    refetchInterval: 15 * 1000, // Refetch every 15 seconds
+    refetchInterval: shouldUseMockData() ? false : 15 * 1000, // Don't refetch mock data
     ...options,
   });
 }

@@ -1,5 +1,6 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 import { fetchTraces, fetchTrace, Trace } from '@/lib/api';
+import { MOCK_TRACES, shouldUseMockData } from '@/lib/mock-data';
 
 /**
  * Query key factory for traces
@@ -38,6 +39,7 @@ interface TracesResponse {
 
 /**
  * Hook to fetch list of traces
+ * Falls back to mock data if API is not configured
  * 
  * @param filters - Optional filters for the trace list
  * @param options - Additional React Query options
@@ -49,7 +51,8 @@ export function useTraces(
   return useQuery({
     queryKey: traceKeys.list(filters),
     queryFn: async () => {
-      const traces = await fetchTraces();
+      // Use mock data if API is not configured (demo mode)
+      const traces = shouldUseMockData() ? MOCK_TRACES : await fetchTraces();
       
       // Transform API response to list format
       const transformedTraces: TraceListItem[] = traces.map(trace => ({

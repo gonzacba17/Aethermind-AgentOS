@@ -1,5 +1,6 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 import { fetchCostSummary, fetchCostHistory, CostSummary, CostInfo } from '@/lib/api';
+import { MOCK_COST_SUMMARY, MOCK_COST_HISTORY, shouldUseMockData } from '@/lib/mock-data';
 import { 
   startOfDay, 
   startOfWeek, 
@@ -49,21 +50,28 @@ export interface CostByModel {
 
 /**
  * Hook to fetch cost summary
+ * Falls back to mock data if API is not configured
  */
 export function useCostSummary(
   options?: Omit<UseQueryOptions<CostSummary>, 'queryKey' | 'queryFn'>
 ) {
   return useQuery({
     queryKey: costKeys.summary(),
-    queryFn: fetchCostSummary,
+    queryFn: async () => {
+      if (shouldUseMockData()) {
+        return MOCK_COST_SUMMARY;
+      }
+      return fetchCostSummary();
+    },
     staleTime: 60 * 1000, // 1 minute
-    refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes
+    refetchInterval: shouldUseMockData() ? false : 2 * 60 * 1000, // Don't refetch mock data
     ...options,
   });
 }
 
 /**
  * Hook to fetch budget status
+ * Falls back to mock data if API is not configured
  */
 export function useBudget(
   options?: Omit<UseQueryOptions<BudgetInfo>, 'queryKey' | 'queryFn'>
@@ -71,6 +79,17 @@ export function useBudget(
   return useQuery({
     queryKey: costKeys.budget(),
     queryFn: async () => {
+      // Use mock data if API is not configured
+      if (shouldUseMockData()) {
+        return {
+          limit: 500,
+          spent: 127.45,
+          remaining: 372.55,
+          percentUsed: 25.49,
+          period: 'monthly' as const,
+        };
+      }
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/costs/budget`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
