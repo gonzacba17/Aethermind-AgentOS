@@ -12,14 +12,21 @@ export default {
       {
         useESM: true,
         tsconfig: {
+          module: 'ESNext',
+          moduleResolution: 'node',
           isolatedModules: true,
+          esModuleInterop: true,
         },
       },
     ],
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(.*\\.mjs$|ioredis|@sendgrid))',
+  ],
   testMatch: [
     '**/tests/unit/**/*.test.ts',
     '**/tests/unit/**/*.spec.ts',
+    '**/tests/integration/**/*.test.ts',
     '**/src/**/__tests__/**/*.test.ts',
   ],
   collectCoverageFrom: [
@@ -31,4 +38,5 @@ export default {
   verbose: true,
   testTimeout: 10000,
   rootDir: '.',
+  setupFilesAfterEnv: ['./tests/setup.js'],
 };
