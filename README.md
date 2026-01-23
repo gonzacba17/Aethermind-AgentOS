@@ -169,11 +169,14 @@ console.log(result);
 
 ## 🧪 Testing
 
-**Test Coverage**: ~60% | **Test Suites**: 14 files | **Test Cases**: 254+
+**Test Coverage**: ~60% | **Test Suites**: 16 files | **Test Cases**: 270+
 
 ```bash
-# Run unit tests
+# Run all tests
 pnpm test
+
+# Run unit tests only
+pnpm test:unit
 
 # Run integration tests
 pnpm test:integration
@@ -181,23 +184,42 @@ pnpm test:integration
 # Run end-to-end tests
 pnpm test:e2e
 
-# Run all tests with coverage
+# Run with coverage report
 pnpm test:coverage
 
-# View coverage report
-start coverage/lcov-report/index.html  # Windows
-open coverage/lcov-report/index.html   # macOS
+# Watch mode for development
+pnpm test --watch
+
+# Run specific test file
+pnpm test StripeService
+pnpm test auth-flow
+```
+
+### Critical Tests Before Deploy
+
+```bash
+# Payment flow - MUST pass before any deploy
+pnpm test StripeService
+
+# Auth flow - security critical
+pnpm test auth-flow
+pnpm test auth
+
+# API routes
+pnpm test routes
 ```
 
 ### Test Coverage by Component
 
-| Component  | Coverage | Test Files                                        |
-| ---------- | -------- | ------------------------------------------------- |
-| Routes API | ~70%     | routes-workflows, routes-costs, routes-traces     |
-| Providers  | ~75%     | AnthropicProvider, OllamaProvider, OpenAIProvider |
-| Services   | ~50%     | CostEstimationService, stores, cache              |
-| Validation | ~90%     | schemas                                           |
-| Middleware | ~80%     | auth, validator, sanitizer                        |
+| Component     | Coverage | Test Files                                        |
+| ------------- | -------- | ------------------------------------------------- |
+| StripeService | ~70%     | StripeService.test.ts                             |
+| Auth Flow     | ~75%     | auth.test.ts, auth-flow.test.ts                   |
+| Routes API    | ~70%     | routes-workflows, routes-costs, routes-traces     |
+| Providers     | ~75%     | AnthropicProvider, OllamaProvider, OpenAIProvider |
+| Services      | ~60%     | CostEstimationService, stores, cache              |
+| Validation    | ~90%     | schemas                                           |
+| Middleware    | ~80%     | auth, validator, sanitizer                        |
 
 See [Testing Guide](docs/TESTING.md) for detailed information.
 
