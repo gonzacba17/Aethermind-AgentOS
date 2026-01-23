@@ -61,11 +61,8 @@ jobs:
         run: pnpm typecheck
         continue-on-error: false
 
-      - name: Generate Prisma client
-        run: pnpm prisma:generate
-
-      - name: Run database migrations
-        run: pnpm db:migrate
+      - name: Sync Drizzle schema
+        run: cd apps/api && pnpm drizzle-kit push
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
 
@@ -176,11 +173,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma client
-        run: pnpm prisma:generate
-
-      - name: Run database migrations
-        run: pnpm db:migrate
+      - name: Sync Drizzle schema
+        run: cd apps/api && pnpm drizzle-kit push
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
 
