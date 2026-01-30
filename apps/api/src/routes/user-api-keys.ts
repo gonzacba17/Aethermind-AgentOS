@@ -3,28 +3,70 @@ import { db, schema } from '../db';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
+import logger from '../utils/logger';
 
 const router = Router();
 
-// Encryption key from environment (32 bytes for AES-256)
-const ENCRYPTION_KEY = process.env.API_KEY_ENCRYPTION_KEY || 'default-key-change-in-production!';
+// SECURITY: Encryption key MUST be set in production - no fallback allowed
+const ENCRYPTION_KEY = process.env.API_KEY_ENCRYPTION_KEY;
 
-// Encrypt API key
+if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SECURITY: API_KEY_ENCRYPTION_KEY must be set and be at least 32 characters in production');
+  }
+  logger.warn('⚠️ API_KEY_ENCRYPTION_KEY not set - user API keys will not be securely stored');
+}
+
+// Use a secure key derivation even if key is weak (development only)
+const getEncryptionKey = (): string => {
+  if (!ENCRYPTION_KEY) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Encryption key not configured');
+    }
+    return 'dev-only-insecure-key-32-chars!!';
+  }
+  return ENCRYPTION_KEY;
+};
+
+// Encrypt API key with AES-256-CBC
 function encrypt(text: string): string {
+  const encKey = getEncryptionKey();
   const iv = crypto.randomBytes(16);
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+  // Use proper salt with scrypt for key derivation
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(encKey, salt, 32);
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
+  // Store salt:iv:encrypted for proper decryption
+  return salt.toString('hex') + ':' + iv.toString('hex') + ':' + encrypted;
 }
 
 // Decrypt API key
 function decrypt(encryptedText: string): string {
+  const encKey = getEncryptionKey();
   const parts = encryptedText.split(':');
-  const iv = Buffer.from(parts[0], 'hex');
-  const encrypted = parts[1];
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+
+  // Handle legacy format (iv:encrypted) vs new format (salt:iv:encrypted)
+  let salt: Buffer;
+  let iv: Buffer;
+  let encrypted: string;
+
+  if (parts.length === 2) {
+    // Legacy format - use static salt
+    salt = Buffer.from('salt');
+    iv = Buffer.from(parts[0]!, 'hex');
+    encrypted = parts[1]!;
+  } else if (parts.length === 3) {
+    // New format with proper salt
+    salt = Buffer.from(parts[0]!, 'hex');
+    iv = Buffer.from(parts[1]!, 'hex');
+    encrypted = parts[2]!;
+  } else {
+    throw new Error('Invalid encrypted key format');
+  }
+
+  const key = crypto.scryptSync(encKey, salt, 32);
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
   let decrypted = decipher.update(encrypted, 'hex', 'utf8');
   decrypted += decipher.final('utf8');

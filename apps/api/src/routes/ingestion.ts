@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { telemetryEvents } from '../db/schema.js';
 import { apiKeyAuthCached } from '../middleware/apiKeyAuth.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
+import { eq, asc, sql } from 'drizzle-orm';
 
 const router: Router = Router();
 
@@ -132,5 +133,64 @@ async function storeEvents(
 
   console.log(`[Ingestion] Stored ${data.length} events for org ${organizationId}`);
 }
+
+/**
+ * GET /v1/ingest/status
+ *
+ * Returns telemetry connection status for onboarding wizard
+ *
+ * Authentication: X-API-Key header
+ *
+ * @returns { connected: boolean, firstEventAt: string | null, totalEvents: number }
+ */
+router.get(
+  '/ingest/status',
+  apiKeyAuthCached,
+  async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { organizationId } = req;
+
+    if (!organizationId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Missing organization context',
+      });
+    }
+
+    // Get the first event timestamp
+    const firstEventResult = await db
+      .select({
+        timestamp: telemetryEvents.timestamp,
+      })
+      .from(telemetryEvents)
+      .where(eq(telemetryEvents.organizationId, organizationId))
+      .orderBy(asc(telemetryEvents.timestamp))
+      .limit(1);
+
+    const firstEvent = firstEventResult[0] || null;
+
+    // Count total events
+    const countResult = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+      })
+      .from(telemetryEvents)
+      .where(eq(telemetryEvents.organizationId, organizationId));
+
+    const totalEvents = Number(countResult[0]?.count) || 0;
+
+    res.json({
+      connected: !!firstEvent,
+      firstEventAt: firstEvent?.timestamp?.toISOString() || null,
+      totalEvents,
+    });
+  } catch (error) {
+    console.error('[Ingestion] Failed to fetch telemetry status:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to fetch telemetry status',
+    });
+  }
+});
 
 export default router;

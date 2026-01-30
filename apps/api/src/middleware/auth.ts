@@ -7,6 +7,7 @@ import logger from '../utils/logger';
 
 const API_KEY_HEADER = 'x-api-key';
 const AUTH_CACHE_TTL = 300;
+const AUTH_COOKIE_NAME = 'auth_token';
 
 export interface AuthConfig {
   apiKeyHash?: string;
@@ -35,8 +36,11 @@ export async function authMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  // Security: DISABLE_API_AUTH removed for production safety
-  // Authentication is now always required
+  // Allow disabling auth for development via DISABLE_AUTH=true
+  if (process.env.DISABLE_AUTH === 'true') {
+    next();
+    return;
+  }
 
   // Public routes - no auth required
   // Use originalUrl to catch full path including /api prefix
@@ -75,20 +79,27 @@ export async function authMiddleware(
 
 /**
  * JWT validation middleware for regular API routes
+ * Reads token from httpOnly cookie (preferred) or Authorization header (fallback for API clients)
  */
 async function validateJWT(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // Try to get token from httpOnly cookie first (more secure for web clients)
+  // Then fall back to Authorization header (for API clients/mobile apps)
+  const cookieToken = req.cookies?.[AUTH_COOKIE_NAME];
   const authHeader = req.headers.authorization;
-  const token = authHeader?.replace('Bearer ', '');
+  const headerToken = authHeader?.replace('Bearer ', '');
+  const token = cookieToken || headerToken;
 
   if (!token) {
     logger.warn('JWT authentication failed: token missing', {
       reason: 'missing_jwt',
       ip: req.ip,
       path: req.path,
+      hasCookie: !!req.cookies,
+      hasAuthHeader: !!authHeader,
     });
     res.status(401).json({
       error: 'Unauthorized',

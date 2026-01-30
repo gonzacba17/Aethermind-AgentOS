@@ -66,7 +66,10 @@
       "Bash(tree:*)",
       "Bash(touch:*)",
       "Bash(dos2unix:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cd:*)",
+      "Bash(wc:*)",
+      "Bash(npm test:*)"
     ],
     "deny": []
   }

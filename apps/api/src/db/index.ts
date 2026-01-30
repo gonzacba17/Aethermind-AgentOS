@@ -7,12 +7,13 @@ let isConnected = false;
 let lastConnectionError: Error | null = null;
 let connectionAttempts = 0;
 
-// Create PostgreSQL connection pool
+// Create PostgreSQL connection pool (optimized for Railway)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 25, // Maximum number of connections in the pool
+  max: 10, // Reduced for Railway tier compatibility
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000, // 10s timeout for Railway/network latency
+  connectionTimeoutMillis: 5000, // Faster failure detection
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
 // Enhanced logging for connection diagnostics

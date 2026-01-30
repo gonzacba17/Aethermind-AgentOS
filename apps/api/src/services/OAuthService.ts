@@ -245,8 +245,8 @@ export async function findOrCreateOAuthUser(
       }
       
       // 3. Create new user with OAuth data
-      logger.info('👤 Creating new OAuth user in database', { provider, email, name });
-      
+      logger.info('Creating new OAuth user in database', { provider, email, name });
+
       const newUserData = {
         id: `user_${randomBytes(16).toString('hex')}`,
         email,
@@ -265,18 +265,35 @@ export async function findOrCreateOAuthUser(
         lastLoginAt: new Date(),
         ...(provider === 'google' ? { googleId: providerId } : { githubId: providerId }),
       };
-      
-      const [newUser] = await db.insert(users)
-        .values(newUserData)
-        .returning();
-      
-      logger.info('✅ New OAuth user created in database', {
-        userId: newUser!.id,
-        provider,
-        email: newUser!.email,
-      });
-      
-      return newUser!;
+
+      try {
+        const [newUser] = await db.insert(users)
+          .values(newUserData)
+          .returning();
+
+        logger.info('New OAuth user created in database', {
+          userId: newUser!.id,
+          provider,
+          email: newUser!.email,
+        });
+
+        return newUser!;
+      } catch (insertError: unknown) {
+        // Handle race condition: user created by concurrent request
+        const error = insertError as { code?: string; message?: string };
+        if (error.code === '23505' || error.message?.includes('unique')) {
+          logger.info('Race condition handled: user created by concurrent request', { email });
+          // User was created by another request - fetch and return
+          const [existingUser] = await db.select()
+            .from(users)
+            .where(eq(users.email, email))
+            .limit(1);
+          if (existingUser) {
+            return existingUser;
+          }
+        }
+        throw insertError;
+      }
     }, {
       maxRetries: 3,
       initialDelayMs: 1000,

@@ -1,18 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
 import { db } from '../db';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
-
-// Validate JWT_SECRET in production
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('JWT_SECRET must be set and at least 32 characters in production');
-  }
-  console.warn('⚠️  Using default JWT_SECRET - NOT SAFE FOR PRODUCTION');
-}
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production-min-32-chars';
+import { verifyJWT, JWTPayload, getUserIdFromPayload } from '../utils/auth-helpers';
+import logger from '../utils/logger';
 
 
 export interface AuthRequest extends Request {
@@ -65,10 +56,24 @@ export async function jwtAuthMiddleware(
 
     const token = authHeader.substring(7);
 
-    const decoded = jwt.verify(token, JWT_SECRET) as {
-      userId: string;
-      email: string;
-    };
+    let decoded: JWTPayload;
+    try {
+      decoded = verifyJWT(token);
+    } catch (error) {
+      const authError = error as { code?: string; message?: string };
+      if (authError.code === 'TOKEN_EXPIRED') {
+        res.status(401).json({ error: 'Token expired' });
+        return;
+      }
+      res.status(401).json({ error: 'Invalid token' });
+      return;
+    }
+
+    const userId = getUserIdFromPayload(decoded);
+    if (!userId) {
+      res.status(401).json({ error: 'Invalid token payload' });
+      return;
+    }
 
     const [user] = await db.select({
       id: users.id,
@@ -78,7 +83,7 @@ export async function jwtAuthMiddleware(
       usageLimit: users.usageLimit,
     })
     .from(users)
-    .where(eq(users.id, decoded.userId))
+    .where(eq(users.id, userId))
     .limit(1);
 
     if (!user) {
@@ -90,15 +95,7 @@ export async function jwtAuthMiddleware(
     req.user = user;
     next();
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      res.status(401).json({ error: 'Token expired' });
-      return;
-    }
-    if (error instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({ error: 'Invalid token' });
-      return;
-    }
-    console.error('JWT auth error:', error);
+    logger.error('JWT auth error', { error: (error as Error).message });
     res.status(500).json({ error: 'Authentication failed' });
   }
 }

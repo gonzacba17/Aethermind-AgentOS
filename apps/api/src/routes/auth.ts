@@ -10,27 +10,64 @@ import { eq, and, gte } from 'drizzle-orm';
 import { emailService } from '../services/EmailService';
 import { StripeService } from '../services/StripeService';
 import { convertTemporaryUser, getTemporaryUser, removeTemporaryUser } from '../services/OAuthService';
-
+import redisService from '../services/RedisService';
+import logger from '../utils/logger';
+import {
+  AUTH_RATE_LIMIT_WINDOW_MS,
+  AUTH_RATE_LIMIT_MAX_ATTEMPTS,
+  PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+  PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS,
+  EMAIL_VERIFY_RATE_LIMIT_WINDOW_MS,
+  EMAIL_VERIFY_RATE_LIMIT_MAX_ATTEMPTS,
+  JWT_EXPIRES_IN,
+  PASSWORD_MIN_LENGTH,
+  EMAIL_VERIFICATION_TTL_MS,
+  PASSWORD_RESET_TTL_MS,
+} from '../config/constants';
+import {
+  getJWTSecret,
+  generateUserToken,
+  formatAuthResponse,
+  extractTokenFromRequest,
+  verifyJWT,
+  JWTPayload,
+  getUserIdFromPayload,
+} from '../utils/auth-helpers';
 
 const stripeService = new StripeService();
 
+// Rate limiter for login/signup attempts
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many authentication attempts, please try again after 15 minutes',
+  windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+  max: AUTH_RATE_LIMIT_MAX_ATTEMPTS,
+  message: 'Too many authentication attempts, please try again later',
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
 });
 
+// SECURITY: Rate limiter for email verification to prevent brute force
+const emailVerifyLimiter = rateLimit({
+  windowMs: EMAIL_VERIFY_RATE_LIMIT_WINDOW_MS,
+  max: EMAIL_VERIFY_RATE_LIMIT_MAX_ATTEMPTS,
+  message: 'Too many verification attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// SECURITY: Strict rate limiter for password reset to prevent abuse
+const passwordResetLimiter = rateLimit({
+  windowMs: PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+  max: PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS,
+  message: 'Too many password reset attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const router: ExpressRouter = Router();
 
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your-super-secret-jwt-key-change-in-production' || process.env.JWT_SECRET.length < 32) {
-  throw new Error('SECURITY: JWT_SECRET must be set and be at least 32 characters in production');
-}
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret-change-in-production-min-32-chars';
-const JWT_EXPIRES_IN = '7d';
+// Validate JWT secret at startup
+const JWT_SECRET = getJWTSecret();
 
 
 interface SignupBody {
@@ -60,8 +97,8 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      return res.status(400).json({ error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` });
     }
 
     const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
@@ -72,7 +109,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const apiKey = `aethermind_${randomBytes(32).toString('hex')}`;
     const verificationToken = randomBytes(32).toString('hex');
-    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    const verificationExpiry = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
 
     const userId = `user_${randomBytes(16).toString('hex')}`;
     
@@ -100,7 +137,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
 
     // Send verification email (non-blocking)
     emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
-      console.error('Failed to send verification email:', error);
+      logger.error('Failed to send verification email', { error: (error as Error).message });
     });
 
     if (!user) {
@@ -109,7 +146,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
 
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
-    });
+    } as jwt.SignOptions);
 
     res.status(201).json({
       token,
@@ -122,7 +159,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Signup error:', error);
+    logger.error('Signup error', { error: (error as Error).message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -151,7 +188,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
 
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
-    });
+    } as jwt.SignOptions);
 
     res.json({
       token,
@@ -166,12 +203,13 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error', { error: (error as Error).message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/verify-email', async (req: Request, res: Response) => {
+// SECURITY: Rate limited to prevent brute force attacks on verification tokens
+router.post('/verify-email', emailVerifyLimiter, async (req: Request, res: Response) => {
   try {
     const { token } = req.body;
 
@@ -201,7 +239,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 
     res.json({ success: true, message: 'Email verified successfully' });
   } catch (error) {
-    console.error('Verify email error:', error);
+    logger.error('Verify email error', { error: (error as Error).message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -234,12 +272,12 @@ router.post('/forgot-password', authLimiter, async (req: Request, res: Response)
 
     // Send password reset email (non-blocking)
     emailService.sendPasswordResetEmail(user.email, resetToken).catch((error) => {
-      console.error('Failed to send password reset email:', error);
+      logger.error('Failed to send password reset email', { error: (error as Error).message });
     });
 
     res.json({ success: true, message: 'If that email exists, a reset link was sent' });
   } catch (error) {
-    console.error('Reset request error:', error);
+    logger.error('Password reset request error', { error: (error as Error).message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -258,8 +296,8 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
       return res.status(400).json({ error: 'Token and password required' });
     }
 
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      return res.status(400).json({ error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` });
     }
 
     const [user] = await db.select()
@@ -286,7 +324,7 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
 
     res.json({ message: 'Password reset successfully' });
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('Password reset error', { error: (error as Error).message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -299,8 +337,7 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response) 
 router.post('/update-plan', async (req: Request, res: Response) => {
   try {
     // Extract token from Authorization header
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.replace('Bearer ', '');
+    const token = extractTokenFromRequest(req);
 
     if (!token) {
       return res.status(401).json({
@@ -310,9 +347,9 @@ router.post('/update-plan', async (req: Request, res: Response) => {
     }
 
     // Verify JWT token
-    let decoded: any;
+    let decoded: JWTPayload;
     try {
-      decoded = jwt.verify(token, JWT_SECRET);
+      decoded = verifyJWT(token);
     } catch (error) {
       return res.status(401).json({
         error: 'Unauthorized',
@@ -320,17 +357,24 @@ router.post('/update-plan', async (req: Request, res: Response) => {
       });
     }
 
-    let userId = decoded.userId || decoded.id;
+    let userId = getUserIdFromPayload(decoded);
     const { plan } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid token payload'
+      });
+    }
 
     // Handle temporary users: attempt to convert to permanent before rejecting
     if (userId.startsWith('temp-')) {
-      console.log(`🔄 Temporary user attempting plan update: ${userId}`);
+      logger.info('Temporary user attempting plan update', { userId });
       
       // Check if we have this user in memory
       const tempUserData = getTemporaryUser(userId);
       if (!tempUserData) {
-        console.error(`❌ Temporary user not found in memory: ${userId}`);
+        logger.error('Temporary user not found in memory', { userId });
         return res.status(503).json({
           error: 'Service Unavailable',
           message: 'Session expired. Please log out and sign in again.',
@@ -339,14 +383,14 @@ router.post('/update-plan', async (req: Request, res: Response) => {
       }
 
       // Attempt to convert temporary user to permanent
-      console.log(`🔄 Attempting to convert temporary user to permanent...`);
+      logger.info('Attempting to convert temporary user to permanent', { userId });
       const convertedUser = await convertTemporaryUser(userId);
-      
+
       if (convertedUser) {
-        console.log(`✅ Successfully converted temporary user to permanent: ${convertedUser.id}`);
+        logger.info('Successfully converted temporary user to permanent', { userId, newId: convertedUser.id });
         userId = convertedUser.id; // Use the new permanent ID
       } else {
-        console.error(`❌ Cannot convert temporary user - database still unavailable`);
+        logger.error('Cannot convert temporary user - database still unavailable', { userId });
         return res.status(503).json({
           error: 'Service Unavailable',
           message: 'Database connection issue. Please try again in a few moments, or log out and sign in again.',
@@ -365,10 +409,64 @@ router.post('/update-plan', async (req: Request, res: Response) => {
       });
     }
 
-    // Get current user
-    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    // Get current user (userId is guaranteed non-null at this point)
+    const [user] = await db.select().from(users).where(eq(users.id, userId!)).limit(1);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // SECURITY: Validate plan upgrade permissions
+    if (plan !== 'free') {
+      const now = new Date();
+      const isTrialActive = user.trialStartedAt && user.trialEndsAt && now < user.trialEndsAt;
+      const hasActiveSubscription = user.stripeSubscriptionId &&
+        ['active', 'trialing'].includes(user.subscriptionStatus || '');
+
+      // For pro/enterprise, user must have active Stripe subscription or be in trial
+      if (!isTrialActive && !hasActiveSubscription) {
+        // Verify with Stripe if they claim to have a subscription
+        if (user.stripeCustomerId) {
+          try {
+            const subscription = await stripeService.getActiveSubscription(user.stripeCustomerId);
+            if (!subscription) {
+              logger.warn('Plan upgrade rejected: no active subscription', {
+                userId,
+                requestedPlan: plan,
+                stripeCustomerId: user.stripeCustomerId,
+              });
+              return res.status(403).json({
+                error: 'Subscription required',
+                message: 'An active subscription is required for this plan. Please upgrade via the billing page.',
+                code: 'SUBSCRIPTION_REQUIRED'
+              });
+            }
+          } catch (stripeError) {
+            logger.error('Stripe verification failed during plan update', {
+              userId,
+              error: (stripeError as Error).message,
+            });
+            // Allow the update if Stripe is unavailable but user has subscription ID
+            if (!user.stripeSubscriptionId) {
+              return res.status(403).json({
+                error: 'Subscription required',
+                message: 'Unable to verify subscription. Please try again.',
+                code: 'SUBSCRIPTION_VERIFICATION_FAILED'
+              });
+            }
+          }
+        } else {
+          // No Stripe customer ID and no trial - cannot upgrade
+          logger.warn('Plan upgrade rejected: no subscription or trial', {
+            userId,
+            requestedPlan: plan,
+          });
+          return res.status(403).json({
+            error: 'Subscription required',
+            message: 'An active subscription is required for this plan. Please upgrade via the billing page.',
+            code: 'SUBSCRIPTION_REQUIRED'
+          });
+        }
+      }
     }
 
     // Check if downgrading from paid to free with active subscription
@@ -385,7 +483,7 @@ router.post('/update-plan', async (req: Request, res: Response) => {
         plan,
         subscriptionStatus: plan === 'free' ? 'free' : user.subscriptionStatus,
       })
-      .where(eq(users.id, userId))
+      .where(eq(users.id, userId!))
       .returning({
         id: users.id,
         name: users.name,
@@ -409,7 +507,7 @@ router.post('/update-plan', async (req: Request, res: Response) => {
 
     // Log plan change
     await db.insert(subscriptionLogs).values({
-      userId,
+      userId: userId!,
       event: 'plan_updated',
       metadata: {
         oldPlan: user.plan,
@@ -417,10 +515,10 @@ router.post('/update-plan', async (req: Request, res: Response) => {
         timestamp: new Date().toISOString(),
       },
     }).catch((error) => {
-      console.error('Failed to log plan change:', error);
+      logger.error('Failed to log plan change', { error: (error as Error).message });
     });
 
-    console.log(`✅ Plan updated for user ${user.email}: ${user.plan} → ${plan}`);
+    logger.info('Plan updated for user', { email: user.email, oldPlan: user.plan, newPlan: plan });
 
     // Safety check (should never happen with .returning())
     if (!updatedUser) {
@@ -450,7 +548,7 @@ router.post('/update-plan', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Update plan error:', error);
+    logger.error('Update plan error', { error: (error as Error).message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -462,19 +560,11 @@ router.post('/update-plan', async (req: Request, res: Response) => {
  */
 router.get('/me', async (req: Request, res: Response) => {
   try {
-    // Debug logging
-    console.log('[/auth/me] Request received');
-    console.log('[/auth/me] Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('[/auth/me] Authorization header:', req.headers.authorization);
-    
     // Extract token from Authorization header
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.replace('Bearer ', '');
-
-    console.log('[/auth/me] Extracted token:', token ? `${token.substring(0, 20)}...` : 'NONE');
+    const token = extractTokenFromRequest(req);
 
     if (!token) {
-      console.log('[/auth/me] REJECTED: No token found');
+      logger.debug('/auth/me rejected: no token found');
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Missing authentication token'
@@ -482,14 +572,12 @@ router.get('/me', async (req: Request, res: Response) => {
     }
 
     // Verify JWT token
-    let decoded: any;
+    let decoded: JWTPayload;
     try {
-      console.log('[/auth/me] Verifying token with JWT_SECRET');
-      decoded = jwt.verify(token, JWT_SECRET);
-      console.log('[/auth/me] Token verified successfully. User ID:', decoded.userId || decoded.id);
+      decoded = verifyJWT(token);
+      logger.debug('/auth/me token verified', { userId: getUserIdFromPayload(decoded) });
     } catch (error) {
-      console.log('[/auth/me] REJECTED: JWT verification failed');
-      console.log('[/auth/me] Error:', (error as Error).message);
+      logger.debug('/auth/me JWT verification failed', { error: (error as Error).message });
       return res.status(401).json({
         error: 'Unauthorized',
         message: 'Invalid or expired token'
@@ -497,12 +585,19 @@ router.get('/me', async (req: Request, res: Response) => {
     }
 
     // Get user from database using userId from token
-    let userId = decoded.userId || decoded.id;
+    let userId = getUserIdFromPayload(decoded);
     const emailFromToken = decoded.email;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid token payload'
+      });
+    }
     
     // Handle temporary users: attempt auto-conversion with new token
     if (userId.startsWith('temp-') || userId.startsWith('tmp-')) {
-      console.log(`🔄 Temporary user accessing /auth/me: ${userId}, email: ${emailFromToken}`);
+      logger.info('Temporary user accessing /auth/me', { userId, email: emailFromToken });
       
       // First, try to find if this user already exists in DB by email
       if (emailFromToken) {
@@ -513,7 +608,7 @@ router.get('/me', async (req: Request, res: Response) => {
             .limit(1);
           
           if (existingUser) {
-            console.log(`✅ User already exists in DB with this email: ${existingUser.id}`);
+            logger.info('User already exists in DB with this email', { userId: existingUser.id });
             
             // Generate new JWT token with permanent user ID
             const newToken = jwt.sign(
@@ -524,7 +619,7 @@ router.get('/me', async (req: Request, res: Response) => {
                 plan: existingUser.plan,
               },
               JWT_SECRET,
-              { expiresIn: JWT_EXPIRES_IN }
+              { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
             );
             
             // Remove from temporary store if exists
@@ -552,7 +647,7 @@ router.get('/me', async (req: Request, res: Response) => {
             });
           }
         } catch (dbError) {
-          console.error('❌ DB lookup failed:', (dbError as Error).message);
+          logger.error('DB lookup failed', { error: (dbError as Error).message });
         }
       }
       
@@ -560,7 +655,7 @@ router.get('/me', async (req: Request, res: Response) => {
       const convertedUser = await convertTemporaryUser(userId);
       
       if (convertedUser) {
-        console.log(`✅ Temporary user auto-converted during /auth/me: ${convertedUser.id}`);
+        logger.info('Temporary user auto-converted during /auth/me', { userId: convertedUser.id });
         
         // Generate new JWT token with permanent user ID
         const newToken = jwt.sign(
@@ -571,7 +666,7 @@ router.get('/me', async (req: Request, res: Response) => {
             plan: convertedUser.plan,
           },
           JWT_SECRET,
-          { expiresIn: JWT_EXPIRES_IN }
+          { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
         );
         
         // Remove from temporary store
@@ -601,7 +696,7 @@ router.get('/me', async (req: Request, res: Response) => {
       
       // If not in memory store, try to create user directly from JWT data
       if (emailFromToken) {
-        console.log(`🔄 Creating new permanent user directly from JWT data: ${emailFromToken}`);
+        logger.info('Creating new permanent user directly from JWT data', { email: emailFromToken });
         
         try {
           const newUserId = `user_${randomBytes(16).toString('hex')}`;
@@ -631,7 +726,7 @@ router.get('/me', async (req: Request, res: Response) => {
             throw new Error('Failed to create user in database');
           }
           
-          console.log(`✅ Created new permanent user from JWT: ${newUser.id}`);
+          logger.info('Created new permanent user from JWT', { userId: newUser.id });
           
           // Generate new token
           const newToken = jwt.sign(
@@ -642,7 +737,7 @@ router.get('/me', async (req: Request, res: Response) => {
               plan: newUser.plan,
             },
             JWT_SECRET,
-            { expiresIn: JWT_EXPIRES_IN }
+            { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
           );
           
           // Remove from temporary store if exists
@@ -669,14 +764,14 @@ router.get('/me', async (req: Request, res: Response) => {
             createdAt: newUser.createdAt,
           });
         } catch (createError) {
-          console.error('❌ Failed to create permanent user from JWT:', (createError as Error).message);
+          logger.error('Failed to create permanent user from JWT', { error: (createError as Error).message });
         }
       }
       
       // All conversion attempts failed - return temporary data or force logout
       const tempUserData = getTemporaryUser(userId);
       if (tempUserData) {
-        console.warn(`⚠️ Returning temporary user data for: ${userId} (all conversions failed)`);
+        logger.warn('Returning temporary user data - all conversions failed', { userId });
         return res.json({
           id: tempUserData.tempId,
           email: tempUserData.email,
@@ -700,7 +795,7 @@ router.get('/me', async (req: Request, res: Response) => {
       }
       
       // No data anywhere - force re-login
-      console.error(`❌ Temporary user not in memory and no email in JWT: ${userId}`);
+      logger.error('Temporary user not in memory and no email in JWT', { userId });
       return res.status(503).json({
         error: 'Service Unavailable',
         message: 'Session expired. Please log out and sign in again.',
@@ -769,7 +864,7 @@ router.get('/me', async (req: Request, res: Response) => {
           currentPeriodEnd = new Date(stripeSubscription.current_period_end * 1000);
         }
       } catch (error) {
-        console.error('Failed to sync with Stripe:', error);
+        logger.error('Failed to sync with Stripe', { error: (error as Error).message });
       }
     }
 
@@ -789,7 +884,7 @@ router.get('/me', async (req: Request, res: Response) => {
       .set({ lastLoginAt: now })
       .where(eq(users.id, userId))
       .catch((error) => {
-        console.error('Failed to update lastLoginAt:', error);
+        logger.error('Failed to update lastLoginAt', { error: (error as Error).message });
       });
 
     // Return user info with enhanced subscription status
@@ -826,11 +921,234 @@ router.get('/me', async (req: Request, res: Response) => {
       createdAt: user.createdAt,
     });
   } catch (error) {
-    console.error('Error fetching user:', error);
+    logger.error('Error fetching user', { error: (error as Error).message });
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch user'
     });
+  }
+});
+
+// ============================================
+// SESSION EXCHANGE ENDPOINTS
+// For secure cross-domain authentication
+// ============================================
+
+/**
+ * POST /auth/create-temp-session
+ * Creates a temporary session ID for secure cross-domain redirect
+ * Requires: Authorization: Bearer <JWT_TOKEN>
+ * Returns: { sessionId: string }
+ */
+router.post('/create-temp-session', async (req: Request, res: Response) => {
+  try {
+    // Extract and verify JWT token
+    const token = extractTokenFromRequest(req);
+
+    if (!token) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Missing authentication token'
+      });
+    }
+
+    let decoded: JWTPayload;
+    try {
+      decoded = verifyJWT(token);
+    } catch (error) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid or expired token'
+      });
+    }
+
+    const userId = getUserIdFromPayload(decoded);
+
+    // Generate unique session ID
+    const sessionId = randomBytes(32).toString('hex');
+
+    // Store session in Redis (or memory fallback) with 60-second TTL
+    await redisService.setex(
+      `temp_session:${sessionId}`,
+      60, // 60 seconds TTL
+      JSON.stringify({
+        token,
+        userId,
+        createdAt: Date.now()
+      })
+    );
+
+    logger.debug('Created temp session', { userId });
+
+    res.json({ sessionId });
+  } catch (error) {
+    logger.error('Failed to create temp session', { error: (error as Error).message });
+    res.status(500).json({ error: 'Failed to create session' });
+  }
+});
+
+/**
+ * POST /auth/session
+ * Exchanges a temporary session ID for JWT token and user data
+ * This is a public endpoint (no auth required)
+ * Body: { sessionId: string }
+ * Returns: { token: string, user: {...} }
+ */
+router.post('/session', async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.body;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'Session ID required' });
+    }
+
+    // Retrieve session from Redis/memory
+    const sessionData = await redisService.get(`temp_session:${sessionId}`);
+
+    if (!sessionData) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
+    }
+
+    // Delete session immediately (one-time use)
+    await redisService.del(`temp_session:${sessionId}`);
+
+    const { token, userId } = JSON.parse(sessionData);
+
+    // Get user data from database
+    const [user] = await db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      plan: users.plan,
+      apiKey: users.apiKey,
+      emailVerified: users.emailVerified,
+      usageCount: users.usageCount,
+      usageLimit: users.usageLimit,
+      hasCompletedOnboarding: users.hasCompletedOnboarding,
+      onboardingStep: users.onboardingStep,
+      subscriptionStatus: users.subscriptionStatus,
+      maxAgents: users.maxAgents,
+      logRetentionDays: users.logRetentionDays,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    logger.debug('Session exchanged', { email: user.email });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.plan,
+        apiKey: user.apiKey,
+        emailVerified: user.emailVerified,
+        hasCompletedOnboarding: user.hasCompletedOnboarding,
+        onboardingStep: user.onboardingStep,
+        subscriptionStatus: user.subscriptionStatus,
+        usageCount: user.usageCount,
+        usageLimit: user.usageLimit,
+        maxAgents: user.maxAgents,
+        logRetentionDays: user.logRetentionDays,
+        createdAt: user.createdAt,
+      }
+    });
+  } catch (error) {
+    logger.error('Session exchange failed', { error: (error as Error).message });
+    res.status(500).json({ error: 'Failed to exchange session' });
+  }
+});
+
+/**
+ * PATCH /auth/onboarding
+ * Updates user's onboarding status
+ * Requires: Authorization: Bearer <JWT_TOKEN>
+ * Body: { completed?: boolean, step?: string }
+ */
+router.patch('/onboarding', async (req: Request, res: Response) => {
+  try {
+    // Extract and verify JWT token
+    const token = extractTokenFromRequest(req);
+
+    if (!token) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Missing authentication token'
+      });
+    }
+
+    let decoded: JWTPayload;
+    try {
+      decoded = verifyJWT(token);
+    } catch (error) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid or expired token'
+      });
+    }
+
+    const userId = getUserIdFromPayload(decoded);
+    const { completed, step } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Invalid token payload'
+      });
+    }
+
+    // Build update object
+    const updates: Record<string, any> = {
+      updatedAt: new Date(),
+    };
+
+    if (typeof completed === 'boolean') {
+      updates.hasCompletedOnboarding = completed;
+    }
+
+    if (step && typeof step === 'string') {
+      // Validate step value
+      const validSteps = ['welcome', 'profile_setup', 'preferences', 'complete', 'skipped'];
+      if (!validSteps.includes(step)) {
+        return res.status(400).json({
+          error: 'Invalid step',
+          message: `Step must be one of: ${validSteps.join(', ')}`
+        });
+      }
+      updates.onboardingStep = step;
+    }
+
+    // Update user
+    const [updatedUser] = await db.update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        hasCompletedOnboarding: users.hasCompletedOnboarding,
+        onboardingStep: users.onboardingStep,
+      });
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    logger.debug('Onboarding updated', { userId, completed: updatedUser.hasCompletedOnboarding, step: updatedUser.onboardingStep });
+
+    res.json({
+      success: true,
+      hasCompletedOnboarding: updatedUser.hasCompletedOnboarding,
+      onboardingStep: updatedUser.onboardingStep,
+    });
+  } catch (error) {
+    logger.error('Failed to update onboarding', { error: (error as Error).message });
+    res.status(500).json({ error: 'Failed to update onboarding' });
   }
 });
 

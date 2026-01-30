@@ -1,5 +1,19 @@
 import "dotenv/config";
 
+// Validate secrets early (before other imports that might use them)
+import { validateSecrets } from "./config/secrets";
+
+try {
+  validateSecrets();
+} catch (error) {
+  console.error("❌ FATAL: Secrets validation failed");
+  console.error((error as Error).message);
+  console.error("💡 Run: pnpm generate-secrets to create new secrets");
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
+}
+
 // Validate critical environment variables early
 if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
   console.error("❌ FATAL: DATABASE_URL is not configured");
@@ -13,6 +27,7 @@ import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser";
 import { createServer } from "http";
 import https from "https";
 import fs from "fs";
@@ -40,7 +55,10 @@ import oauthRoutes from "./routes/oauth";
 import onboardingRoutes from "./routes/onboarding";
 import stripeRoutes from "./routes/stripe";
 import userApiKeysRoutes from "./routes/user-api-keys";
+import optimizationRoutes from "./routes/optimization.routes";
+import forecastingRoutes from "./routes/forecasting.routes";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import passportConfig from "./config/passport";
 import { WebSocketManager } from "./websocket/WebSocketManager";
 import { InMemoryStore } from "./services/InMemoryStore";
@@ -51,6 +69,10 @@ import { AlertService } from "./services/AlertService";
 import type { StoreInterface } from "./services/PostgresStore";
 import { authMiddleware, configureAuth, verifyApiKey } from "./middleware/auth";
 import { verifyDatabaseOnStartup, measureDatabaseLatency, getDatabaseStatus } from "./middleware/database";
+import { requestIdMiddleware, withRequestId } from "./middleware/request-id.middleware";
+import { csrfProtection, csrfTokenHandler } from "./middleware/csrf.middleware";
+import { authRateLimiter } from "./middleware/rateLimiter";
+import { errorHandler, notFoundHandler } from "./middleware/error-handler";
 import { getTemporaryUsersCount } from "./services/OAuthService";
 import { sanitizeLog, sanitizeObject } from "./utils/sanitizer";
 import logger, { stream } from "./utils/logger";
@@ -74,6 +96,15 @@ if (process.env["NODE_ENV"] === "production" && !process.env["API_KEY_HASH"]) {
   logger.error("FATAL: API_KEY_HASH must be configured in production");
   logger.error("Generate one with: pnpm generate-api-key");
   process.exit(1);
+}
+
+// Validate session secret
+if (!process.env.SESSION_SECRET && !process.env.JWT_SECRET) {
+  logger.error("❌ FATAL: SESSION_SECRET or JWT_SECRET must be configured");
+  process.exit(1);
+}
+if (!process.env.SESSION_SECRET) {
+  logger.warn("⚠️ SESSION_SECRET not set, using JWT_SECRET as fallback for sessions");
 }
 
 const authCache = redisCache;
@@ -132,6 +163,10 @@ const app = express();
 // Trust Railway proxy for X-Forwarded-For header (required for rate limiting)
 // Railway sits behind a proxy, so we need to trust the first proxy in the chain
 app.set('trust proxy', 1);
+
+// Request ID middleware - MUST be first middleware for consistent tracing
+// Assigns unique ID to each request for distributed tracing and log correlation
+app.use(requestIdMiddleware);
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
@@ -262,10 +297,13 @@ async function startServer(): Promise<void> {
     logger.info("Anthropic provider configured");
   }
 
+  // Event handlers - using 'any' due to dynamic event types from @aethermind/core
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runtime.getEmitter().on("agent:event", (event: any) => {
     wsManager.broadcast("agent:event", event);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runtime.getEmitter().on("log", (entry: any) => {
     const sanitizedEntry = {
       ...entry,
@@ -276,14 +314,17 @@ async function startServer(): Promise<void> {
     wsManager.broadcast("log", sanitizedEntry);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runtime.getEmitter().on("workflow:started", (event: any) => {
     wsManager.broadcast("workflow:started", event);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runtime.getEmitter().on("workflow:completed", (event: any) => {
     wsManager.broadcast("workflow:completed", event);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   runtime.getEmitter().on("workflow:failed", (event: any) => {
     wsManager.broadcast("workflow:failed", event);
   });
@@ -320,21 +361,38 @@ async function startServer(): Promise<void> {
     })
   );
 
+  // Create PostgreSQL session store to replace in-memory store
+  const PgSession = connectPgSimple(session);
+
   app.use(
     session({
-      secret: process.env.JWT_SECRET!,
+      store: new PgSession({
+        conObject: {
+          connectionString: process.env.DATABASE_URL,
+          ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+        },
+        tableName: 'user_sessions',
+        createTableIfMissing: true,
+        errorLog: (err: Error) => logger.error('Session store error:', { error: err.message })
+      }),
+      secret: process.env.SESSION_SECRET || process.env.JWT_SECRET!,
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === "production",
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 10 * 60 * 1000, // 10 minutes for OAuth flow
-      },
+        sameSite: 'lax'
+      }
     })
   );
+  logger.info('✅ PostgreSQL session store initialized (table: user_sessions)');
 
   // Initialize Passport
   app.use(passportConfig.initialize());
+
+  // Cookie parser middleware - required for httpOnly auth cookies
+  app.use(cookieParser());
 
   // Compression middleware - reduces payload size by 20-40%
   app.use(
@@ -350,9 +408,10 @@ async function startServer(): Promise<void> {
     })
   );
 
-  // HTTP request logging
+  // HTTP request logging with request ID for tracing
+  morgan.token('request-id', (req: express.Request) => req.requestId || '-');
   app.use(
-    morgan(":method :url :status :res[content-length] - :response-time ms", {
+    morgan(":method :url :status :res[content-length] - :response-time ms [:request-id]", {
       stream,
     })
   );
@@ -411,6 +470,7 @@ async function startServer(): Promise<void> {
       email: false,
     };
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const details: any = {
       storage: databaseStore?.isConnected() ? "drizzle" : "memory",
       queue: queueService ? "enabled" : "disabled",
@@ -492,12 +552,17 @@ async function startServer(): Promise<void> {
     });
   });
 
+  // CSRF token endpoint - public, returns token for state-changing requests
+  app.get("/csrf-token", csrfTokenHandler);
+  app.get("/api/csrf-token", csrfTokenHandler);
+
   // Public routes - OAuth and auth (MUST be before authMiddleware!)
+  // Apply auth rate limiter to prevent brute force attacks
   // Mount at BOTH /auth and /api/auth for maximum compatibility
-  app.use("/auth", oauthRoutes); // Direct /auth/google, /auth/github
-  app.use("/auth", authRoutes); // Direct /auth/login, /auth/signup
-  app.use("/api/auth", oauthRoutes); // Also at /api/auth/google
-  app.use("/api/auth", authRoutes); // Also at /api/auth/login
+  app.use("/auth", authRateLimiter, oauthRoutes); // Direct /auth/google, /auth/github
+  app.use("/auth", authRateLimiter, authRoutes); // Direct /auth/login, /auth/signup
+  app.use("/api/auth", authRateLimiter, oauthRoutes); // Also at /api/auth/google
+  app.use("/api/auth", authRateLimiter, authRoutes); // Also at /api/auth/login
 
   // Public ingestion endpoint - uses its own auth middleware
   // Must be before general authMiddleware
@@ -506,6 +571,10 @@ async function startServer(): Promise<void> {
   // Apply auth middleware to all OTHER /api routes
   // This will NOT affect routes already defined above
   app.use("/api", authMiddleware);
+
+  // Apply CSRF protection to state-changing API requests
+  // Exempts: webhooks, SDK ingestion, API-key authenticated requests
+  app.use("/api", csrfProtection);
 
   app.use((req, _res, next) => {
     req.runtime = runtime;
@@ -532,47 +601,12 @@ async function startServer(): Promise<void> {
   app.use("/api/onboarding", onboardingRoutes);
   app.use("/api/stripe", stripeRoutes); // Protected Stripe endpoints (checkout, portal)
   app.use("/api/user/api-keys", userApiKeysRoutes); // User API keys management
+  app.use("/api/optimization", optimizationRoutes); // Auto-optimization engine
+  app.use("/api/forecasting", forecastingRoutes); // Predictive cost forecasting
 
-  app.use(
-    (
-      err: Error,
-      _req: express.Request,
-      res: express.Response,
-      _next: express.NextFunction
-    ) => {
-      const isProduction = process.env["NODE_ENV"] === "production";
-
-      if (!isProduction) {
-        console.error("Error:", err);
-      } else {
-        console.error("Error:", err.message);
-      }
-
-      const isAethermindError = "code" in err && "suggestion" in err;
-
-      if (isAethermindError) {
-        const aethermindErr = err as {
-          code: string;
-          suggestion: string;
-          message: string;
-        };
-        res.status(500).json({
-          error: err.name || "AethermindError",
-          code: aethermindErr.code,
-          message: aethermindErr.message,
-          suggestion: aethermindErr.suggestion,
-        });
-      } else {
-        const errorMessage = isProduction
-          ? "An internal error occurred"
-          : err.message;
-        res.status(500).json({
-          error: "Internal Server Error",
-          message: errorMessage,
-        });
-      }
-    }
-  );
+  // Centralized error handling
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   const PORT = DEFAULT_PORT;
 
