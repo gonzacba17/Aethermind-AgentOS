@@ -1,26 +1,50 @@
 import type { TelemetryEvent, IngestionResponse } from './types.js';
 import { getConfig } from '../config/index.js';
 import { retryWithBackoff } from '../utils/retry.js';
+import { EventQueue } from '../queue/EventQueue.js';
+import type { EventQueueConfig, QueueStats } from '../queue/types.js';
+
+/**
+ * Batch transport configuration
+ */
+export interface BatchTransportConfig {
+  /** Enable Dead Letter Queue for failed events (default: true) */
+  enableDLQ: boolean;
+  /** DLQ configuration overrides */
+  dlqConfig?: Partial<EventQueueConfig>;
+  /** Callback when events are successfully sent */
+  onSuccess?: (count: number) => void;
+  /** Callback when events fail permanently */
+  onFailure?: (events: TelemetryEvent[], error: Error) => void;
+}
+
+const DEFAULT_TRANSPORT_CONFIG: BatchTransportConfig = {
+  enableDLQ: true,
+};
 
 /**
  * Batch transport for sending telemetry events to the ingestion API
- * 
+ *
  * Features:
  * - Buffers events up to configured batch size
  * - Auto-flushes on interval or when buffer is full
  * - Retry with exponential backoff
+ * - Dead Letter Queue for failed events (file persistence)
  * - Graceful shutdown (flushes pending events)
- * 
+ *
  * @example
  * ```typescript
- * const transport = new BatchTransport();
+ * const transport = new BatchTransport({
+ *   enableDLQ: true,
+ *   onSuccess: (count) => console.log(`Sent ${count} events`),
+ *   onFailure: (events, error) => console.error('Failed:', error)
+ * });
  * transport.start();
- * 
+ *
  * // Events are automatically batched and sent
  * transport.send(event1);
  * transport.send(event2);
- * // ...
- * 
+ *
  * // On app shutdown
  * await transport.stop();
  * ```
@@ -29,10 +53,16 @@ export class BatchTransport {
   private buffer: TelemetryEvent[] = [];
   private flushTimer: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private transportConfig: BatchTransportConfig;
+  private eventQueue: EventQueue | null = null;
+
+  constructor(config: Partial<BatchTransportConfig> = {}) {
+    this.transportConfig = { ...DEFAULT_TRANSPORT_CONFIG, ...config };
+  }
 
   /**
    * Start the transport
-   * Begins auto-flush timer
+   * Begins auto-flush timer and DLQ processing
    */
   start(): void {
     if (this.isRunning) {
@@ -41,17 +71,23 @@ export class BatchTransport {
     }
 
     this.isRunning = true;
-    this.scheduleFlush();
 
-    // Register shutdown handlers
+    // Initialize Dead Letter Queue if enabled
+    if (this.transportConfig.enableDLQ) {
+      this.initializeDLQ();
+    }
+
+    this.scheduleFlush();
     this.registerShutdownHandlers();
 
-    console.log('[Aethermind] BatchTransport started');
+    console.log('[Aethermind] BatchTransport started', {
+      dlqEnabled: this.transportConfig.enableDLQ,
+    });
   }
 
   /**
    * Stop the transport
-   * Flushes any pending events
+   * Flushes any pending events and stops DLQ processing
    */
   async stop(): Promise<void> {
     if (!this.isRunning) {
@@ -68,6 +104,11 @@ export class BatchTransport {
 
     // Flush remaining events
     await this.flush();
+
+    // Stop DLQ processing
+    if (this.eventQueue) {
+      await this.eventQueue.stopProcessing();
+    }
 
     console.log('[Aethermind] BatchTransport stopped');
   }
@@ -93,6 +134,22 @@ export class BatchTransport {
   }
 
   /**
+   * Get DLQ statistics
+   */
+  getQueueStats(): QueueStats | null {
+    return this.eventQueue?.getStats() ?? null;
+  }
+
+  /**
+   * Manually trigger DLQ processing
+   */
+  async processQueue(): Promise<void> {
+    if (this.eventQueue) {
+      await this.eventQueue.processQueue();
+    }
+  }
+
+  /**
    * Flush all buffered events to the API
    */
   private async flush(): Promise<void> {
@@ -107,9 +164,22 @@ export class BatchTransport {
     try {
       await this.sendBatch(eventsToSend);
       console.log(`[Aethermind] Flushed ${eventsToSend.length} events`);
+      this.transportConfig.onSuccess?.(eventsToSend.length);
     } catch (error) {
-      console.error('[Aethermind] Failed to flush events:', error);
-      // Events are lost on failure - could implement persistent queue in future
+      const err = error as Error;
+      console.error('[Aethermind] Failed to flush events:', err.message);
+
+      // Enqueue to DLQ for later retry
+      if (this.eventQueue) {
+        for (const event of eventsToSend) {
+          this.eventQueue.enqueue(event, err);
+        }
+        console.log(`[Aethermind] ${eventsToSend.length} events queued for retry`);
+      } else {
+        // No DLQ - events are lost
+        console.error(`[Aethermind] ${eventsToSend.length} events lost (DLQ disabled)`);
+        this.transportConfig.onFailure?.(eventsToSend, err);
+      }
     }
   }
 
@@ -146,6 +216,37 @@ export class BatchTransport {
       maxDelayMs: 10000,
       backoffMultiplier: 2,
     });
+  }
+
+  /**
+   * Initialize Dead Letter Queue
+   */
+  private initializeDLQ(): void {
+    this.eventQueue = new EventQueue(
+      async (events) => {
+        await this.sendBatch(events);
+      },
+      {
+        debug: process.env['AETHERMIND_DEBUG'] === 'true',
+        ...this.transportConfig.dlqConfig,
+      },
+      {
+        onEventProcessed: (event) => {
+          console.log('[Aethermind] Queued event sent successfully');
+          this.transportConfig.onSuccess?.(1);
+        },
+        onEventFailed: (entry, error) => {
+          console.error('[Aethermind] Event failed permanently after retries:', error.message);
+          this.transportConfig.onFailure?.([entry.event], error);
+        },
+        onQueueFull: (size) => {
+          console.warn(`[Aethermind] DLQ full (${size} events), dropping new events`);
+        },
+      }
+    );
+
+    // Start background processing of queued events
+    this.eventQueue.startProcessing();
   }
 
   /**
@@ -198,4 +299,11 @@ export function getTransport(): BatchTransport {
     globalTransport.start();
   }
   return globalTransport;
+}
+
+/**
+ * Create a custom transport with specific configuration
+ */
+export function createTransport(config?: Partial<BatchTransportConfig>): BatchTransport {
+  return new BatchTransport(config);
 }

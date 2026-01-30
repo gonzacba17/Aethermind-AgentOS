@@ -1,7 +1,8 @@
-import { db } from '../db';
+import { db, pool } from '../db';
 import { budgets } from '../db/schema';
 import type { Budget } from '../db/schema';
 import { eq, and, lt, sql } from 'drizzle-orm';
+import logger from '../utils/logger';
 
 export class BudgetService {
   /**
@@ -49,20 +50,92 @@ export class BudgetService {
   }
 
   /**
-   * Increment the current spend for a budget
+   * Increment the current spend for a budget using atomic SQL increment
+   * Uses a transaction with row lock to prevent race conditions
    */
   async incrementSpend(budgetId: string, amount: number): Promise<void> {
-    // Drizzle doesn't have increment, so we need to fetch and update
-    const [budget] = await db.select({ currentSpend: budgets.currentSpend })
-      .from(budgets)
-      .where(eq(budgets.id, budgetId))
-      .limit(1);
-    
-    if (budget) {
-      const newSpend = Number(budget.currentSpend) + amount;
-      await db.update(budgets)
-        .set({ currentSpend: newSpend.toString() })
-        .where(eq(budgets.id, budgetId));
+    // Use raw SQL with atomic increment to prevent race condition
+    // This is the ONLY safe way to do concurrent updates
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Use SELECT FOR UPDATE to lock the row during the transaction
+      const lockResult = await client.query(
+        'SELECT id FROM budgets WHERE id = $1 FOR UPDATE',
+        [budgetId]
+      );
+
+      if (lockResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        logger.warn('Budget not found for increment', { budgetId });
+        return;
+      }
+
+      // Atomic increment using SQL - no JavaScript calculation
+      await client.query(
+        `UPDATE budgets
+         SET current_spend = current_spend + $1,
+             updated_at = NOW()
+         WHERE id = $2`,
+        [amount.toString(), budgetId]
+      );
+
+      await client.query('COMMIT');
+      logger.debug('Budget spend incremented', { budgetId, amount });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('Failed to increment budget spend', {
+        budgetId,
+        amount,
+        error: (error as Error).message,
+      });
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Increment spend and check if budget exceeded (atomic operation)
+   * Returns the new spend amount and whether limit was exceeded
+   */
+  async incrementSpendAndCheck(
+    budgetId: string,
+    amount: number
+  ): Promise<{ newSpend: number; exceeded: boolean; limitAmount: number }> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Lock and update in one atomic operation
+      const result = await client.query(
+        `UPDATE budgets
+         SET current_spend = current_spend + $1,
+             updated_at = NOW()
+         WHERE id = $2
+         RETURNING current_spend, limit_amount, hard_limit`,
+        [amount.toString(), budgetId]
+      );
+
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error(`Budget ${budgetId} not found`);
+      }
+
+      const row = result.rows[0];
+      const newSpend = parseFloat(row.current_spend);
+      const limitAmount = parseFloat(row.limit_amount);
+      const exceeded = row.hard_limit && newSpend > limitAmount;
+
+      await client.query('COMMIT');
+
+      return { newSpend, exceeded, limitAmount };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 

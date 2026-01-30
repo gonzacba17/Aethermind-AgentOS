@@ -69,7 +69,10 @@
       "Bash(curl:*)",
       "Bash(cd:*)",
       "Bash(wc:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(xargs:*)",
+      "Bash(dir /b \"C:\\\\wamp64\\\\www\\\\Aethermind Agent os\\\\packages\\\\agent\\\\src\")",
+      "WebFetch(domain:aethermind-agentos-production.up.railway.app)"
     ],
     "deny": []
   }

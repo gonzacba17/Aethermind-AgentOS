@@ -1,7 +1,8 @@
-import { db } from '../db';
+import { db, pool } from '../db';
 import { budgets, users, alertLogs } from '../db/schema';
 import type { Budget, User } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import logger from '../utils/logger';
 
 export class AlertService {
   constructor(
@@ -30,24 +31,64 @@ export class AlertService {
 
   /**
    * Check a single budget and send alerts if needed
+   * Uses transaction to prevent duplicate alerts from race conditions
    */
   private async checkBudgetAlerts(budget: Budget & { user: User }): Promise<void> {
     const percentUsed = (Number(budget.currentSpend) / Number(budget.limitAmount)) * 100;
 
-    // 80% warning (or custom alertAt threshold)
-    if (percentUsed >= budget.alertAt && !budget.alert80Sent) {
-      await this.sendAlert(budget, 'warning', percentUsed);
-      await db.update(budgets)
-        .set({ alert80Sent: true })
-        .where(eq(budgets.id, budget.id));
-    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    // 100% critical
-    if (percentUsed >= 100 && !budget.alert100Sent) {
-      await this.sendAlert(budget, 'critical', percentUsed);
-      await db.update(budgets)
-        .set({ alert100Sent: true })
-        .where(eq(budgets.id, budget.id));
+      // Lock the budget row to prevent duplicate alerts
+      const result = await client.query(
+        'SELECT alert_80_sent, alert_100_sent FROM budgets WHERE id = $1 FOR UPDATE',
+        [budget.id]
+      );
+
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return;
+      }
+
+      const currentState = result.rows[0];
+
+      // 80% warning (or custom alertAt threshold)
+      if (percentUsed >= budget.alertAt && !currentState.alert_80_sent) {
+        await client.query(
+          'UPDATE budgets SET alert_80_sent = true, updated_at = NOW() WHERE id = $1',
+          [budget.id]
+        );
+        await client.query('COMMIT');
+
+        // Send alert outside transaction (non-critical, can fail independently)
+        await this.sendAlert(budget, 'warning', percentUsed);
+        return;
+      }
+
+      // 100% critical
+      if (percentUsed >= 100 && !currentState.alert_100_sent) {
+        await client.query(
+          'UPDATE budgets SET alert_100_sent = true, updated_at = NOW() WHERE id = $1',
+          [budget.id]
+        );
+        await client.query('COMMIT');
+
+        // Send alert outside transaction
+        await this.sendAlert(budget, 'critical', percentUsed);
+        return;
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      logger.error('Failed to check budget alerts', {
+        budgetId: budget.id,
+        error: (error as Error).message,
+      });
+      throw error;
+    } finally {
+      client.release();
     }
   }
 
