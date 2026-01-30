@@ -65,9 +65,13 @@ export function removeTemporaryUser(tempId: string): boolean {
  */
 export async function convertTemporaryUser(tempId: string): Promise<any | null> {
   const tempUser = temporaryUsersStore.get(tempId);
-  
+
   if (!tempUser) {
-    logger.warn('🔍 Temporary user not found for conversion', { tempId });
+    logger.warn('🔍 Temporary user not found in memory store for conversion', {
+      tempId,
+      storeSize: temporaryUsersStore.size,
+      note: 'User may have been created before server restart. Will attempt direct DB creation.'
+    });
     return null;
   }
 
@@ -140,24 +144,49 @@ export async function convertTemporaryUser(tempId: string): Promise<any | null> 
         : { githubId: tempUser.providerId }),
     };
 
-    const [newUser] = await db.insert(users)
-      .values(newUserData)
-      .returning();
+    try {
+      const [newUser] = await db.insert(users)
+        .values(newUserData)
+        .returning();
 
-    // Remove from temporary store
-    temporaryUsersStore.delete(tempId);
+      // Remove from temporary store
+      temporaryUsersStore.delete(tempId);
 
-    logger.info('✅ Temporary user converted to permanent successfully', {
-      oldTempId: tempId,
-      newPermanentId: newUser!.id,
-      email: newUser!.email,
-    });
+      logger.info('✅ Temporary user converted to permanent successfully', {
+        oldTempId: tempId,
+        newPermanentId: newUser!.id,
+        email: newUser!.email,
+      });
 
-    return newUser;
-  } catch (error) {
+      return newUser;
+    } catch (insertError: any) {
+      // Handle unique constraint violation - user might have been created by concurrent request
+      if (insertError.code === '23505' || insertError.message?.includes('unique') || insertError.message?.includes('duplicate')) {
+        logger.info('Race condition: user created by concurrent request, fetching existing user', {
+          email: tempUser.email
+        });
+
+        const [existingUser] = await db.select()
+          .from(users)
+          .where(eq(users.email, tempUser.email))
+          .limit(1);
+
+        if (existingUser) {
+          temporaryUsersStore.delete(tempId);
+          logger.info('✅ Found existing user after unique constraint error', { userId: existingUser.id });
+          return existingUser;
+        }
+      }
+      throw insertError; // Re-throw to be caught by outer catch
+    }
+  } catch (error: any) {
     logger.error('❌ Failed to convert temporary user', {
       tempId,
-      error: (error as Error).message,
+      error: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n'),
     });
     return null;
   }

@@ -556,6 +556,145 @@ async function startServer(): Promise<void> {
   app.get("/csrf-token", csrfTokenHandler);
   app.get("/api/csrf-token", csrfTokenHandler);
 
+  // Detailed database diagnostics endpoint
+  app.get("/health/db", async (req, res) => {
+    const diagnostics: {
+      connection: { status: string; latencyMs?: number; error?: string };
+      tables: { name: string; exists: boolean; rowCount?: number; error?: string }[];
+      schema: { column: string; type: string; nullable: boolean }[];
+      testQuery: { success: boolean; error?: string; userCount?: number };
+      userLookup?: { found: boolean; userId?: string; email?: string; error?: string };
+    } = {
+      connection: { status: 'unknown' },
+      tables: [],
+      schema: [],
+      testQuery: { success: false },
+    };
+
+    try {
+      // 1. Test basic connection
+      const startTime = Date.now();
+      const { pool } = await import('./db');
+      await pool.query('SELECT 1');
+      diagnostics.connection = {
+        status: 'connected',
+        latencyMs: Date.now() - startTime,
+      };
+
+      // 2. Check if users table exists and get row count
+      try {
+        const tableCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name = 'users'
+          ) as exists
+        `);
+        const usersTableExists = tableCheck.rows[0]?.exists;
+
+        if (usersTableExists) {
+          const countResult = await pool.query('SELECT COUNT(*) as count FROM users');
+          diagnostics.tables.push({
+            name: 'users',
+            exists: true,
+            rowCount: parseInt(countResult.rows[0]?.count || '0', 10),
+          });
+        } else {
+          diagnostics.tables.push({
+            name: 'users',
+            exists: false,
+            error: 'Table does not exist',
+          });
+        }
+      } catch (tableError: any) {
+        diagnostics.tables.push({
+          name: 'users',
+          exists: false,
+          error: tableError.message,
+        });
+      }
+
+      // 3. Get users table schema
+      try {
+        const schemaResult = await pool.query(`
+          SELECT column_name, data_type, is_nullable
+          FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'users'
+          ORDER BY ordinal_position
+        `);
+        diagnostics.schema = schemaResult.rows.map((row: any) => ({
+          column: row.column_name,
+          type: row.data_type,
+          nullable: row.is_nullable === 'YES',
+        }));
+      } catch (schemaError: any) {
+        diagnostics.schema = [];
+      }
+
+      // 4. Test user query
+      try {
+        const userResult = await pool.query('SELECT COUNT(*) as count FROM users');
+        diagnostics.testQuery = {
+          success: true,
+          userCount: parseInt(userResult.rows[0]?.count || '0', 10),
+        };
+      } catch (queryError: any) {
+        diagnostics.testQuery = {
+          success: false,
+          error: queryError.message,
+        };
+      }
+
+      // 5. Optional: Look up specific email if provided (for debugging)
+      const emailToCheck = req.query.email as string;
+      if (emailToCheck) {
+        try {
+          const userLookup = await pool.query(
+            'SELECT id, email FROM users WHERE email = $1 LIMIT 1',
+            [emailToCheck]
+          );
+          if (userLookup.rows.length > 0) {
+            diagnostics.userLookup = {
+              found: true,
+              userId: userLookup.rows[0].id,
+              email: userLookup.rows[0].email,
+            };
+          } else {
+            diagnostics.userLookup = {
+              found: false,
+            };
+          }
+        } catch (lookupError: any) {
+          diagnostics.userLookup = {
+            found: false,
+            error: lookupError.message,
+          };
+        }
+      }
+
+      res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        diagnostics,
+      });
+    } catch (error: any) {
+      diagnostics.connection = {
+        status: 'error',
+        error: error.message,
+      };
+
+      res.status(500).json({
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        diagnostics,
+        error: {
+          message: error.message,
+          code: error.code,
+        },
+      });
+    }
+  });
+
   // Public routes - OAuth and auth (MUST be before authMiddleware!)
   // Apply auth rate limiter to prevent brute force attacks
   // Mount at BOTH /auth and /api/auth for maximum compatibility

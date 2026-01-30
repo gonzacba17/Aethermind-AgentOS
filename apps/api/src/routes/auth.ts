@@ -601,15 +601,16 @@ router.get('/me', async (req: Request, res: Response) => {
       
       // First, try to find if this user already exists in DB by email
       if (emailFromToken) {
+        logger.info('Looking up existing user by email', { email: emailFromToken });
         try {
           const [existingUser] = await db.select()
             .from(users)
             .where(eq(users.email, emailFromToken))
             .limit(1);
-          
+
           if (existingUser) {
-            logger.info('User already exists in DB with this email', { userId: existingUser.id });
-            
+            logger.info('User already exists in DB with this email', { userId: existingUser.id, email: emailFromToken });
+
             // Generate new JWT token with permanent user ID
             const newToken = jwt.sign(
               {
@@ -621,10 +622,10 @@ router.get('/me', async (req: Request, res: Response) => {
               JWT_SECRET,
               { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
             );
-            
+
             // Remove from temporary store if exists
             removeTemporaryUser(userId);
-            
+
             return res.json({
               id: existingUser.id,
               email: existingUser.email,
@@ -645,9 +646,16 @@ router.get('/me', async (req: Request, res: Response) => {
               },
               createdAt: existingUser.createdAt,
             });
+          } else {
+            logger.info('No existing user found with this email', { email: emailFromToken });
           }
-        } catch (dbError) {
-          logger.error('DB lookup failed', { error: (dbError as Error).message });
+        } catch (dbError: any) {
+          logger.error('DB lookup failed', {
+            error: dbError.message,
+            code: dbError.code,
+            detail: dbError.detail,
+            email: emailFromToken
+          });
         }
       }
       
@@ -763,8 +771,71 @@ router.get('/me', async (req: Request, res: Response) => {
             },
             createdAt: newUser.createdAt,
           });
-        } catch (createError) {
-          logger.error('Failed to create permanent user from JWT', { error: (createError as Error).message });
+        } catch (createError: any) {
+          // Log full error details for debugging
+          logger.error('Failed to create permanent user from JWT', {
+            error: createError.message,
+            code: createError.code,
+            detail: createError.detail,
+            constraint: createError.constraint,
+            email: emailFromToken,
+          });
+
+          // If it's a unique constraint violation, try to find the existing user
+          if (createError.code === '23505' || createError.message?.includes('unique') || createError.message?.includes('duplicate')) {
+            logger.info('Unique constraint violation - attempting to find existing user', { email: emailFromToken });
+            try {
+              const [existingUser] = await db.select()
+                .from(users)
+                .where(eq(users.email, emailFromToken))
+                .limit(1);
+
+              if (existingUser) {
+                logger.info('Found existing user after unique constraint error', { userId: existingUser.id });
+
+                // Generate new token with permanent user ID
+                const newToken = jwt.sign(
+                  {
+                    userId: existingUser.id,
+                    id: existingUser.id,
+                    email: existingUser.email,
+                    plan: existingUser.plan,
+                  },
+                  JWT_SECRET,
+                  { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
+                );
+
+                // Remove from temporary store if exists
+                removeTemporaryUser(userId);
+
+                return res.json({
+                  id: existingUser.id,
+                  email: existingUser.email,
+                  name: existingUser.name,
+                  plan: existingUser.plan,
+                  usageCount: existingUser.usageCount,
+                  usageLimit: existingUser.usageLimit,
+                  emailVerified: existingUser.emailVerified,
+                  hasCompletedOnboarding: existingUser.hasCompletedOnboarding,
+                  isTemporaryUser: false,
+                  wasConverted: true,
+                  newToken,
+                  subscription: {
+                    status: existingUser.subscriptionStatus || 'free',
+                    plan: existingUser.plan || 'free',
+                    isTrialActive: false,
+                    daysLeftInTrial: 0,
+                  },
+                  createdAt: existingUser.createdAt,
+                });
+              }
+            } catch (lookupError) {
+              logger.error('Failed to lookup user after unique constraint error', {
+                error: (lookupError as Error).message,
+                email: emailFromToken
+              });
+            }
+          }
         }
       }
       
