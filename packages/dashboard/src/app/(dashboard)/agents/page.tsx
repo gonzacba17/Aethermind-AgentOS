@@ -14,7 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
-import { useAgents, useCreateAgent, useDeleteAgent, useMetrics } from "@/hooks"
+import { useAgents, useCreateAgent, useDeleteAgent, useUpdateAgent, useMetrics } from "@/hooks"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Agent } from "@/lib/api"
@@ -66,11 +66,14 @@ export default function AgentsPage() {
   
   // Dialog states
   const [isNewAgentOpen, setIsNewAgentOpen] = useState(false)
+  const [isEditAgentOpen, setIsEditAgentOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null)
+  const [agentToEdit, setAgentToEdit] = useState<Agent | null>(null)
   
   // Form state
   const [formData, setFormData] = useState<CreateAgentFormData>(defaultFormData)
+  const [editFormData, setEditFormData] = useState<CreateAgentFormData>(defaultFormData)
   
   // Data fetching
   const { data, isLoading, error, refetch } = useAgents({
@@ -81,6 +84,7 @@ export default function AgentsPage() {
   const { data: metrics } = useMetrics()
   const createAgent = useCreateAgent()
   const deleteAgent = useDeleteAgent()
+  const updateAgent = useUpdateAgent()
   
   const agents = data?.data || []
   const totalAgents = data?.total || agents.length
@@ -187,6 +191,58 @@ export default function AgentsPage() {
   const confirmDelete = (agent: Agent) => {
     setAgentToDelete(agent)
     setIsDeleteDialogOpen(true)
+  }
+
+  const openEditDialog = (agent: Agent) => {
+    setAgentToEdit(agent)
+    setEditFormData({
+      name: agent.name,
+      model: agent.model,
+      systemPrompt: agent.config?.systemPrompt || "",
+      maxTokens: agent.config?.maxTokens || 4096,
+      temperature: agent.config?.temperature || 0.7,
+    })
+    setIsEditAgentOpen(true)
+  }
+
+  const handleUpdateAgent = async () => {
+    if (!agentToEdit) return
+
+    if (!editFormData.name.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Agent name is required",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await updateAgent.mutateAsync({
+        id: agentToEdit.id,
+        data: {
+          name: editFormData.name,
+          model: editFormData.model,
+          systemPrompt: editFormData.systemPrompt,
+          maxTokens: editFormData.maxTokens,
+          temperature: editFormData.temperature,
+        },
+      })
+
+      setIsEditAgentOpen(false)
+      setAgentToEdit(null)
+      setEditFormData(defaultFormData)
+      toast({
+        title: "Agent Updated",
+        description: `${editFormData.name} has been updated successfully.`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error Updating Agent",
+        description: error instanceof Error ? error.message : "Failed to update agent",
+        variant: "destructive",
+      })
+    }
   }
 
   // Loading state
@@ -455,9 +511,9 @@ export default function AgentsPage() {
                           <Activity className="h-4 w-4 mr-2" />
                           View Logs
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e) => { 
-                          e.stopPropagation(); 
-                          toast({ title: "Coming Soon", description: "Edit functionality will be available soon" }); 
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          openEditDialog(agent);
                         }}>
                           <Settings className="h-4 w-4 mr-2" />
                           Edit Configuration
@@ -558,6 +614,95 @@ export default function AgentsPage() {
             <Button onClick={handleCreateAgent} disabled={createAgent.isPending}>
               {createAgent.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Agent
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Agent Dialog */}
+      <Dialog open={isEditAgentOpen} onOpenChange={(open) => {
+        setIsEditAgentOpen(open)
+        if (!open) {
+          setAgentToEdit(null)
+          setEditFormData(defaultFormData)
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Agent</DialogTitle>
+            <DialogDescription>
+              Update the configuration for {agentToEdit?.name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="editName">Agent Name *</Label>
+              <Input
+                id="editName"
+                placeholder="e.g., Customer Support Agent"
+                value={editFormData.name}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editModel">Model</Label>
+              <Select
+                value={editFormData.model}
+                onValueChange={(value) => setEditFormData(prev => ({ ...prev, model: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AVAILABLE_MODELS.map(model => (
+                    <SelectItem key={model.value} value={model.value}>
+                      {model.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editSystemPrompt">System Prompt</Label>
+              <Textarea
+                id="editSystemPrompt"
+                className="h-24 resize-none"
+                placeholder="Describe the agent's role and behavior..."
+                value={editFormData.systemPrompt}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, systemPrompt: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="editMaxTokens">Max Tokens</Label>
+                <Input
+                  id="editMaxTokens"
+                  type="number"
+                  value={editFormData.maxTokens}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, maxTokens: parseInt(e.target.value) || 4096 }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="editTemperature">Temperature</Label>
+                <Input
+                  id="editTemperature"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="2"
+                  value={editFormData.temperature}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) || 0.7 }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditAgentOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateAgent} disabled={updateAgent.isPending}>
+              {updateAgent.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -53,7 +53,6 @@ const settingsItems = [
     href: "/settings/appearance",
     color: "text-emerald-500",
     bg: "bg-emerald-500/10",
-    disabled: true,
   },
   {
     title: "Billing",
@@ -62,7 +61,6 @@ const settingsItems = [
     href: "/settings/billing",
     color: "text-orange-500",
     bg: "bg-orange-500/10",
-    disabled: true,
   },
 ]
 

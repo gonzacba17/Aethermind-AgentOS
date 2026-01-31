@@ -230,6 +230,87 @@ export function useDeleteBudget() {
 }
 
 /**
+ * Hook to fetch a single budget by ID
+ */
+export function useBudgetDetail(
+  id: string,
+  options?: Omit<UseQueryOptions<Budget | null>, 'queryKey' | 'queryFn'>
+) {
+  return useQuery({
+    queryKey: budgetKeys.detail(id),
+    queryFn: async (): Promise<Budget | null> => {
+      if (!id) return null;
+
+      const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error('Failed to fetch budget');
+      }
+
+      return response.json();
+    },
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
+    ...options,
+  });
+}
+
+/**
+ * Hook to fetch budget usage (current spend vs limit)
+ */
+export function useBudgetUsage(budgetId: string) {
+  return useQuery({
+    queryKey: [...budgetKeys.detail(budgetId), 'usage'] as const,
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE}/api/budgets/${budgetId}/usage`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch budget usage');
+      }
+
+      return response.json();
+    },
+    enabled: !!budgetId,
+    staleTime: 60 * 1000, // 1 minute
+    refetchInterval: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+/**
+ * Hook to pause/resume a budget
+ */
+export function usePauseBudget() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, paused }: { id: string; paused: boolean }): Promise<Budget> => {
+      const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: paused ? 'paused' : 'active' }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update budget status');
+      }
+
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: budgetKeys.detail(variables.id) });
+      queryClient.invalidateQueries({ queryKey: budgetKeys.list() });
+    },
+  });
+}
+
+/**
  * Budget progress component helper
  * Returns color and status based on budget usage
  */

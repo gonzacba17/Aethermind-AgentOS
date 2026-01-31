@@ -25,16 +25,58 @@ export {
 } from './api/useCosts';
 export type { CostFilters, DailyCost, CostByModel, CostPrediction } from './api/useCosts';
 
-export { 
-  useBudget, 
-  useBudgets, 
-  useCreateBudget, 
-  useUpdateBudget, 
+export {
+  useBudget,
+  useBudgets,
+  useBudgetDetail,
+  useBudgetUsage,
+  usePauseBudget,
+  useCreateBudget,
+  useUpdateBudget,
   useDeleteBudget,
   getBudgetProgressInfo,
-  budgetKeys 
+  budgetKeys
 } from './api/useBudget';
 export type { Budget, BudgetStatus, CreateBudgetData } from './api/useBudget';
+
+// Workflows Hook
+export {
+  useWorkflows,
+  useWorkflow,
+  useCreateWorkflow,
+  useUpdateWorkflow,
+  useDeleteWorkflow,
+  useEstimateWorkflow,
+  useExecuteWorkflow,
+  workflowKeys
+} from './api/useWorkflows';
+export type { Workflow, WorkflowStep, CreateWorkflowData, WorkflowEstimate, WorkflowExecution } from './api/useWorkflows';
+
+// Forecasting Hook
+export {
+  useForecast,
+  usePatterns,
+  useAnomalies,
+  useForecastingAlerts,
+  useSeasonalPatterns,
+  useAcknowledgeAlert,
+  useBudgetProjection,
+  forecastingKeys
+} from './api/useForecasting';
+export type { Forecast, ForecastPeriod, Anomaly, Pattern, PredictiveAlert, SeasonalPattern } from './api/useForecasting';
+
+// Optimization Hook
+export {
+  useOptimizationReport,
+  useAvailableModels,
+  useRoutingRules,
+  useEstimateCost,
+  useFindAlternatives,
+  useAddRoutingRule,
+  useDeleteRoutingRule,
+  optimizationKeys
+} from './api/useOptimization';
+export type { OptimizationReport, OptimizationRecommendation, ModelInfo, ModelAlternative, RoutingRule, CostEstimate } from './api/useOptimization';
 
 export { useMetrics, useTraceTimeSeries, metricsKeys } from './api/useMetrics';
 export type { DashboardMetrics } from './api/useMetrics';

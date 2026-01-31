@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Key, Plus, Eye, EyeOff, Copy, Trash2, MoreVertical, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react"
+import { Key, Plus, Eye, EyeOff, Copy, Trash2, MoreVertical, AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,67 +11,41 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
-
-interface ApiKey {
-  id: string;
-  name: string;
-  provider: 'openai' | 'anthropic' | 'cohere' | 'custom';
-  maskedKey: string;
-  status: 'active' | 'expired' | 'invalid';
-  createdAt: string;
-  lastUsed?: string;
-  usageCount: number;
-}
+import { useUserApiKeys, useAddApiKey, useDeleteApiKey, useValidateApiKey, type UserApiKey, type AddApiKeyData } from "@/hooks/api/useUserApiKeys"
 
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI', prefix: 'sk-' },
   { value: 'anthropic', label: 'Anthropic', prefix: 'sk-ant-' },
   { value: 'cohere', label: 'Cohere', prefix: '' },
+  { value: 'google', label: 'Google AI', prefix: '' },
+  { value: 'azure', label: 'Azure OpenAI', prefix: '' },
   { value: 'custom', label: 'Custom', prefix: '' },
-]
-
-// Mock data
-const MOCK_KEYS: ApiKey[] = [
-  {
-    id: '1',
-    name: 'Production OpenAI',
-    provider: 'openai',
-    maskedKey: 'sk-***************abcd',
-    status: 'active',
-    createdAt: new Date().toISOString(),
-    lastUsed: new Date().toISOString(),
-    usageCount: 15420,
-  },
-  {
-    id: '2',
-    name: 'Development Anthropic',
-    provider: 'anthropic',
-    maskedKey: 'sk-ant-***************efgh',
-    status: 'active',
-    createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-    lastUsed: new Date(Date.now() - 3600000).toISOString(),
-    usageCount: 3250,
-  },
-]
+] as const
 
 export default function ApiKeysPage() {
   const { toast } = useToast()
-  
-  // State
-  const [keys, setKeys] = useState<ApiKey[]>(MOCK_KEYS)
+
+  // API hooks
+  const { data: keys = [], isLoading, error, refetch } = useUserApiKeys()
+  const addApiKey = useAddApiKey()
+  const deleteApiKey = useDeleteApiKey()
+  const validateApiKey = useValidateApiKey()
+
+  // UI State
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
-  const [keyToDelete, setKeyToDelete] = useState<ApiKey | null>(null)
-  const [isAdding, setIsAdding] = useState(false)
+  const [keyToDelete, setKeyToDelete] = useState<UserApiKey | null>(null)
   const [showKey, setShowKey] = useState<Record<string, boolean>>({})
-  
-  const [newKey, setNewKey] = useState({
+  const [validatingKey, setValidatingKey] = useState<string | null>(null)
+
+  const [newKey, setNewKey] = useState<AddApiKeyData>({
     name: '',
     provider: 'openai',
     apiKey: '',
   })
-  
+
   // Handlers
   const handleAdd = async () => {
     if (!newKey.name.trim() || !newKey.apiKey.trim()) {
@@ -82,46 +56,29 @@ export default function ApiKeysPage() {
       })
       return
     }
-    
-    setIsAdding(true)
+
     try {
-      // TODO: Call API to add key
-      await new Promise(r => setTimeout(r, 1000))
-      
-      const key: ApiKey = {
-        id: Date.now().toString(),
-        name: newKey.name,
-        provider: newKey.provider as any,
-        maskedKey: newKey.apiKey.slice(0, 5) + '***************' + newKey.apiKey.slice(-4),
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        usageCount: 0,
-      }
-      
-      setKeys(prev => [...prev, key])
+      await addApiKey.mutateAsync(newKey)
       setIsAddOpen(false)
       setNewKey({ name: '', provider: 'openai', apiKey: '' })
       toast({
         title: "API Key Added",
-        description: `${newKey.name} has been added successfully`,
+        description: `${newKey.name} has been added and validated successfully`,
       })
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to add API key",
+        description: error instanceof Error ? error.message : "Failed to add API key",
         variant: "destructive",
       })
-    } finally {
-      setIsAdding(false)
     }
   }
-  
+
   const handleDelete = async () => {
     if (!keyToDelete) return
-    
+
     try {
-      await new Promise(r => setTimeout(r, 500))
-      setKeys(prev => prev.filter(k => k.id !== keyToDelete.id))
+      await deleteApiKey.mutateAsync(keyToDelete.id)
       setIsDeleteOpen(false)
       setKeyToDelete(null)
       toast({
@@ -131,36 +88,111 @@ export default function ApiKeysPage() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to delete API key",
+        description: error instanceof Error ? error.message : "Failed to delete API key",
         variant: "destructive",
       })
     }
   }
-  
-  const confirmDelete = (key: ApiKey) => {
+
+  const handleValidate = async (key: UserApiKey) => {
+    setValidatingKey(key.id)
+    try {
+      const result = await validateApiKey.mutateAsync(key.id)
+      toast({
+        title: result.valid ? "Key Valid" : "Key Invalid",
+        description: result.valid
+          ? `${key.name} is valid and working`
+          : result.error || "The API key could not be validated",
+        variant: result.valid ? "default" : "destructive",
+      })
+    } catch (error) {
+      toast({
+        title: "Validation Error",
+        description: error instanceof Error ? error.message : "Failed to validate key",
+        variant: "destructive",
+      })
+    } finally {
+      setValidatingKey(null)
+    }
+  }
+
+  const confirmDelete = (key: UserApiKey) => {
     setKeyToDelete(key)
     setIsDeleteOpen(true)
   }
-  
-  const copyKey = (key: ApiKey) => {
+
+  const copyKey = (key: UserApiKey) => {
     navigator.clipboard.writeText(key.maskedKey)
     toast({
       title: "Copied",
-      description: "API key copied to clipboard (note: only masked version is copied for security)",
+      description: "Masked key copied to clipboard (full key is not accessible for security)",
     })
   }
-  
+
   const toggleShowKey = (id: string) => {
     setShowKey(prev => ({ ...prev, [id]: !prev[id] }))
   }
-  
-  const getStatusColor = (status: ApiKey['status']) => {
-    switch (status) {
-      case 'active': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-      case 'expired': return 'bg-amber-500/10 text-amber-500 border-amber-500/20'
-      case 'invalid': return 'bg-red-500/10 text-red-500 border-red-500/20'
-      default: return ''
+
+  const getStatusBadge = (key: UserApiKey) => {
+    if (key.isValid) {
+      return (
+        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+          <CheckCircle2 className="h-3 w-3 mr-1" />
+          Valid
+        </Badge>
+      )
     }
+    return (
+      <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">
+        Invalid
+      </Badge>
+    )
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-12 w-12 rounded-xl" />
+            <div>
+              <Skeleton className="h-6 w-32" />
+              <Skeleton className="h-4 w-48 mt-1" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <Skeleton className="h-24" />
+        <Skeleton className="h-64" />
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-violet-500/10">
+            <Key className="h-6 w-6 text-violet-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">API Keys</h1>
+            <p className="text-muted-foreground">Manage your AI provider API keys</p>
+          </div>
+        </div>
+        <Card className="border-destructive/50">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="text-destructive mb-4">Failed to load API keys</div>
+            <Button onClick={() => refetch()} variant="outline" className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -176,10 +208,16 @@ export default function ApiKeysPage() {
             <p className="text-muted-foreground">Manage your AI provider API keys</p>
           </div>
         </div>
-        <Button className="gap-2" onClick={() => setIsAddOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Add API Key
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => refetch()} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button className="gap-2" onClick={() => setIsAddOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Add API Key
+          </Button>
+        </div>
       </div>
 
       {/* Security Notice */}
@@ -191,8 +229,8 @@ export default function ApiKeysPage() {
           <div>
             <h4 className="font-medium text-amber-500">Security Notice</h4>
             <p className="text-sm text-muted-foreground mt-1">
-              API keys are encrypted at rest and only the last 4 characters are visible. 
-              Never share your full API keys with anyone.
+              API keys are encrypted at rest using AES-256-CBC and only the last 4 characters are visible.
+              Keys are validated with the provider before being stored.
             </p>
           </div>
         </CardContent>
@@ -234,9 +272,7 @@ export default function ApiKeysPage() {
                         <Badge variant="outline" className="text-xs capitalize">
                           {key.provider}
                         </Badge>
-                        <Badge variant="outline" className={`text-xs ${getStatusColor(key.status)}`}>
-                          {key.status}
-                        </Badge>
+                        {getStatusBadge(key)}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <code className="text-sm text-muted-foreground font-mono">
@@ -263,13 +299,14 @@ export default function ApiKeysPage() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right hidden sm:block">
-                      <p className="text-sm font-medium">{key.usageCount.toLocaleString()} calls</p>
-                      <p className="text-xs text-muted-foreground">
-                        {key.lastUsed 
-                          ? `Last used ${new Date(key.lastUsed).toLocaleDateString()}`
-                          : 'Never used'
-                        }
+                      <p className="text-sm text-muted-foreground">
+                        Created {new Date(key.createdAt).toLocaleDateString()}
                       </p>
+                      {key.lastValidated && (
+                        <p className="text-xs text-muted-foreground">
+                          Validated {new Date(key.lastValidated).toLocaleDateString()}
+                        </p>
+                      )}
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -278,14 +315,19 @@ export default function ApiKeysPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Edit functionality will be available soon" })}>
-                          Edit Name
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toast({ title: "Coming Soon", description: "Key rotation will be available soon" })}>
-                          Rotate Key
+                        <DropdownMenuItem
+                          onClick={() => handleValidate(key)}
+                          disabled={validatingKey === key.id}
+                        >
+                          {validatingKey === key.id ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <ShieldCheck className="h-4 w-4 mr-2" />
+                          )}
+                          Validate Key
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           className="text-red-500 focus:text-red-500"
                           onClick={() => confirmDelete(key)}
                         >
@@ -308,25 +350,25 @@ export default function ApiKeysPage() {
           <DialogHeader>
             <DialogTitle>Add API Key</DialogTitle>
             <DialogDescription>
-              Add a new API key to use with your agents
+              Add a new API key to use with your agents. The key will be validated with the provider before being stored.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="keyName">Key Name</Label>
-              <Input 
+              <Label htmlFor="keyName">Key Name *</Label>
+              <Input
                 id="keyName"
                 placeholder="e.g., Production OpenAI"
                 value={newKey.name}
                 onChange={(e) => setNewKey(prev => ({ ...prev, name: e.target.value }))}
               />
             </div>
-            
+
             <div className="space-y-2">
-              <Label>Provider</Label>
-              <Select 
-                value={newKey.provider} 
-                onValueChange={(value) => setNewKey(prev => ({ ...prev, provider: value }))}
+              <Label>Provider *</Label>
+              <Select
+                value={newKey.provider}
+                onValueChange={(value) => setNewKey(prev => ({ ...prev, provider: value as AddApiKeyData['provider'] }))}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -340,18 +382,18 @@ export default function ApiKeysPage() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key</Label>
-              <Input 
+              <Label htmlFor="apiKey">API Key *</Label>
+              <Input
                 id="apiKey"
                 type="password"
-                placeholder="sk-..."
+                placeholder={PROVIDERS.find(p => p.value === newKey.provider)?.prefix || 'Enter your API key'}
                 value={newKey.apiKey}
                 onChange={(e) => setNewKey(prev => ({ ...prev, apiKey: e.target.value }))}
               />
               <p className="text-xs text-muted-foreground">
-                Your API key is encrypted and stored securely
+                Your API key will be encrypted with AES-256-CBC and validated before storage
               </p>
             </div>
           </div>
@@ -359,8 +401,8 @@ export default function ApiKeysPage() {
             <Button variant="outline" onClick={() => setIsAddOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleAdd} disabled={isAdding}>
-              {isAdding && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            <Button onClick={handleAdd} disabled={addApiKey.isPending}>
+              {addApiKey.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Add Key
             </Button>
           </DialogFooter>
@@ -373,7 +415,7 @@ export default function ApiKeysPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete API Key</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{keyToDelete?.name}"? 
+              Are you sure you want to delete "{keyToDelete?.name}"?
               This will revoke access for any agents using this key.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -381,10 +423,12 @@ export default function ApiKeysPage() {
             <AlertDialogCancel onClick={() => setKeyToDelete(null)}>
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteApiKey.isPending}
             >
+              {deleteApiKey.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
