@@ -4,6 +4,7 @@ import { Home, ArrowRight, Bot, GitBranch, FileText, DollarSign, BarChart3 } fro
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { SDKConnectCard } from "@/components/dashboard/SDKConnectCard"
 
 const quickLinks = [
   {
@@ -51,6 +52,9 @@ const quickLinks = [
 export default function HomePage() {
   return (
     <div className="space-y-8">
+      {/* SDK Connection Card - Prominent and Required */}
+      <SDKConnectCard />
+
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-border p-8">
         <div className="absolute inset-0 bg-grid-pattern opacity-5" />
@@ -64,7 +68,7 @@ export default function HomePage() {
             </h1>
           </div>
           <p className="text-muted-foreground text-lg max-w-2xl">
-            Your central hub for managing, monitoring, and optimizing AI agents. 
+            Your central hub for managing, monitoring, and optimizing AI agents.
             Get started by exploring the sections below or dive into the dashboard for real-time insights.
           </p>
           <div className="mt-6 flex gap-4">

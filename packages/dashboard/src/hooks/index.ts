@@ -116,3 +116,24 @@ export {
   organizationKeys
 } from './api/useOrganization';
 export type { Organization, OrganizationMember, Invitation, CreateOrganizationData, InviteMemberData } from './api/useOrganization';
+
+// User Profile Hook
+export {
+  useUserProfile,
+  useTestSDKConnection,
+  useRegenerateApiKey,
+  userProfileKeys
+} from './api/useUserProfile';
+export type { UserProfile, SDKConnectionStatus } from './api/useUserProfile';
+
+// User API Keys Hook
+export {
+  useUserApiKeys,
+  useAddApiKey,
+  useDeleteApiKey,
+  useValidateApiKey,
+  useProviderUsage,
+  getProviderInfo,
+  userApiKeyKeys
+} from './api/useUserApiKeys';
+export type { UserApiKey, AddApiKeyData } from './api/useUserApiKeys';
