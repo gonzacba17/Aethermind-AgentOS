@@ -241,27 +241,7 @@ router.post('/logout', (req: Request, res: Response) => {
   res.status(200).json({ message: 'Logged out successfully' });
 });
 
-/**
- * Check auth status - returns current user from cookie
- * GET /api/auth/me
- */
-router.get('/me', (req: Request, res: Response) => {
-  // This endpoint is protected by authMiddleware which attaches user to req
-  const user = (req as any).user;
-
-  if (!user) {
-    res.status(401).json({ error: 'Not authenticated' });
-    return;
-  }
-
-  res.json({
-    id: user.id,
-    email: user.email,
-    plan: user.plan,
-    usageCount: user.usageCount,
-    usageLimit: user.usageLimit,
-  });
-});
+// Note: /me endpoint is handled by auth.ts which provides complete user data including apiKey
 
 export { AUTH_COOKIE_NAME };
 export default router;

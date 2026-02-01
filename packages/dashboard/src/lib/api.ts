@@ -63,6 +63,7 @@ async function refreshToken(): Promise<string | null> {
       
       const response = await fetch(`${API_BASE}/api/auth/refresh`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${currentToken}`,
@@ -130,6 +131,7 @@ async function handleApiError(response: Response, endpoint: string): Promise<nev
 
 /**
  * Make an API request with automatic retry and token refresh
+ * Includes credentials for cookie-based auth (OAuth)
  */
 async function apiRequest<T>(
   endpoint: string,
@@ -137,11 +139,12 @@ async function apiRequest<T>(
   retries: number = DEFAULT_RETRIES
 ): Promise<T> {
   let lastError: Error | null = null;
-  
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
+        credentials: 'include', // Send cookies for OAuth auth
         headers: getHeaders(options.headers as Record<string, string>),
       });
       
@@ -152,6 +155,7 @@ async function apiRequest<T>(
           // Retry with new token
           const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
             ...options,
+            credentials: 'include',
             headers: {
               ...getHeaders(options.headers as Record<string, string>),
               'Authorization': `Bearer ${newToken}`,
@@ -306,6 +310,7 @@ export interface CostInfo {
 
 export async function fetchAgents(): Promise<Agent[]> {
   const res = await fetch(`${API_BASE}/api/agents`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/agents');
@@ -314,6 +319,7 @@ export async function fetchAgents(): Promise<Agent[]> {
 
 export async function fetchAgent(id: string): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents/${id}`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, `/api/agents/${id}`);
@@ -332,6 +338,7 @@ export async function createAgent(data: {
 }): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents`, {
     method: 'POST',
+    credentials: 'include',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data),
   });
@@ -345,6 +352,7 @@ export async function executeAgent(
 ): Promise<ExecutionResult> {
   const res = await fetch(`${API_BASE}/api/agents/${id}/execute`, {
     method: 'POST',
+    credentials: 'include',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
@@ -367,6 +375,7 @@ export async function fetchLogs(params?: {
   if (params?.offset) searchParams.set('offset', String(params.offset));
 
   const res = await fetch(`${API_BASE}/api/logs?${searchParams}`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/logs');
@@ -375,6 +384,7 @@ export async function fetchLogs(params?: {
 
 export async function fetchTraces(): Promise<Trace[]> {
   const res = await fetch(`${API_BASE}/api/traces`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/traces');
@@ -383,6 +393,7 @@ export async function fetchTraces(): Promise<Trace[]> {
 
 export async function fetchTrace(id: string): Promise<Trace> {
   const res = await fetch(`${API_BASE}/api/traces/${id}`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, `/api/traces/${id}`);
@@ -391,6 +402,7 @@ export async function fetchTrace(id: string): Promise<Trace> {
 
 export async function fetchCostSummary(): Promise<CostSummary> {
   const res = await fetch(`${API_BASE}/api/costs/summary`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/costs/summary');
@@ -399,6 +411,7 @@ export async function fetchCostSummary(): Promise<CostSummary> {
 
 export async function fetchExecutions(): Promise<ExecutionResult[]> {
   const res = await fetch(`${API_BASE}/api/executions`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/executions');
@@ -407,6 +420,7 @@ export async function fetchExecutions(): Promise<ExecutionResult[]> {
 
 export async function fetchHealth(): Promise<{ status: string; timestamp: string }> {
   const res = await fetch(`${API_BASE}/api/health`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/health');
@@ -419,6 +433,7 @@ export async function estimateWorkflowCost(
 ): Promise<CostEstimate> {
   const res = await fetch(`${API_BASE}/api/workflows/${workflowName}/estimate`, {
     method: 'POST',
+    credentials: 'include',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
@@ -439,6 +454,7 @@ export async function fetchCostHistory(params?: {
   if (params?.workflowName) searchParams.set('workflowName', params.workflowName);
 
   const res = await fetch(`${API_BASE}/api/costs?${searchParams}`, {
+    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/costs');

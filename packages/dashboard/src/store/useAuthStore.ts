@@ -50,76 +50,72 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       
       /**
-       * Initialize auth state from stored token
+       * Initialize auth state from stored token or httpOnly cookie (OAuth)
        * Should be called on app mount
        */
       initialize: async () => {
         set({ isLoading: true, error: null });
-        
+
         try {
           const token = getAuthToken();
-          
-          if (!token) {
-            set({ user: null, token: null, isAuthenticated: false, isLoading: false });
-            return;
+
+          // Build headers - include Bearer token if available in localStorage
+          const headers: Record<string, string> = {};
+          if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
           }
-          
-          // Decode basic user info from token
-          const tokenUser = getUserFromToken(token);
-          
-          if (!tokenUser) {
-            // Token is invalid or expired
-            clearAuthToken();
-            set({ user: null, token: null, isAuthenticated: false, isLoading: false });
-            return;
-          }
-          
-          // Fetch full user profile from API
+
+          // Try to fetch user profile - works with both:
+          // 1. Bearer token in localStorage (email/password login)
+          // 2. httpOnly cookie (OAuth login - cookie sent automatically with credentials: 'include')
           const response = await fetch(`${API_BASE}/api/auth/me`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
+            credentials: 'include',
+            headers,
           });
-          
+
           if (!response.ok) {
             if (response.status === 401) {
-              clearAuthToken();
+              // Not authenticated - clear any stale localStorage token
+              if (token) clearAuthToken();
               set({ user: null, token: null, isAuthenticated: false, isLoading: false });
               return;
             }
             throw new Error('Failed to fetch user profile');
           }
-          
+
           const data = await response.json();
-          
+
           // Handle token refresh if provided
           if (data.newToken) {
             setAuthToken(data.newToken);
             set({ token: data.newToken });
           }
-          
+
+          // Get user info from response or decode from token
+          const tokenUser = token ? getUserFromToken(token) : null;
+
           const user: User = {
-            id: data.user?.id || tokenUser.id,
-            email: data.user?.email || tokenUser.email,
-            name: data.user?.name || null,
-            image: data.user?.image || null,
-            plan: data.user?.plan || null,
-            organizationId: data.user?.organizationId || null,
-            role: data.user?.role || null,
+            id: data.user?.id || data.id || tokenUser?.id || '',
+            email: data.user?.email || data.email || tokenUser?.email || '',
+            name: data.user?.name || data.name || null,
+            image: data.user?.image || data.image || null,
+            plan: data.user?.plan || data.plan || null,
+            organizationId: data.user?.organizationId || data.organizationId || null,
+            role: data.user?.role || data.role || null,
           };
-          
-          set({ 
-            user, 
-            token: data.newToken || token, 
-            isAuthenticated: true, 
-            isLoading: false 
+
+          set({
+            user,
+            token: data.newToken || token || null,
+            isAuthenticated: true,
+            isLoading: false
           });
         } catch (error) {
           console.error('Auth initialization error:', error);
-          set({ 
-            user: null, 
-            token: null, 
-            isAuthenticated: false, 
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
             isLoading: false,
             error: error instanceof Error ? error.message : 'Authentication failed'
           });
@@ -165,9 +161,10 @@ export const useAuthStore = create<AuthState>()(
       refreshUser: async () => {
         const token = get().token;
         if (!token) return;
-        
+
         try {
           const response = await fetch(`${API_BASE}/api/auth/me`, {
+            credentials: 'include',
             headers: {
               'Authorization': `Bearer ${token}`,
             },
