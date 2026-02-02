@@ -48,16 +48,21 @@ router.get('/google', (req: Request, res: Response, next: NextFunction) => {
     });
   }
 
-  // Store validated redirect URL in session for callback
+  // Store validated redirect URL in session for callback (backup)
   if (req.session) {
     req.session.oauthRedirect = redirect;
   }
 
   logger.info('Initiating Google OAuth', { redirect });
 
+  // Use state parameter to pass redirect URL (more reliable than sessions)
+  // Base64 encode to safely pass in URL
+  const state = Buffer.from(JSON.stringify({ redirect })).toString('base64');
+
   passport.authenticate('google', {
     scope: ['profile', 'email'],
     session: false,
+    state,
   })(req, res, next);
 });
 
@@ -79,8 +84,20 @@ router.get(
         throw new Error('No user returned from OAuth');
       }
 
-      // SECURITY: Get safe redirect URL (validated against whitelist)
-      const redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+      // Get redirect URL from state parameter (primary) or session (fallback)
+      let redirect: string;
+      const state = req.query.state as string;
+
+      if (state) {
+        try {
+          const decoded = JSON.parse(Buffer.from(state, 'base64').toString());
+          redirect = getSafeRedirectUrl(decoded.redirect);
+        } catch {
+          redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+        }
+      } else {
+        redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+      }
 
       // Generate JWT token using centralized helper
       const token = generateUserToken(user);
@@ -143,15 +160,20 @@ router.get('/github', (req: Request, res: Response, next: NextFunction) => {
     });
   }
 
+  // Store validated redirect URL in session for callback (backup)
   if (req.session) {
     req.session.oauthRedirect = redirect;
   }
 
   logger.info('Initiating GitHub OAuth', { redirect });
 
+  // Use state parameter to pass redirect URL (more reliable than sessions)
+  const state = Buffer.from(JSON.stringify({ redirect })).toString('base64');
+
   passport.authenticate('github', {
     scope: ['user:email'],
     session: false,
+    state,
   })(req, res, next);
 });
 
@@ -173,8 +195,20 @@ router.get(
         throw new Error('No user returned from OAuth');
       }
 
-      // SECURITY: Get safe redirect URL (validated against whitelist)
-      const redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+      // Get redirect URL from state parameter (primary) or session (fallback)
+      let redirect: string;
+      const state = req.query.state as string;
+
+      if (state) {
+        try {
+          const decoded = JSON.parse(Buffer.from(state, 'base64').toString());
+          redirect = getSafeRedirectUrl(decoded.redirect);
+        } catch {
+          redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+        }
+      } else {
+        redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+      }
 
       // Generate JWT token using centralized helper
       const token = generateUserToken(user);
