@@ -97,11 +97,16 @@ router.get(
         req.session.oauthRedirect = undefined;
       }
 
-      // Set httpOnly cookie instead of URL param (security: prevents XSS token theft)
+      // For cross-domain OAuth (API on Railway, Frontend on Vercel),
+      // we must pass the token in the URL since cookies won't work across domains.
+      // The frontend will save it to localStorage and clear the URL.
+      const redirectUrl = new URL(redirect);
+      redirectUrl.searchParams.set('token', token);
+
+      // Also set cookie for same-domain requests
       res.cookie(AUTH_COOKIE_NAME, token, AUTH_COOKIE_OPTIONS);
 
-      // Redirect without token in URL
-      res.redirect(redirect);
+      res.redirect(redirectUrl.toString());
     } catch (error) {
       logger.error('OAuth callback error', {
         error: (error as Error).message,
@@ -186,11 +191,16 @@ router.get(
         req.session.oauthRedirect = undefined;
       }
 
-      // Set httpOnly cookie instead of URL param (security: prevents XSS token theft)
+      // For cross-domain OAuth (API on Railway, Frontend on Vercel),
+      // we must pass the token in the URL since cookies won't work across domains.
+      // The frontend will save it to localStorage and clear the URL.
+      const redirectUrl = new URL(redirect);
+      redirectUrl.searchParams.set('token', token);
+
+      // Also set cookie for same-domain requests
       res.cookie(AUTH_COOKIE_NAME, token, AUTH_COOKIE_OPTIONS);
 
-      // Redirect without token in URL
-      res.redirect(redirect);
+      res.redirect(redirectUrl.toString());
     } catch (error) {
       logger.error('OAuth callback error', {
         error: (error as Error).message,
