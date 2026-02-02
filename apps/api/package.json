@@ -12,6 +12,10 @@
     "drizzle:studio": "drizzle-kit studio",
     "drizzle:introspect": "drizzle-kit introspect",
     "generate-secrets": "tsx scripts/generate-secrets.ts",
+    "backup": "tsx scripts/backup.ts",
+    "backup:list": "tsx scripts/backup.ts --list",
+    "backup:cleanup": "tsx scripts/backup.ts --cleanup",
+    "migrate": "drizzle-kit push",
     "typecheck": "tsc --noEmit",
     "clean": "rimraf dist",
     "test": "cross-env NODE_OPTIONS='--experimental-vm-modules' jest"

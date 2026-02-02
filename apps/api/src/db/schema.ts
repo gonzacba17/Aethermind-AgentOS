@@ -1,15 +1,18 @@
-import { 
-  pgTable, 
-  uuid, 
-  varchar, 
-  text, 
-  timestamp, 
-  boolean, 
-  integer, 
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+  boolean,
+  integer,
   json,
+  jsonb,
   decimal,
   index,
+  inet,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ============================================
 // ORGANIZATIONS TABLE
@@ -23,9 +26,11 @@ export const organizations = pgTable('organizations', {
   rateLimitPerMin: integer('rate_limit_per_min').default(100).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true, precision: 6 }),
 }, (table) => ({
   apiKeyIdx: index('idx_organizations_api_key').on(table.apiKeyHash),
   planIdx: index('idx_organizations_plan').on(table.plan),
+  deletedAtIdx: index('idx_organizations_deleted_at').on(table.deletedAt),
 }));
 
 // ============================================
@@ -71,6 +76,9 @@ export const users = pgTable('users', {
   // Free Tier Limits
   maxAgents: integer('max_agents').default(3).notNull(),
   logRetentionDays: integer('log_retention_days').default(30).notNull(),
+
+  // Soft Delete
+  deletedAt: timestamp('deleted_at', { withTimezone: true, precision: 6 }),
 }, (table) => ({
   emailIdx: index('idx_users_email').on(table.email),
   apiKeyIdx: index('idx_users_api_key').on(table.apiKey),
@@ -78,6 +86,7 @@ export const users = pgTable('users', {
   googleIdIdx: index('idx_users_google_id').on(table.googleId),
   githubIdIdx: index('idx_users_github_id').on(table.githubId),
   orgIdIdx: index('idx_users_organization_id').on(table.organizationId),
+  deletedAtIdx: index('idx_users_deleted_at').on(table.deletedAt),
 }));
 
 // ============================================
@@ -91,8 +100,10 @@ export const agents = pgTable('agents', {
   config: json('config').default({}).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow(),
+  deletedAt: timestamp('deleted_at', { withTimezone: true, precision: 6 }),
 }, (table) => ({
   userIdIdx: index('idx_agents_user_id').on(table.userId),
+  deletedAtIdx: index('idx_agents_deleted_at').on(table.deletedAt),
 }));
 
 // ============================================
@@ -109,12 +120,16 @@ export const executions = pgTable('executions', {
   startedAt: timestamp('started_at', { withTimezone: true, precision: 6 }).defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: true, precision: 6 }),
   durationMs: integer('duration_ms'),
+  traceId: varchar('trace_id', { length: 64 }),
+  deletedAt: timestamp('deleted_at', { withTimezone: true, precision: 6 }),
 }, (table) => ({
   userIdIdx: index('idx_executions_user_id').on(table.userId),
   agentIdIdx: index('idx_executions_agent_id').on(table.agentId),
   statusIdx: index('idx_executions_status').on(table.status),
   startedAtIdx: index('idx_executions_started_at').on(table.startedAt),
   agentStatusIdx: index('idx_executions_agent_status').on(table.agentId, table.status),
+  traceIdIdx: index('idx_executions_trace_id').on(table.traceId),
+  deletedAtIdx: index('idx_executions_deleted_at').on(table.deletedAt),
 }));
 
 // ============================================
@@ -291,6 +306,74 @@ export const subscriptionLogs = pgTable('subscription_logs', {
 }));
 
 // ============================================
+// SPANS TABLE (Distributed Tracing)
+// ============================================
+export const spans = pgTable('spans', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  traceId: varchar('trace_id', { length: 64 }).notNull(),
+  spanId: varchar('span_id', { length: 32 }).notNull(),
+  parentSpanId: varchar('parent_span_id', { length: 32 }),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 255 }).notNull(),
+  kind: varchar('kind', { length: 50 }).notNull(), // 'llm', 'tool', 'chain', 'agent', 'internal'
+  startTime: timestamp('start_time', { withTimezone: true, precision: 6 }).notNull(),
+  endTime: timestamp('end_time', { withTimezone: true, precision: 6 }),
+  durationMs: integer('duration_ms'),
+  status: varchar('status', { length: 20 }).default('ok').notNull(), // 'ok', 'error', 'unset'
+  statusMessage: text('status_message'),
+  attributes: json('attributes').default({}),
+  events: json('events').default([]),
+  links: json('links').default([]),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  traceIdIdx: index('idx_spans_trace_id').on(table.traceId),
+  parentIdIdx: index('idx_spans_parent_id').on(table.parentSpanId),
+  orgTimeIdx: index('idx_spans_org_time').on(table.organizationId, table.startTime),
+  kindIdx: index('idx_spans_kind').on(table.kind),
+}));
+
+// ============================================
+// AUDIT LOGS TABLE (Security & Compliance)
+// ============================================
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
+  userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
+  action: varchar('action', { length: 100 }).notNull(),
+  entityType: varchar('entity_type', { length: 50 }).notNull(),
+  entityId: varchar('entity_id', { length: 255 }),
+  oldValues: json('old_values'),
+  newValues: json('new_values'),
+  ipAddress: varchar('ip_address', { length: 45 }),
+  userAgent: text('user_agent'),
+  timestamp: timestamp('timestamp', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  orgIdx: index('idx_audit_logs_org').on(table.organizationId, table.timestamp),
+  userIdx: index('idx_audit_logs_user').on(table.userId, table.timestamp),
+  entityIdx: index('idx_audit_logs_entity').on(table.entityType, table.entityId),
+  actionIdx: index('idx_audit_logs_action').on(table.action),
+}));
+
+// ============================================
+// BACKUP HISTORY TABLE
+// ============================================
+export const backupHistory = pgTable('backup_history', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  filename: varchar('filename', { length: 255 }).notNull(),
+  fileSize: integer('file_size').notNull(),
+  backupType: varchar('backup_type', { length: 50 }).notNull(), // 'full', 'incremental'
+  status: varchar('status', { length: 20 }).notNull(), // 'success', 'failed', 'in_progress'
+  storageLocation: varchar('storage_location', { length: 500 }),
+  error: text('error'),
+  startedAt: timestamp('started_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true, precision: 6 }),
+  expiresAt: timestamp('expires_at', { withTimezone: true, precision: 6 }),
+}, (table) => ({
+  statusIdx: index('idx_backup_history_status').on(table.status),
+  startedAtIdx: index('idx_backup_history_started_at').on(table.startedAt),
+}));
+
+// ============================================
 // TYPESCRIPT TYPE EXPORTS
 // ============================================
 export type Organization = typeof organizations.$inferSelect;
@@ -331,3 +414,12 @@ export type NewSubscriptionLog = typeof subscriptionLogs.$inferInsert;
 
 export type UserApiKey = typeof userApiKeys.$inferSelect;
 export type NewUserApiKey = typeof userApiKeys.$inferInsert;
+
+export type Span = typeof spans.$inferSelect;
+export type NewSpan = typeof spans.$inferInsert;
+
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+export type BackupHistory = typeof backupHistory.$inferSelect;
+export type NewBackupHistory = typeof backupHistory.$inferInsert;
