@@ -22,6 +22,7 @@ export const organizations = pgTable('organizations', {
   name: varchar('name', { length: 255 }).notNull(),
   slug: varchar('slug', { length: 255 }).notNull().unique(),
   apiKeyHash: varchar('api_key_hash', { length: 255 }).notNull().unique(),
+  apiKeyPrefix: varchar('api_key_prefix', { length: 16 }),
   plan: varchar('plan', { length: 50 }).default('FREE').notNull(),
   rateLimitPerMin: integer('rate_limit_per_min').default(100).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
@@ -29,6 +30,7 @@ export const organizations = pgTable('organizations', {
   deletedAt: timestamp('deleted_at', { withTimezone: true, precision: 6 }),
 }, (table) => ({
   apiKeyIdx: index('idx_organizations_api_key').on(table.apiKeyHash),
+  apiKeyPrefixIdx: index('idx_organizations_api_key_prefix').on(table.apiKeyPrefix),
   planIdx: index('idx_organizations_plan').on(table.plan),
   deletedAtIdx: index('idx_organizations_deleted_at').on(table.deletedAt),
 }));
@@ -43,7 +45,7 @@ export const users = pgTable('users', {
   name: varchar('name', { length: 255 }),
   googleId: varchar('google_id', { length: 255 }).unique(),
   githubId: varchar('github_id', { length: 255 }).unique(),
-  apiKey: varchar('api_key', { length: 255 }).notNull().unique(),
+  apiKeyHash: varchar('api_key_hash', { length: 255 }).notNull().unique(),
   plan: varchar('plan', { length: 50 }).default('free').notNull(),
   usageLimit: integer('usage_limit').default(100).notNull(),
   usageCount: integer('usage_count').default(0).notNull(),
@@ -81,7 +83,7 @@ export const users = pgTable('users', {
   deletedAt: timestamp('deleted_at', { withTimezone: true, precision: 6 }),
 }, (table) => ({
   emailIdx: index('idx_users_email').on(table.email),
-  apiKeyIdx: index('idx_users_api_key').on(table.apiKey),
+  apiKeyHashIdx: index('idx_users_api_key_hash').on(table.apiKeyHash),
   planIdx: index('idx_users_plan').on(table.plan),
   googleIdIdx: index('idx_users_google_id').on(table.googleId),
   githubIdIdx: index('idx_users_github_id').on(table.githubId),

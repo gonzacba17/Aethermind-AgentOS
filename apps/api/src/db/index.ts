@@ -7,13 +7,22 @@ let isConnected = false;
 let lastConnectionError: Error | null = null;
 let connectionAttempts = 0;
 
+// SSL configuration for production
+// Default: rejectUnauthorized: true (secure). Set DB_SSL_REJECT_UNAUTHORIZED=false
+// only for managed databases with self-signed certs (e.g., Railway, Render).
+const sslConfig = process.env.NODE_ENV === 'production'
+  ? {
+      rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+    }
+  : false;
+
 // Create PostgreSQL connection pool (optimized for Railway)
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10, // Reduced for Railway tier compatibility
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000, // Faster failure detection
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: sslConfig,
 });
 
 // Enhanced logging for connection diagnostics

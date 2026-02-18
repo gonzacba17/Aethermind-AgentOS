@@ -36,8 +36,8 @@ export async function authMiddleware(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  // Allow disabling auth for development via DISABLE_AUTH=true
-  if (process.env.DISABLE_AUTH === 'true') {
+  // Allow disabling auth for development ONLY — never in production
+  if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
     next();
     return;
   }
@@ -126,12 +126,14 @@ async function validateJWT(
     const decoded = jwt.verify(token, JWT_SECRET) as any;
     
     // Attach user info to request
+    // NOTE: usageCount/usageLimit are NOT in the JWT anymore (they became stale).
+    // The usage-limiter middleware reads fresh values from the DB.
     req.user = {
       id: decoded.id,
       email: decoded.email,
       plan: decoded.plan || 'free',
-      usageCount: decoded.usageCount || 0,
-      usageLimit: decoded.usageLimit || 100,
+      usageCount: 0,   // Placeholder — fresh value loaded by usage-limiter
+      usageLimit: 100,  // Placeholder — fresh value loaded by usage-limiter
     };
     
     next();

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import { users } from '../db/schema';
 import { eq } from 'drizzle-orm';
+import bcrypt from 'bcryptjs';
 import { verifyJWT, JWTPayload, getUserIdFromPayload } from '../utils/auth-helpers';
 import logger from '../utils/logger';
 
@@ -27,24 +28,33 @@ export async function jwtAuthMiddleware(
     const apiKey = req.header('x-api-key');
 
     if (apiKey) {
-      const [user] = await db.select({
+      // BLOCKER NOTE: For scale, user API keys should also have a prefix column
+      // for indexed lookup (same pattern as organizations). For now, fetch all and compare.
+      const allUsers = await db.select({
         id: users.id,
         email: users.email,
         plan: users.plan,
         usageCount: users.usageCount,
         usageLimit: users.usageLimit,
+        apiKeyHash: users.apiKeyHash,
       })
-      .from(users)
-      .where(eq(users.apiKey, apiKey))
-      .limit(1);
+      .from(users);
 
-      if (!user) {
+      let matchedUser = null;
+      for (const u of allUsers) {
+        if (await bcrypt.compare(apiKey, u.apiKeyHash)) {
+          matchedUser = u;
+          break;
+        }
+      }
+
+      if (!matchedUser) {
         res.status(403).json({ error: 'Invalid API key' });
         return;
       }
 
-      req.userId = user.id;
-      req.user = user;
+      req.userId = matchedUser.id;
+      req.user = matchedUser;
       next();
       return;
     }

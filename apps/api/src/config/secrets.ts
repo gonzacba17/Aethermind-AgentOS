@@ -23,11 +23,11 @@ const secretsSchema = z.object({
     .describe('Bcrypt hash of admin API key'),
 
   // Encryption key for sensitive data (user API keys)
+  // NOTE: Reads API_KEY_ENCRYPTION_KEY (used by user-api-keys.ts) with ENCRYPTION_KEY as fallback
   ENCRYPTION_KEY: z.string()
-    .length(64, 'ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)')
-    .regex(/^[0-9a-fA-F]+$/, 'ENCRYPTION_KEY must be a valid hex string')
+    .min(32, 'ENCRYPTION_KEY must be at least 32 characters')
     .optional()
-    .describe('AES-256 encryption key for user data'),
+    .describe('AES-256 encryption key for user API keys (env: API_KEY_ENCRYPTION_KEY or ENCRYPTION_KEY)'),
 
   // Database URL
   DATABASE_URL: z.string()
@@ -86,7 +86,7 @@ export function validateSecrets(): SecretsConfig {
       JWT_SECRET: process.env.JWT_SECRET,
       SESSION_SECRET: process.env.SESSION_SECRET,
       API_KEY_HASH: process.env.API_KEY_HASH,
-      ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+      ENCRYPTION_KEY: process.env.API_KEY_ENCRYPTION_KEY || process.env.ENCRYPTION_KEY,
       DATABASE_URL: process.env.DATABASE_URL,
       REDIS_URL: process.env.REDIS_URL,
       STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
@@ -107,7 +107,16 @@ export function validateSecrets(): SecretsConfig {
         throw new Error('API_KEY_HASH is required in production');
       }
       if (!secrets.SESSION_SECRET) {
-        logger.warn('SESSION_SECRET not set in production, using JWT_SECRET as fallback');
+        throw new Error(
+          'FATAL: SESSION_SECRET is required in production. ' +
+          'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        );
+      }
+      if (!secrets.ENCRYPTION_KEY) {
+        throw new Error(
+          'FATAL: API_KEY_ENCRYPTION_KEY is required in production for encrypting user API keys. ' +
+          'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        );
       }
     }
 

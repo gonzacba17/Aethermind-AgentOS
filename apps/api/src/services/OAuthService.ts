@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { retryDatabaseOperation, checkDatabaseConnection } from '../middleware/database';
 
 interface OAuthUserData {
@@ -130,7 +131,7 @@ export async function convertTemporaryUser(tempId: string): Promise<any | null> 
       plan: tempUser.plan as 'free' | 'pro' | 'enterprise',
       usageLimit: tempUser.usageLimit,
       usageCount: tempUser.usageCount,
-      apiKey: `aethermind_${uuidv4()}`,
+      apiKeyHash: await bcrypt.hash(`aethermind_${uuidv4()}`, 10),
       emailVerified: true,
       hasCompletedOnboarding: false,
       onboardingStep: 'welcome',
@@ -283,7 +284,7 @@ export async function findOrCreateOAuthUser(
         plan: 'free' as const,
         usageLimit: 100,
         usageCount: 0,
-        apiKey: `aethermind_${uuidv4()}`,
+        apiKeyHash: await bcrypt.hash(`aethermind_${uuidv4()}`, 10),
         emailVerified: true, // OAuth emails are pre-verified
         hasCompletedOnboarding: false,
         onboardingStep: 'welcome',
@@ -348,7 +349,7 @@ export async function findOrCreateOAuthUser(
       plan: 'free',
       usageCount: 0,
       usageLimit: 100,
-      apiKey: `temp-${uuidv4()}`,
+      apiKeyHash: `temp-${uuidv4()}`, // Temp user, not a real hash
       emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),

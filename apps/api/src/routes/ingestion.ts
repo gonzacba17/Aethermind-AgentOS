@@ -5,6 +5,8 @@ import { telemetryEvents } from '../db/schema.js';
 import { apiKeyAuthCached } from '../middleware/apiKeyAuth.js';
 import { rateLimiter } from '../middleware/rateLimiter.js';
 import { eq, asc, sql } from 'drizzle-orm';
+import fs from 'fs';
+import path from 'path';
 
 const router: Router = Router();
 
@@ -88,7 +90,8 @@ router.post(
         await storeEvents(req.organizationId!, events);
       } catch (error) {
         console.error('[Ingestion] Failed to store events:', error);
-        // Events lost - could implement dead letter queue in future
+        // Write to dead-letter queue for retry
+        writeToDeadLetterQueue(req.organizationId!, events, error as Error);
       }
     });
 
@@ -192,5 +195,40 @@ router.get(
     });
   }
 });
+
+/**
+ * Dead Letter Queue — write failed telemetry events to disk for retry
+ */
+const DLQ_DIR = path.resolve(process.cwd(), 'failed-events');
+
+function writeToDeadLetterQueue(
+  organizationId: string,
+  events: z.infer<typeof TelemetryEventSchema>[],
+  error: Error
+): void {
+  try {
+    if (!fs.existsSync(DLQ_DIR)) {
+      fs.mkdirSync(DLQ_DIR, { recursive: true });
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `${timestamp}_${organizationId.slice(0, 8)}.json`;
+    const filepath = path.join(DLQ_DIR, filename);
+
+    const payload = {
+      organizationId,
+      events,
+      error: error.message,
+      failedAt: new Date().toISOString(),
+      retryCount: 0,
+    };
+
+    fs.writeFileSync(filepath, JSON.stringify(payload, null, 2), 'utf-8');
+    console.log(`[DLQ] Saved ${events.length} failed events to ${filename}`);
+  } catch (dlqError) {
+    console.error('[DLQ] CRITICAL: Failed to write to dead-letter queue:', dlqError);
+    console.error('[DLQ] Lost events:', JSON.stringify(events).slice(0, 200));
+  }
+}
 
 export default router;

@@ -1,6 +1,6 @@
 /**
  * Railway Startup Script
- * Syncs Drizzle schema and starts the API server
+ * Runs Drizzle migrations and starts the API server
  */
 
 const { exec } = require('child_process');
@@ -33,15 +33,13 @@ async function main() {
   
   console.log('');
   
-  // Skip drizzle-kit push in production - it requires tsx and doesn't work well in containers
-  // Instead, run migrations manually before deploy or use the application's built-in schema sync
-  if (process.env.SKIP_DB_PUSH !== 'true') {
-    console.log('🔄 Attempting database schema sync...');
+  // Run drizzle-kit migrate (NOT push — push is destructive)
+  if (process.env.SKIP_DB_MIGRATE !== 'true') {
+    console.log('🔄 Running database migrations...');
     
     try {
-      // Try using npx with tsx loader
       const { stdout, stderr } = await execAsync(
-        'npx tsx ./node_modules/drizzle-kit/bin.cjs push --config=./drizzle.config.ts 2>&1 || echo "Schema sync skipped - using existing schema"', 
+        'npx tsx ./node_modules/drizzle-kit/bin.cjs migrate --config=./drizzle.config.ts 2>&1', 
         {
           cwd: __dirname,
           env: { ...process.env, NODE_OPTIONS: '' },
@@ -49,17 +47,22 @@ async function main() {
         }
       );
       
-      if (stdout && !stdout.includes('skipped')) {
-        console.log('📋 Drizzle output:', stdout.slice(0, 500));
+      if (stdout) {
+        console.log('📋 Migration output:', stdout.slice(0, 500));
       }
-      console.log('✅ Database schema check completed');
+      console.log('✅ Database migrations completed');
     } catch (error) {
-      console.warn('⚠️  drizzle-kit push skipped:', error.message);
-      console.log('ℹ️  This is OK - the schema should already be in sync.');
-      console.log('   If you added new tables, run: pnpm drizzle:push locally first.');
+      if (process.env.NODE_ENV === 'production') {
+        console.error('❌ FATAL: Database migration failed in production:', error.message);
+        console.error('   This is a blocking error. Fix migrations before deploying.');
+        process.exit(1);
+      } else {
+        console.warn('⚠️  Migration failed (non-production):', error.message);
+        console.log('ℹ️  Run migrations manually: pnpm drizzle:push');
+      }
     }
   } else {
-    console.log('ℹ️  SKIP_DB_PUSH=true - skipping database schema sync');
+    console.log('ℹ️  SKIP_DB_MIGRATE=true - skipping database migrations');
   }
   
   console.log('');
@@ -74,4 +77,3 @@ main().catch(err => {
   console.error(err.stack);
   process.exit(1);
 });
-

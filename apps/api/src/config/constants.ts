@@ -57,31 +57,30 @@ export const DEFAULT_QUERY_LIMIT = 100;
 export const MAX_QUERY_LIMIT = 1000;
 
 // =============================================================================
-// CORS Origins - strict whitelist in production
+// CORS Origins - configurable via env vars, with secure defaults
 // =============================================================================
+const DEFAULT_PROD_ORIGINS = [
+  'https://aethermind-page.vercel.app',
+  'https://aethermind-agent-os-dashboard.vercel.app',
+  'https://dashboard.aethermind.io',
+];
+
 export const CORS_ORIGINS = process.env.NODE_ENV === 'production'
-  ? [
-      'https://aethermind-page.vercel.app',
-      'https://aethermind-agent-os-dashboard.vercel.app',
-      'https://dashboard.aethermind.io',
-    ]
-  : process.env['CORS_ORIGINS']?.split(',') || [
+  ? (process.env['CORS_ORIGINS']?.split(',').map(s => s.trim()).filter(Boolean) || DEFAULT_PROD_ORIGINS)
+  : (process.env['CORS_ORIGINS']?.split(',').map(s => s.trim()).filter(Boolean) || [
       'http://localhost:3000',
       'http://localhost:3001',
       'http://localhost:5173',
       'https://aethermind-page.vercel.app',
-      'https://aethermind-agent-os-dashboard.vercel.app'
-    ];
+      'https://aethermind-agent-os-dashboard.vercel.app',
+    ]);
 
 // =============================================================================
 // OAuth Redirect Whitelist - SECURITY: Only allow redirects to known domains
+// Configurable via ALLOWED_OAUTH_REDIRECTS env var (comma-separated)
 // =============================================================================
 export const ALLOWED_OAUTH_REDIRECTS = process.env.NODE_ENV === 'production'
-  ? [
-      'https://aethermind-page.vercel.app',
-      'https://aethermind-agent-os-dashboard.vercel.app',
-      'https://dashboard.aethermind.io',
-    ]
+  ? (process.env['ALLOWED_OAUTH_REDIRECTS']?.split(',').map(s => s.trim()).filter(Boolean) || DEFAULT_PROD_ORIGINS)
   : [
       'http://localhost:3000',
       'http://localhost:3001',

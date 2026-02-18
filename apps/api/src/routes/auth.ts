@@ -107,7 +107,8 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const apiKey = `aethermind_${randomBytes(32).toString('hex')}`;
+    const apiKeyPlaintext = `aethermind_${randomBytes(32).toString('hex')}`;
+    const apiKeyHash = await bcrypt.hash(apiKeyPlaintext, 10);
     const verificationToken = randomBytes(32).toString('hex');
     const verificationExpiry = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
 
@@ -117,7 +118,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       id: userId,
       email,
       passwordHash,
-      apiKey,
+      apiKeyHash,
       verificationToken,
       verificationExpiry,
       plan: 'free',
@@ -148,13 +149,15 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       expiresIn: JWT_EXPIRES_IN,
     } as jwt.SignOptions);
 
+    // Return plaintext API key ONLY on signup (shown once, never again)
     res.status(201).json({
       token,
+      apiKey: apiKeyPlaintext,
+      apiKeyShownOnce: true,
       user: {
         id: user.id,
         email: user.email,
         plan: user.plan,
-        apiKey: user.apiKey,
         emailVerified: user.emailVerified,
       },
     });
@@ -196,7 +199,6 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         plan: user.plan,
-        apiKey: user.apiKey,
         emailVerified: user.emailVerified,
         usageCount: user.usageCount,
         usageLimit: user.usageLimit,
@@ -489,7 +491,7 @@ router.post('/update-plan', async (req: Request, res: Response) => {
         name: users.name,
         email: users.email,
         plan: users.plan,
-        apiKey: users.apiKey,
+        apiKeyHash: users.apiKeyHash,
         emailVerified: users.emailVerified,
         usageCount: users.usageCount,
         usageLimit: users.usageLimit,
@@ -718,7 +720,7 @@ router.get('/me', async (req: Request, res: Response) => {
               plan: 'free',
               usageLimit: 100,
               usageCount: 0,
-              apiKey: `aethermind_${randomBytes(16).toString('hex')}`,
+              apiKeyHash: await bcrypt.hash(`aethermind_${randomBytes(16).toString('hex')}`, 10),
               emailVerified: true,
               hasCompletedOnboarding: false,
               onboardingStep: 'welcome',
@@ -880,7 +882,7 @@ router.get('/me', async (req: Request, res: Response) => {
       name: users.name,
       email: users.email,
       plan: users.plan,
-      apiKey: users.apiKey,
+      apiKeyHash: users.apiKeyHash,
       emailVerified: users.emailVerified,
       usageCount: users.usageCount,
       usageLimit: users.usageLimit,
@@ -964,7 +966,7 @@ router.get('/me', async (req: Request, res: Response) => {
       name: user.name,
       email: user.email,
       plan: user.plan,
-      apiKey: user.apiKey,
+      // apiKey removed — never return hash to client
       emailVerified: user.emailVerified,
       usageCount: user.usageCount,
       usageLimit: user.usageLimit,
@@ -1091,7 +1093,7 @@ router.post('/session', async (req: Request, res: Response) => {
       name: users.name,
       email: users.email,
       plan: users.plan,
-      apiKey: users.apiKey,
+      apiKeyHash: users.apiKeyHash,
       emailVerified: users.emailVerified,
       usageCount: users.usageCount,
       usageLimit: users.usageLimit,
@@ -1119,7 +1121,7 @@ router.post('/session', async (req: Request, res: Response) => {
         email: user.email,
         name: user.name,
         plan: user.plan,
-        apiKey: user.apiKey,
+        // apiKey removed — never return hash to client
         emailVerified: user.emailVerified,
         hasCompletedOnboarding: user.hasCompletedOnboarding,
         onboardingStep: user.onboardingStep,
@@ -1220,6 +1222,59 @@ router.patch('/onboarding', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Failed to update onboarding', { error: (error as Error).message });
     res.status(500).json({ error: 'Failed to update onboarding' });
+  }
+});
+
+// ============================================
+// POST /regenerate-api-key — Generate new API key
+// Returns plaintext ONCE. Stores bcrypt hash.
+// ============================================
+router.post('/regenerate-api-key', async (req: Request, res: Response) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.cookies?.auth_token;
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Missing authentication token' });
+    }
+
+    let decoded: JWTPayload;
+    try {
+      decoded = verifyJWT(token);
+    } catch {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired token' });
+    }
+
+    const userId = getUserIdFromPayload(decoded);
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized', message: 'Invalid token payload' });
+    }
+
+    // Generate new API key
+    const apiKeyPlaintext = `aethermind_${randomBytes(32).toString('hex')}`;
+    const apiKeyHash = await bcrypt.hash(apiKeyPlaintext, 10);
+
+    // Update in database
+    const [updatedUser] = await db.update(users)
+      .set({ apiKeyHash })
+      .where(eq(users.id, userId))
+      .returning({
+        id: users.id,
+        email: users.email,
+      });
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    logger.info('API key regenerated', { userId });
+
+    res.json({
+      apiKey: apiKeyPlaintext,
+      apiKeyShownOnce: true,
+      message: 'New API key generated. Save it now — it will not be shown again.',
+    });
+  } catch (error) {
+    logger.error('Failed to regenerate API key', { error: (error as Error).message });
+    res.status(500).json({ error: 'Failed to regenerate API key' });
   }
 });
 

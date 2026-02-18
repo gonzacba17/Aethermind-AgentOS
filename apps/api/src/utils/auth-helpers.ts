@@ -16,8 +16,9 @@ export interface JWTPayload {
   email: string;
   name?: string;
   plan?: string;
-  usageCount?: number;
-  usageLimit?: number;
+  // NOTE: usageCount/usageLimit deliberately excluded from JWT.
+  // These values change on every API call and become stale in long-lived tokens.
+  // The usage-limiter middleware reads fresh values from the DB.
   iat?: number;
   exp?: number;
 }
@@ -183,16 +184,12 @@ export function generateUserToken(user: {
   id: string;
   email: string;
   plan?: string;
-  usageCount?: number;
-  usageLimit?: number;
 }): string {
   return generateToken({
     userId: user.id,
     id: user.id,
     email: user.email,
     plan: user.plan,
-    usageCount: user.usageCount,
-    usageLimit: user.usageLimit,
   });
 }
 
@@ -234,7 +231,6 @@ export function formatAuthResponse(user: {
   email: string;
   name?: string | null;
   plan?: string;
-  apiKey?: string;
   emailVerified?: boolean;
   usageCount?: number;
   usageLimit?: number;
@@ -246,7 +242,6 @@ export function formatAuthResponse(user: {
       email: user.email,
       name: user.name,
       plan: user.plan,
-      apiKey: user.apiKey,
       emailVerified: user.emailVerified,
       usageCount: user.usageCount,
       usageLimit: user.usageLimit,

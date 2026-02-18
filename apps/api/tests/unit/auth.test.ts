@@ -9,8 +9,18 @@ describe('Auth Middleware', () => {
   let mockNext: NextFunction;
 
   beforeEach(() => {
+    // Admin route so that authMiddleware routes to validateApiKey (not JWT)
     mockReq = {
       header: jest.fn() as any,
+      headers: {} as any,
+      cookies: {} as any,
+      query: {} as any,
+      originalUrl: '/api/admin/test',
+      url: '/api/admin/test',
+      path: '/admin/test',
+      baseUrl: '/api',
+      method: 'GET',
+      ip: '127.0.0.1',
     };
     mockRes = {
       status: jest.fn().mockReturnThis() as any,
@@ -20,7 +30,7 @@ describe('Auth Middleware', () => {
   });
 
   describe('authMiddleware', () => {
-    it('allows request with valid API key', async () => {
+    it('allows request with valid API key (admin route)', async () => {
       const testKey = 'test-key-12345';
       const hash = await bcrypt.hash(testKey, 10);
       
@@ -33,7 +43,7 @@ describe('Auth Middleware', () => {
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    it('rejects request with invalid API key', async () => {
+    it('rejects request with invalid API key (admin route)', async () => {
       const validKey = 'valid-key';
       const invalidKey = 'invalid-key';
       const hash = await bcrypt.hash(validKey, 10);
@@ -51,7 +61,7 @@ describe('Auth Middleware', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('rejects request with missing API key', async () => {
+    it('rejects request with missing API key (admin route)', async () => {
       const hash = await bcrypt.hash('test-key', 10);
       
       configureAuth({ apiKeyHash: hash, enabled: true });
@@ -67,9 +77,12 @@ describe('Auth Middleware', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('bypasses auth when disabled', async () => {
-      configureAuth({ enabled: false });
-      (mockReq.header as jest.Mock).mockReturnValue(undefined);
+    it('allows public auth routes without authentication', async () => {
+      mockReq.originalUrl = '/api/auth/login';
+      mockReq.url = '/api/auth/login';
+      Object.defineProperty(mockReq, 'path', { value: '/auth/login', writable: true });
+
+      configureAuth({ enabled: true });
 
       await authMiddleware(mockReq as Request, mockRes as Response, mockNext);
 
@@ -77,14 +90,18 @@ describe('Auth Middleware', () => {
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
-    it('bypasses auth when no hash configured', async () => {
-      configureAuth({ apiKeyHash: undefined, enabled: true });
-      (mockReq.header as jest.Mock).mockReturnValue(undefined);
+    it('requires JWT for non-admin API routes', async () => {
+      mockReq.originalUrl = '/api/agents';
+      mockReq.url = '/api/agents';
+      Object.defineProperty(mockReq, 'path', { value: '/agents', writable: true });
+
+      configureAuth({ enabled: true });
 
       await authMiddleware(mockReq as Request, mockRes as Response, mockNext);
 
-      expect(mockNext).toHaveBeenCalled();
-      expect(mockRes.status).not.toHaveBeenCalled();
+      // Should return 401 (no JWT token)
+      expect(mockRes.status).toHaveBeenCalledWith(401);
+      expect(mockNext).not.toHaveBeenCalled();
     });
   });
 

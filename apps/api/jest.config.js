@@ -21,7 +21,7 @@ export default {
     ],
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(.*\\.mjs$|ioredis|@sendgrid))',
+    'node_modules/(?!(.*\\.mjs$|ioredis|@sendgrid|lru-cache))',
   ],
   testMatch: [
     '**/tests/unit/**/*.test.ts',
