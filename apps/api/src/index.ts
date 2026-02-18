@@ -57,6 +57,7 @@ import stripeRoutes from "./routes/stripe";
 import userApiKeysRoutes from "./routes/user-api-keys";
 import optimizationRoutes from "./routes/optimization.routes";
 import forecastingRoutes from "./routes/forecasting.routes";
+import organizationRoutes from "./routes/organizations";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import passportConfig from "./config/passport";
@@ -740,6 +741,7 @@ async function startServer(): Promise<void> {
   app.use("/api/onboarding", onboardingRoutes);
   app.use("/api/stripe", stripeRoutes); // Protected Stripe endpoints (checkout, portal)
   app.use("/api/user/api-keys", userApiKeysRoutes); // User API keys management
+  app.use("/api/organizations", organizationRoutes); // Organization management
   app.use("/api/optimization", optimizationRoutes); // Auto-optimization engine
   app.use("/api/forecasting", forecastingRoutes); // Predictive cost forecasting
 

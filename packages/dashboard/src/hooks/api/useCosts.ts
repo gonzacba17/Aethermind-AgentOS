@@ -1,6 +1,8 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { fetchCostSummary, fetchCostHistory, CostSummary, CostInfo } from '@/lib/api';
 import { MOCK_COST_SUMMARY, MOCK_COST_HISTORY, shouldUseMockData } from '@/lib/mock-data';
+import { useMockDataContext } from '@/contexts/MockDataContext';
 import { 
   startOfDay, 
   startOfWeek, 
@@ -55,17 +57,28 @@ export interface CostByModel {
 export function useCostSummary(
   options?: Omit<UseQueryOptions<CostSummary>, 'queryKey' | 'queryFn'>
 ) {
+  const { reportMockFallback } = useMockDataContext();
+  const reportedRef = useRef(false);
+
   return useQuery({
     queryKey: costKeys.summary(),
     queryFn: async () => {
       if (shouldUseMockData()) {
+        if (!reportedRef.current) {
+          reportMockFallback('useCostSummary', 'NEXT_PUBLIC_API_URL not configured');
+          reportedRef.current = true;
+        }
         return MOCK_COST_SUMMARY;
       }
-      
+
       try {
         return await fetchCostSummary();
       } catch (error) {
         console.warn('[useCostSummary] API request failed, using mock data:', error);
+        if (!reportedRef.current) {
+          reportMockFallback('useCostSummary', `API request failed: ${(error as Error).message}`);
+          reportedRef.current = true;
+        }
         return MOCK_COST_SUMMARY;
       }
     },

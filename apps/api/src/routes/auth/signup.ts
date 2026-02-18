@@ -1,0 +1,160 @@
+/**
+ * Auth routes — signup + email verification
+ */
+
+import { Router, Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
+import rateLimit from 'express-rate-limit';
+import { db } from '../../db';
+import { users } from '../../db/schema';
+import { eq, and, gte } from 'drizzle-orm';
+import { emailService } from '../../services/EmailService';
+import logger from '../../utils/logger';
+import {
+  AUTH_RATE_LIMIT_WINDOW_MS,
+  AUTH_RATE_LIMIT_MAX_ATTEMPTS,
+  EMAIL_VERIFY_RATE_LIMIT_WINDOW_MS,
+  EMAIL_VERIFY_RATE_LIMIT_MAX_ATTEMPTS,
+  JWT_EXPIRES_IN,
+  PASSWORD_MIN_LENGTH,
+  EMAIL_VERIFICATION_TTL_MS,
+} from '../../config/constants';
+import { getJWTSecret } from '../../utils/auth-helpers';
+
+const router = Router();
+const JWT_SECRET = getJWTSecret();
+
+const authLimiter = rateLimit({
+  windowMs: AUTH_RATE_LIMIT_WINDOW_MS,
+  max: AUTH_RATE_LIMIT_MAX_ATTEMPTS,
+  message: 'Too many authentication attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
+});
+
+const emailVerifyLimiter = rateLimit({
+  windowMs: EMAIL_VERIFY_RATE_LIMIT_WINDOW_MS,
+  max: EMAIL_VERIFY_RATE_LIMIT_MAX_ATTEMPTS,
+  message: 'Too many verification attempts, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+interface SignupBody {
+  email: string;
+  password: string;
+}
+
+router.post('/signup', authLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body as SignupBody;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      return res.status(400).json({ error: `Password must be at least ${PASSWORD_MIN_LENGTH} characters` });
+    }
+
+    const [existingUser] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (existingUser) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const apiKeyPlaintext = `aethermind_${randomBytes(32).toString('hex')}`;
+    const apiKeyHash = await bcrypt.hash(apiKeyPlaintext, 10);
+    const verificationToken = randomBytes(32).toString('hex');
+    const verificationExpiry = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
+
+    const userId = `user_${randomBytes(16).toString('hex')}`;
+    
+    const [user] = await db.insert(users).values({
+      id: userId,
+      email,
+      passwordHash,
+      apiKeyHash,
+      verificationToken,
+      verificationExpiry,
+      plan: 'free',
+      usageLimit: 100,
+      usageCount: 0,
+      hasCompletedOnboarding: false,
+      onboardingStep: 'welcome',
+      subscriptionStatus: 'free',
+      maxAgents: 3,
+      logRetentionDays: 30,
+      lastLoginAt: new Date(),
+    }).returning();
+
+    // Send verification email (non-blocking)
+    emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
+      logger.error('Failed to send verification email', { error: (error as Error).message });
+    });
+
+    if (!user) {
+      return res.status(500).json({ error: 'Failed to create user' });
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+      expiresIn: JWT_EXPIRES_IN,
+    } as jwt.SignOptions);
+
+    res.status(201).json({
+      token,
+      apiKey: apiKeyPlaintext,
+      apiKeyShownOnce: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        plan: user.plan,
+        emailVerified: user.emailVerified,
+      },
+    });
+  } catch (error) {
+    logger.error('Signup error', { error: (error as Error).message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// SECURITY: Rate limited to prevent brute force attacks on verification tokens
+router.post('/verify-email', emailVerifyLimiter, async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Verification token required' });
+    }
+
+    const [user] = await db.select()
+      .from(users)
+      .where(and(
+        eq(users.verificationToken, token),
+        gte(users.verificationExpiry, new Date())
+      ))
+      .limit(1);
+
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    await db.update(users)
+      .set({
+        emailVerified: true,
+        verificationToken: null,
+        verificationExpiry: null,
+      })
+      .where(eq(users.id, user.id));
+
+    res.json({ success: true, message: 'Email verified successfully' });
+  } catch (error) {
+    logger.error('Verify email error', { error: (error as Error).message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+export default router;

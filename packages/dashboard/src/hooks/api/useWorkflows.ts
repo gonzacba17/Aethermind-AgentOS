@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { getAuthToken } from '@/lib/auth-utils';
 import { shouldUseMockData } from '@/lib/mock-data';
+import { useMockDataContext } from '@/contexts/MockDataContext';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -115,11 +117,17 @@ const MOCK_WORKFLOWS: Workflow[] = [
 export function useWorkflows(
   options?: Omit<UseQueryOptions<WorkflowsResponse>, 'queryKey' | 'queryFn'>
 ) {
+  const { reportMockFallback } = useMockDataContext();
+  const reportedRef = useRef(false);
+
   return useQuery({
     queryKey: workflowKeys.list(),
     queryFn: async (): Promise<WorkflowsResponse> => {
       if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
+        if (!reportedRef.current) {
+          reportMockFallback('useWorkflows', 'NEXT_PUBLIC_API_URL not configured');
+          reportedRef.current = true;
+        }
         return {
           data: MOCK_WORKFLOWS,
           total: MOCK_WORKFLOWS.length,
@@ -148,6 +156,10 @@ export function useWorkflows(
         };
       } catch (error) {
         console.warn('[useWorkflows] API failed, using mock data:', error);
+        if (!reportedRef.current) {
+          reportMockFallback('useWorkflows', `API request failed: ${(error as Error).message}`);
+          reportedRef.current = true;
+        }
         return {
           data: MOCK_WORKFLOWS,
           total: MOCK_WORKFLOWS.length,

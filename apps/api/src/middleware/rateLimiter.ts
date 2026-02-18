@@ -300,15 +300,24 @@ export function cleanupRateLimits(): void {
 // Cleanup every 5 minutes
 setInterval(cleanupRateLimits, 5 * 60 * 1000);
 
+// Log which store is being used at startup
+if (redisService.isAvailable()) {
+  logger.info('Rate limiter: Redis store (distributed across instances)');
+} else {
+  logger.info('Rate limiter: in-memory store (dev — not shared across instances)');
+}
+
 /**
- * Get current rate limit status for debugging
+ * Get current rate limit status for debugging and health checks
  */
 export function getRateLimitStatus(): {
   memoryEntries: number;
   redisAvailable: boolean;
+  store: 'redis' | 'memory';
 } {
   return {
     memoryEntries: memoryRateLimitStore.size,
     redisAvailable: redisService.isAvailable(),
+    store: redisService.isAvailable() ? 'redis' : 'memory',
   };
 }

@@ -1,4 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRef } from 'react';
+import { apiRequest } from '@/lib/api';
+import { shouldUseMockData } from '@/lib/mock-data';
+import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
  * Organization and Team interfaces
@@ -56,7 +60,7 @@ export const organizationKeys = {
   invitations: (id: string) => [...organizationKeys.detail(id), 'invitations'] as const,
 };
 
-// Mock data
+// Fallback mock data — used only when API is not available
 const MOCK_ORG: Organization = {
   id: 'org-1',
   name: 'Acme Corporation',
@@ -79,47 +83,38 @@ const MOCK_MEMBERS: OrganizationMember[] = [
     joinedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
     lastActive: new Date().toISOString(),
   },
-  {
-    id: 'member-2',
-    userId: 'user-2',
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    role: 'admin',
-    joinedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-    lastActive: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: 'member-3',
-    userId: 'user-3',
-    name: 'Bob Johnson',
-    email: 'bob@example.com',
-    role: 'member',
-    joinedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    lastActive: new Date(Date.now() - 86400000).toISOString(),
-  },
 ];
 
-const MOCK_INVITATIONS: Invitation[] = [
-  {
-    id: 'inv-1',
-    email: 'newmember@example.com',
-    role: 'member',
-    invitedBy: 'John Doe',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    expiresAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString(),
-    status: 'pending',
-  },
-];
+const MOCK_INVITATIONS: Invitation[] = [];
 
 /**
  * Hook to get current organization
  */
 export function useOrganization() {
+  const { reportMockFallback } = useMockDataContext();
+  const reportedRef = useRef(false);
+
   return useQuery({
     queryKey: organizationKeys.detail('current'),
     queryFn: async (): Promise<Organization> => {
-      await new Promise(r => setTimeout(r, 300));
-      return MOCK_ORG;
+      if (shouldUseMockData()) {
+        if (!reportedRef.current) {
+          reportMockFallback('useOrganization', 'NEXT_PUBLIC_API_URL not configured');
+          reportedRef.current = true;
+        }
+        return MOCK_ORG;
+      }
+
+      try {
+        return await apiRequest<Organization>('/api/organizations/current');
+      } catch (error) {
+        console.warn('[useOrganization] API request failed, using mock data:', error);
+        if (!reportedRef.current) {
+          reportMockFallback('useOrganization', `API request failed: ${(error as Error).message}`);
+          reportedRef.current = true;
+        }
+        return MOCK_ORG;
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -132,8 +127,14 @@ export function useOrganizations() {
   return useQuery({
     queryKey: organizationKeys.lists(),
     queryFn: async (): Promise<Organization[]> => {
-      await new Promise(r => setTimeout(r, 300));
-      return [MOCK_ORG];
+      if (shouldUseMockData()) {
+        return [MOCK_ORG];
+      }
+      try {
+        return await apiRequest<Organization[]>('/api/organizations');
+      } catch {
+        return [MOCK_ORG];
+      }
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -146,8 +147,12 @@ export function useOrganizationMembers(orgId: string) {
   return useQuery({
     queryKey: organizationKeys.members(orgId),
     queryFn: async (): Promise<OrganizationMember[]> => {
-      await new Promise(r => setTimeout(r, 300));
-      return MOCK_MEMBERS;
+      if (shouldUseMockData()) return MOCK_MEMBERS;
+      try {
+        return await apiRequest<OrganizationMember[]>(`/api/organizations/${orgId}/members`);
+      } catch {
+        return MOCK_MEMBERS;
+      }
     },
     enabled: !!orgId,
     staleTime: 60 * 1000,
@@ -161,8 +166,12 @@ export function useOrganizationInvitations(orgId: string) {
   return useQuery({
     queryKey: organizationKeys.invitations(orgId),
     queryFn: async (): Promise<Invitation[]> => {
-      await new Promise(r => setTimeout(r, 300));
-      return MOCK_INVITATIONS;
+      if (shouldUseMockData()) return MOCK_INVITATIONS;
+      try {
+        return await apiRequest<Invitation[]>(`/api/organizations/${orgId}/invitations`);
+      } catch {
+        return MOCK_INVITATIONS;
+      }
     },
     enabled: !!orgId,
     staleTime: 60 * 1000,
@@ -174,20 +183,14 @@ export function useOrganizationInvitations(orgId: string) {
  */
 export function useCreateOrganization() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (data: CreateOrganizationData): Promise<Organization> => {
-      await new Promise(r => setTimeout(r, 500));
-      return {
-        id: `org-${Date.now()}`,
-        name: data.name,
-        slug: data.name.toLowerCase().replace(/\s+/g, '-'),
-        plan: 'free',
-        createdAt: new Date().toISOString(),
-        memberCount: 1,
-        agentCount: 0,
-        currentSpend: 0,
-      };
+      return apiRequest<Organization>('/api/organizations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.lists() });
@@ -200,11 +203,14 @@ export function useCreateOrganization() {
  */
 export function useUpdateOrganization() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Organization> & { id: string }): Promise<Organization> => {
-      await new Promise(r => setTimeout(r, 500));
-      return { ...MOCK_ORG, ...data };
+      return apiRequest<Organization>(`/api/organizations/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.detail(data.id) });
@@ -217,19 +223,14 @@ export function useUpdateOrganization() {
  */
 export function useInviteMember() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ orgId, ...data }: InviteMemberData & { orgId: string }): Promise<Invitation> => {
-      await new Promise(r => setTimeout(r, 500));
-      return {
-        id: `inv-${Date.now()}`,
-        email: data.email,
-        role: data.role,
-        invitedBy: 'Current User',
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        status: 'pending',
-      };
+      return apiRequest<Invitation>(`/api/organizations/${orgId}/invitations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.invitations(variables.orgId) });
@@ -242,10 +243,10 @@ export function useInviteMember() {
  */
 export function useRemoveMember() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ orgId, memberId }: { orgId: string; memberId: string }): Promise<void> => {
-      await new Promise(r => setTimeout(r, 500));
+      await apiRequest(`/api/organizations/${orgId}/members/${memberId}`, { method: 'DELETE' });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.members(variables.orgId) });
@@ -258,10 +259,14 @@ export function useRemoveMember() {
  */
 export function useUpdateMemberRole() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ orgId, memberId, role }: { orgId: string; memberId: string; role: OrganizationMember['role'] }): Promise<void> => {
-      await new Promise(r => setTimeout(r, 500));
+      await apiRequest(`/api/organizations/${orgId}/members/${memberId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role }),
+      });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.members(variables.orgId) });
@@ -274,10 +279,10 @@ export function useUpdateMemberRole() {
  */
 export function useCancelInvitation() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ orgId, invitationId }: { orgId: string; invitationId: string }): Promise<void> => {
-      await new Promise(r => setTimeout(r, 500));
+      await apiRequest(`/api/organizations/${orgId}/invitations/${invitationId}`, { method: 'DELETE' });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.invitations(variables.orgId) });

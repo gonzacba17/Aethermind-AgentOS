@@ -13,6 +13,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { createHash } from 'crypto';
+import logger from '../utils/logger';
 
 // ============================================
 // TYPES
@@ -61,6 +62,12 @@ interface ThreatLog {
 // CONFIGURATION
 // ============================================
 
+const WAF_CLEANUP_INTERVAL_MS = 5 * 60 * 1000;        // 5 minutes
+const WAF_WINDOW_MS = 15 * 60 * 1000;                  // 15 minutes default window
+const WAF_SUSPICIOUS_IP_MAX_SIZE = 10_000;
+const WAF_THREAT_LOG_MAX_SIZE = 10_000;
+const WAF_DIAGNOSTIC_INTERVAL_MS = 30 * 60 * 1000;     // 30 minutes
+
 const defaultConfig: SecurityConfig = {
   enabled: process.env.WAF_ENABLED !== 'false',
   ipBlacklist: new Set(process.env.IP_BLACKLIST?.split(',') || []),
@@ -78,7 +85,7 @@ const defaultConfig: SecurityConfig = {
     sqlInjection: [
       /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|UNION|DECLARE)\b)/gi,
       /(\b(OR|AND)\b\s+\d+\s*=\s*\d+)/gi,
-      /(--|\#|\/\*|\*\/)/g,
+      /(--|#|\/\*|\*\/)/g,
       /(\b(SLEEP|BENCHMARK|WAITFOR)\b)/gi,
       /(\bINFORMATION_SCHEMA\b)/gi,
     ],
@@ -121,9 +128,9 @@ const suspiciousIPs: Map<string, { score: number; lastSeen: number }> = new Map(
 function logThreat(log: ThreatLog): void {
   threatLogs.push(log);
 
-  // Keep only last 10000 logs
-  if (threatLogs.length > 10000) {
-    threatLogs.shift();
+  // Rotate threatLogs when exceeding max size
+  if (threatLogs.length > WAF_THREAT_LOG_MAX_SIZE) {
+    threatLogs.splice(0, threatLogs.length - WAF_THREAT_LOG_MAX_SIZE);
   }
 
   // Update suspicious IP score
@@ -132,14 +139,50 @@ function logThreat(log: ThreatLog): void {
   current.lastSeen = Date.now();
   suspiciousIPs.set(log.ip, current);
 
+  // Enforce max size on suspiciousIPs with simple LRU eviction
+  if (suspiciousIPs.size > WAF_SUSPICIOUS_IP_MAX_SIZE) {
+    // Find and remove entries with the oldest lastSeen timestamps
+    const entries = Array.from(suspiciousIPs.entries())
+      .sort((a, b) => a[1].lastSeen - b[1].lastSeen);
+    const toRemove = entries.slice(0, suspiciousIPs.size - WAF_SUSPICIOUS_IP_MAX_SIZE);
+    for (const [ip] of toRemove) {
+      suspiciousIPs.delete(ip);
+    }
+  }
+
   // Log to console in development
   if (process.env.NODE_ENV !== 'production') {
     console.warn(`[WAF] ${log.threatType}: ${log.ip} - ${log.path} - ${log.details}`);
   }
 }
 
+// Fields that contain user-authored content and should skip SQL injection checks
+const FREE_TEXT_FIELDS = ['prompt', 'systemPrompt', 'name', 'description', 'content', 'message'];
+
+const WAF_DRY_RUN = process.env.WAF_DRY_RUN === 'true';
+
 function checkSQLInjection(value: string): boolean {
   return defaultConfig.patterns.sqlInjection.some((pattern) => pattern.test(value));
+}
+
+/**
+ * Extract only non-free-text fields from a body object for SQL injection checking.
+ * Free text fields (prompt, name, description, etc.) are excluded.
+ */
+function extractCheckableFields(body: Record<string, any>): Record<string, any> {
+  const checkable: Record<string, any> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (FREE_TEXT_FIELDS.includes(key)) continue;
+    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+      const nested = extractCheckableFields(value);
+      if (Object.keys(nested).length > 0) {
+        checkable[key] = nested;
+      }
+    } else {
+      checkable[key] = value;
+    }
+  }
+  return checkable;
 }
 
 function checkXSS(value: string): boolean {
@@ -302,30 +345,36 @@ export function securityMiddleware(config: Partial<SecurityConfig> = {}) {
     // 6. SQL injection check on query params
     const queryString = JSON.stringify(req.query);
     if (checkSQLInjection(queryString)) {
-      logThreat({
+      const threat: ThreatLog = {
         timestamp: new Date(),
         ip,
         path: req.path,
         method: req.method,
         threatType: 'SQL_INJECTION',
         details: 'SQL injection pattern detected in query',
-        blocked: true,
-      });
-      return res.status(400).json({ error: 'Invalid request' });
+        blocked: !WAF_DRY_RUN,
+      };
+      logThreat(threat);
+      if (!WAF_DRY_RUN) {
+        return res.status(400).json({ error: 'Invalid request' });
+      }
     }
 
     // 7. XSS check on query params
     if (checkXSS(queryString)) {
-      logThreat({
+      const threat: ThreatLog = {
         timestamp: new Date(),
         ip,
         path: req.path,
         method: req.method,
         threatType: 'XSS',
         details: 'XSS pattern detected in query',
-        blocked: true,
-      });
-      return res.status(400).json({ error: 'Invalid request' });
+        blocked: !WAF_DRY_RUN,
+      };
+      logThreat(threat);
+      if (!WAF_DRY_RUN) {
+        return res.status(400).json({ error: 'Invalid request' });
+      }
     }
 
     // 8. Bot detection
@@ -395,34 +444,42 @@ export function bodyValidationMiddleware() {
     }
 
     const ip = getClientIP(req);
-    const bodyString = JSON.stringify(req.body);
 
-    // SQL injection check
-    if (checkSQLInjection(bodyString)) {
-      logThreat({
+    // SQL injection check — only on non-free-text fields
+    const checkableFields = extractCheckableFields(req.body);
+    const checkableString = JSON.stringify(checkableFields);
+    if (checkSQLInjection(checkableString)) {
+      const threat: ThreatLog = {
         timestamp: new Date(),
         ip,
         path: req.path,
         method: req.method,
         threatType: 'SQL_INJECTION',
-        details: 'SQL injection pattern detected in body',
-        blocked: true,
-      });
-      return res.status(400).json({ error: 'Invalid request body' });
+        details: 'SQL injection pattern detected in body (non-free-text fields)',
+        blocked: !WAF_DRY_RUN,
+      };
+      logThreat(threat);
+      if (!WAF_DRY_RUN) {
+        return res.status(400).json({ error: 'Invalid request body' });
+      }
     }
 
-    // XSS check
+    // XSS check — applied to full body (XSS is dangerous in all fields)
+    const bodyString = JSON.stringify(req.body);
     if (checkXSS(bodyString)) {
-      logThreat({
+      const threat: ThreatLog = {
         timestamp: new Date(),
         ip,
         path: req.path,
         method: req.method,
         threatType: 'XSS',
         details: 'XSS pattern detected in body',
-        blocked: true,
-      });
-      return res.status(400).json({ error: 'Invalid request body' });
+        blocked: !WAF_DRY_RUN,
+      };
+      logThreat(threat);
+      if (!WAF_DRY_RUN) {
+        return res.status(400).json({ error: 'Invalid request body' });
+      }
     }
 
     next();
@@ -465,4 +522,64 @@ export function clearSuspiciousIP(ip: string): void {
   suspiciousIPs.delete(ip);
 }
 
+// ============================================
+// WAF STATE CLEANUP (prevents memory leak in production)
+// ============================================
+
+/**
+ * Cleans up stale WAF state to prevent unbounded memory growth.
+ * - requestCounts: removes entries past their reset window
+ * - suspiciousIPs: removes entries not seen within the configured window
+ * - threatLogs: rotates to keep max WAF_THREAT_LOG_MAX_SIZE entries
+ */
+export function cleanupWAFState(): void {
+  const now = Date.now();
+  let removedRequestCounts = 0;
+  let removedSuspiciousIPs = 0;
+
+  // Clean up expired request counts
+  for (const [key, entry] of requestCounts.entries()) {
+    if (now > entry.resetTime) {
+      requestCounts.delete(key);
+      removedRequestCounts++;
+    }
+  }
+
+  // Clean up suspicious IPs not seen within the WAF window
+  for (const [ip, data] of suspiciousIPs.entries()) {
+    if (now - data.lastSeen > WAF_WINDOW_MS) {
+      suspiciousIPs.delete(ip);
+      removedSuspiciousIPs++;
+    }
+  }
+
+  // Rotate threat logs if needed
+  if (threatLogs.length > WAF_THREAT_LOG_MAX_SIZE) {
+    threatLogs.splice(0, threatLogs.length - WAF_THREAT_LOG_MAX_SIZE);
+  }
+
+  if (removedRequestCounts > 0 || removedSuspiciousIPs > 0) {
+    logger.debug('WAF state cleanup', {
+      removedRequestCounts,
+      removedSuspiciousIPs,
+      remainingRequestCounts: requestCounts.size,
+      remainingSuspiciousIPs: suspiciousIPs.size,
+      threatLogsCount: threatLogs.length,
+    });
+  }
+}
+
+// Run WAF cleanup every 5 minutes
+setInterval(cleanupWAFState, WAF_CLEANUP_INTERVAL_MS);
+
+// Diagnostic snapshot every 30 minutes
+setInterval(() => {
+  logger.info('WAF state snapshot', {
+    requestCountsSize: requestCounts.size,
+    suspiciousIPsSize: suspiciousIPs.size,
+    threatLogsCount: threatLogs.length,
+  });
+}, WAF_DIAGNOSTIC_INTERVAL_MS);
+
 export default securityMiddleware;
+

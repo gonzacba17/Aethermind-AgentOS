@@ -1,6 +1,8 @@
 import type React from "react"
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
+import { MockDataProvider } from "@/contexts/MockDataContext"
+import { MockDataBanner } from "@/components/dashboard/mock-data-banner"
 
 export default function DashboardLayout({
   children,
@@ -8,14 +10,17 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-background">
-      <DashboardSidebar />
-      <div className="flex-1 flex flex-col">
-        <DashboardHeader />
-        <main className="flex-1 p-6 space-y-6 overflow-auto">
-          {children}
-        </main>
+    <MockDataProvider>
+      <div className="flex min-h-screen bg-background">
+        <DashboardSidebar />
+        <div className="flex-1 flex flex-col">
+          <MockDataBanner />
+          <DashboardHeader />
+          <main className="flex-1 p-6 space-y-6 overflow-auto">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </MockDataProvider>
   )
 }

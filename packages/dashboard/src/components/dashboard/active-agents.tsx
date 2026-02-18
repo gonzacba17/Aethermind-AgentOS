@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useAgents } from "@/hooks"
+import { useAgents, useToggleAgentStatus } from "@/hooks"
 import { ListSkeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useToast } from "@/hooks/use-toast"
@@ -26,6 +26,7 @@ export function ActiveAgents() {
   const router = useRouter();
   const { toast } = useToast();
   const { data, isLoading, error, refetch } = useAgents({ limit: 4 });
+  const toggleStatus = useToggleAgentStatus();
 
   const agents = data?.data || [];
 
@@ -45,12 +46,26 @@ export function ActiveAgents() {
     router.push(`/logs?agentId=${agentId}`);
   };
 
-  const handlePauseAgent = (agentId: string, agentName: string) => {
-    toast({
-      title: "Agent Paused",
-      description: `${agentName} has been paused`,
-    });
-    // TODO: Call API to pause agent
+  const handlePauseAgent = (agentId: string, agentName: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'running' ? 'paused' : 'active';
+    toggleStatus.mutate(
+      { id: agentId, status: newStatus },
+      {
+        onSuccess: () => {
+          toast({
+            title: newStatus === 'paused' ? "Agent Paused" : "Agent Resumed",
+            description: `${agentName} has been ${newStatus === 'paused' ? 'paused' : 'resumed'}`,
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: "Error",
+            description: `Failed to update agent: ${error.message}`,
+            variant: "destructive",
+          });
+        },
+      }
+    );
   };
 
   if (isLoading) {
@@ -152,11 +167,12 @@ export function ActiveAgents() {
                       View Logs
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={(e) => { e.stopPropagation(); handlePauseAgent(agent.id, agent.name); }}
+                    <DropdownMenuItem
+                      onClick={(e) => { e.stopPropagation(); handlePauseAgent(agent.id, agent.name, agent.status); }}
                       className="text-amber-600"
+                      disabled={toggleStatus.isPending}
                     >
-                      {agent.status === 'running' ? 'Pause Agent' : 'Start Agent'}
+                      {toggleStatus.isPending ? 'Updating...' : agent.status === 'running' ? 'Pause Agent' : 'Start Agent'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

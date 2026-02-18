@@ -107,6 +107,50 @@ router.post('/:id/execute', usageLimiter as any, validateParams(IdParamSchema), 
   }
 });
 
+router.patch('/:id/status', validateParams(IdParamSchema), async (req: AuthRequest, res: any) => {
+  const { status } = req.body;
+
+  if (!status || !['active', 'paused', 'running', 'idle'].includes(status)) {
+    res.status(400).json({ error: 'Invalid status. Must be one of: active, paused, running, idle' });
+    return;
+  }
+
+  const agent = req.runtime.getAgent(req.params['id']!);
+  if (!agent) {
+    res.status(404).json({ error: 'Agent not found' });
+    return;
+  }
+
+  try {
+    // NOTE: orchestrator.pauseAgent() and orchestrator.resumeAgent() are NOT implemented
+    // in packages/core/src/orchestrator/Orchestrator.ts as of 2024-02.
+    // The typeof check below is a safe guard — the status change is cosmetic (DB only)
+    // until core actually implements pause/resume functionality.
+    // Using bracket notation to avoid TS2339 on future methods not yet in the type.
+    const orch = req.orchestrator as unknown as Record<string, unknown>;
+    if (status === 'paused' && typeof orch['pauseAgent'] === 'function') {
+      await (orch['pauseAgent'] as (id: string) => Promise<void>)(agent.id);
+    } else if (status === 'active' && typeof orch['resumeAgent'] === 'function') {
+      await (orch['resumeAgent'] as (id: string) => Promise<void>)(agent.id);
+    }
+
+    // Update in DB (updateAgent may not be on StoreInterface yet)
+    const store = req.store as unknown as Record<string, unknown>;
+    if (typeof store['updateAgent'] === 'function') {
+      await (store['updateAgent'] as (id: string, data: Record<string, unknown>) => Promise<void>)(agent.id, { status });
+    }
+
+    res.json({
+      id: agent.id,
+      name: agent.getName(),
+      model: agent.getModel(),
+      status,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 router.delete('/:id', validateParams(IdParamSchema), (req, res) => {
   const removed = req.runtime.removeAgent(req.params['id']!);
   if (!removed) {

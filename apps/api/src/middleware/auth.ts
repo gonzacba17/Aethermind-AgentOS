@@ -1,9 +1,25 @@
+/**
+ * Global auth middleware — mounted at app.use("/api", authMiddleware) in index.ts.
+ *
+ * AUDIT: Routes using this middleware (applied globally to /api/*):
+ *   All routes under /api/* (agents, executions, logs, traces, costs, workflows, budgets,
+ *   onboarding, stripe, user-api-keys, organizations, optimization, forecasting)
+ *   EXCEPT: /auth/* and /v1/* which are mounted BEFORE this middleware.
+ *
+ * See also: middleware/jwt-auth.ts — per-route middleware used by:
+ *   - routes/organizations.ts
+ *   - routes/agents.ts
+ * jwt-auth.ts loads fresh user data from DB and exports AuthRequest type.
+ * This middleware (auth.ts) only decodes the JWT without DB lookup.
+ * They have DISTINCT responsibilities and both should be kept.
+ */
+
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 import type { RedisCache } from '../services/RedisCache.js';
 import logger from '../utils/logger';
+import { verifyJWT } from '../utils/auth-helpers';
 
 const API_KEY_HEADER = 'x-api-key';
 const AUTH_CACHE_TTL = 300;
@@ -109,27 +125,15 @@ async function validateJWT(
   }
 
   try {
-    // Enforce JWT_SECRET requirement
-    const JWT_SECRET = (() => {
-      const secret = process.env.JWT_SECRET;
-      if (!secret) {
-        throw new Error(
-          'JWT_SECRET environment variable is required. Generate with: openssl rand -base64 32'
-        );
-      }
-      if (secret.length < 32) {
-        throw new Error('JWT_SECRET must be at least 32 characters long');
-      }
-      return secret;
-    })();
-    
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    // Use centralized verifyJWT which reads JWT_SECRET through the validated secrets.ts getter
+    // All JWT_SECRET access MUST go through auth-helpers → secrets.ts (never process.env directly)
+    const decoded = verifyJWT(token);
     
     // Attach user info to request
     // NOTE: usageCount/usageLimit are NOT in the JWT anymore (they became stale).
     // The usage-limiter middleware reads fresh values from the DB.
     req.user = {
-      id: decoded.id,
+      id: decoded.userId || decoded.id || '',
       email: decoded.email,
       plan: decoded.plan || 'free',
       usageCount: 0,   // Placeholder — fresh value loaded by usage-limiter

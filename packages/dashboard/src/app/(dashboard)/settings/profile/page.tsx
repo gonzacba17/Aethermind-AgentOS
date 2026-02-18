@@ -1,52 +1,132 @@
 "use client"
 
-import { useState } from "react"
-import { User, Mail, Building2, Save, Loader2, Camera } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { User, Mail, Building2, Save, Loader2, Camera, AlertTriangle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
+import { useUserProfile } from "@/hooks"
+import { apiRequest } from "@/lib/api"
 
 export default function ProfilePage() {
   const { toast } = useToast()
+  const { data: user, isLoading: isLoadingUser, error: userError } = useUserProfile()
   const [isSaving, setIsSaving] = useState(false)
-  
-  // Mock user data - would come from auth store in real app
+  const originalEmailRef = useRef<string>("")
+
   const [profile, setProfile] = useState({
-    name: "John Doe",
-    email: "john@example.com",
-    company: "Acme Corp",
-    role: "Admin",
+    name: "",
+    email: "",
+    company: "",
+    role: "Member",
     avatar: "",
   })
-  
+
+  // Populate form when user data loads
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name: user.name || "",
+        email: user.email || "",
+        company: "",
+        role: user.plan === 'enterprise' ? 'Admin' : 'Member',
+        avatar: "",
+      })
+      originalEmailRef.current = user.email || ""
+    }
+  }, [user])
+
+  const emailChanged = profile.email !== originalEmailRef.current && originalEmailRef.current !== ""
+
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      // TODO: Call API to update profile
-      await new Promise(r => setTimeout(r, 1000))
-      toast({
-        title: "Profile Updated",
-        description: "Your profile has been saved successfully",
+      const body: Record<string, string> = {}
+      if (profile.name) body.name = profile.name
+      if (profile.email) body.email = profile.email
+
+      const result = await apiRequest<{ success: boolean; emailChanged?: boolean }>('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       })
-    } catch (error) {
+
+      if (result.emailChanged) {
+        toast({
+          title: "Profile Updated",
+          description: "A verification email has been sent to your new address.",
+        })
+      } else {
+        toast({
+          title: "Profile Updated",
+          description: "Your profile has been saved successfully",
+        })
+      }
+      originalEmailRef.current = profile.email
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to update profile",
+        description: error?.message || "Failed to update profile",
         variant: "destructive",
       })
     } finally {
       setIsSaving(false)
     }
   }
-  
-  const initials = profile.name
+
+  const initials = (profile.name || "U")
     .split(' ')
     .map(n => n[0])
     .join('')
     .toUpperCase()
+    .slice(0, 2)
+
+  if (isLoadingUser) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-500/10">
+            <User className="h-6 w-6 text-blue-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Profile</h1>
+            <p className="text-muted-foreground">Manage your account information</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-muted-foreground">Loading profile...</span>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (userError) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-500/10">
+            <User className="h-6 w-6 text-blue-500" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Profile</h1>
+            <p className="text-muted-foreground">Manage your account information</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <AlertTriangle className="h-8 w-8 text-destructive/70 mb-2" />
+            <p className="text-sm text-muted-foreground">Failed to load profile data</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -77,7 +157,7 @@ export default function ProfilePage() {
                   {initials}
                 </AvatarFallback>
               </Avatar>
-              <button 
+              <button
                 className="absolute bottom-0 right-0 p-1.5 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                 onClick={() => toast({ title: "Coming Soon", description: "Avatar upload will be available soon" })}
               >
@@ -85,7 +165,7 @@ export default function ProfilePage() {
               </button>
             </div>
             <div>
-              <h3 className="font-semibold text-lg">{profile.name}</h3>
+              <h3 className="font-semibold text-lg">{profile.name || "User"}</h3>
               <p className="text-muted-foreground">{profile.role}</p>
             </div>
           </div>
@@ -96,7 +176,7 @@ export default function ProfilePage() {
               <Label htmlFor="name">Full Name</Label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
+                <Input
                   id="name"
                   value={profile.name}
                   onChange={(e) => setProfile(prev => ({ ...prev, name: e.target.value }))}
@@ -104,12 +184,12 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="email">Email Address</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
+                <Input
                   id="email"
                   type="email"
                   value={profile.email}
@@ -117,13 +197,18 @@ export default function ProfilePage() {
                   className="pl-10"
                 />
               </div>
+              {emailChanged && (
+                <p className="text-xs text-amber-600">
+                  Changing your email will require verification. A confirmation email will be sent.
+                </p>
+              )}
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="company">Company</Label>
               <div className="relative">
                 <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
+                <Input
                   id="company"
                   value={profile.company}
                   onChange={(e) => setProfile(prev => ({ ...prev, company: e.target.value }))}
@@ -131,10 +216,10 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Input 
+              <Input
                 id="role"
                 value={profile.role}
                 disabled
@@ -172,11 +257,11 @@ export default function ProfilePage() {
                 Permanently delete your account and all associated data
               </p>
             </div>
-            <Button 
+            <Button
               variant="destructive"
-              onClick={() => toast({ 
-                title: "Coming Soon", 
-                description: "Account deletion will be available in settings" 
+              onClick={() => toast({
+                title: "Coming Soon",
+                description: "Account deletion will be available in settings"
               })}
             >
               Delete Account

@@ -1,6 +1,8 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { fetchTraces, fetchTrace, Trace } from '@/lib/api';
 import { MOCK_TRACES, shouldUseMockData } from '@/lib/mock-data';
+import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
  * Query key factory for traces
@@ -48,6 +50,9 @@ export function useTraces(
   filters: TraceFilters = {},
   options?: Omit<UseQueryOptions<TracesResponse>, 'queryKey' | 'queryFn'>
 ) {
+  const { reportMockFallback } = useMockDataContext();
+  const reportedRef = useRef(false);
+
   return useQuery({
     queryKey: traceKeys.list(filters),
     queryFn: async () => {
@@ -88,6 +93,10 @@ export function useTraces(
 
       // Use mock data if API is not configured (demo mode)
       if (shouldUseMockData()) {
+        if (!reportedRef.current) {
+          reportMockFallback('useTraces', 'NEXT_PUBLIC_API_URL not configured');
+          reportedRef.current = true;
+        }
         return transformTraces(MOCK_TRACES);
       }
       
@@ -97,6 +106,10 @@ export function useTraces(
         return transformTraces(traces);
       } catch (error) {
         console.warn('[useTraces] API request failed, using mock data:', error);
+        if (!reportedRef.current) {
+          reportMockFallback('useTraces', `API request failed: ${(error as Error).message}`);
+          reportedRef.current = true;
+        }
         return transformTraces(MOCK_TRACES);
       }
     },

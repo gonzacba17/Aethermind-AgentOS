@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { 
-  Rocket, Key, Bot, DollarSign, CheckCircle2, ChevronRight, 
+import {
+  Rocket, Key, Bot, DollarSign, CheckCircle2, ChevronRight,
   ChevronLeft, Sparkles, Loader2, X
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { apiRequest } from "@/lib/api"
 
 interface OnboardingWizardProps {
   open: boolean;
@@ -93,17 +94,28 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
     if (currentStep === STEPS.length - 1) {
       setIsLoading(true)
       try {
-        // TODO: Call API to save onboarding data
-        await new Promise(r => setTimeout(r, 1000))
+        await apiRequest('/api/auth/onboarding', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            completed: true,
+            step: 'complete',
+            data: {
+              apiKey: { provider: apiKeyData.provider },
+              agent: { name: agentData.name, model: agentData.model },
+              budget: { limit: budgetData.limit, period: budgetData.period },
+            },
+          }),
+        })
         onComplete()
         toast({
-          title: "🎉 Welcome to Aethermind!",
+          title: "Welcome to Aethermind!",
           description: "Your account is ready to use",
         })
       } catch (error) {
         toast({
           title: "Error",
-          description: "Failed to complete onboarding",
+          description: "Failed to complete onboarding. Please try again.",
           variant: "destructive",
         })
       } finally {

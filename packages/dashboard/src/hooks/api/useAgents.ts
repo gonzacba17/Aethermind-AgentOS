@@ -1,12 +1,15 @@
 import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
-import { 
-  fetchAgents, 
-  fetchAgent, 
-  createAgent, 
+import { useRef } from 'react';
+import {
+  fetchAgents,
+  fetchAgent,
+  createAgent,
   executeAgent,
-  Agent 
+  apiRequest,
+  Agent
 } from '@/lib/api';
 import { MOCK_AGENTS, shouldUseMockData } from '@/lib/mock-data';
+import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
  * Query key factory for agents
@@ -48,6 +51,9 @@ export function useAgents(
   filters: AgentFilters = {},
   options?: Omit<UseQueryOptions<AgentsResponse>, 'queryKey' | 'queryFn'>
 ) {
+  const { reportMockFallback } = useMockDataContext();
+  const reportedRef = useRef(false);
+
   return useQuery({
     queryKey: agentKeys.list(filters),
     queryFn: async () => {
@@ -81,6 +87,10 @@ export function useAgents(
 
       // Use mock data if API is not configured (demo mode)
       if (shouldUseMockData()) {
+        if (!reportedRef.current) {
+          reportMockFallback('useAgents', 'NEXT_PUBLIC_API_URL not configured');
+          reportedRef.current = true;
+        }
         return getMockData();
       }
       
@@ -125,6 +135,10 @@ export function useAgents(
         return result as AgentsResponse;
       } catch (error) {
         console.warn('[useAgents] API request failed, using mock data:', error);
+        if (!reportedRef.current) {
+          reportMockFallback('useAgents', `API request failed: ${(error as Error).message}`);
+          reportedRef.current = true;
+        }
         return getMockData();
       }
     },
@@ -248,16 +262,14 @@ export function useExecuteAgent() {
  */
 export function useToggleAgentStatus() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'active' | 'paused' }) => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents/${id}/status`, {
+      return apiRequest(`/api/agents/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
-      if (!response.ok) throw new Error('Failed to update agent status');
-      return response.json();
     },
     onSuccess: (data, variables) => {
       queryClient.setQueryData(agentKeys.detail(variables.id), data);
