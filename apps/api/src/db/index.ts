@@ -25,11 +25,10 @@ const pool = new Pool({
   ssl: sslConfig,
 });
 
-// Enhanced logging for connection diagnostics
+// Track connection state changes (no verbose logging — these fire on every pool checkout/release)
 pool.on('connect', () => {
   isConnected = true;
   lastConnectionError = null;
-  console.log('✅ Database pool connection established');
 });
 
 pool.on('error', (err) => {
@@ -40,7 +39,8 @@ pool.on('error', (err) => {
 });
 
 pool.on('remove', () => {
-  console.log('🔌 Database connection removed from pool');
+  // Normal pool lifecycle — connection returned after idle timeout.
+  // No logging needed; this fires frequently in production.
 });
 
 /**

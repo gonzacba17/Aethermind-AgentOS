@@ -79,7 +79,8 @@
       "Bash(git ls-tree:*)",
       "Bash(git pull:*)",
       "Bash(git merge:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(npx vitest:*)"
     ],
     "deny": []
   }

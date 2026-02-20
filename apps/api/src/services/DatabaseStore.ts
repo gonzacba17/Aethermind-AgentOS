@@ -15,16 +15,28 @@ export class DatabaseStore implements StoreInterface {
   constructor() {}
 
   async connect(): Promise<boolean> {
-    try {
-      await db.select().from(agents).limit(1);
-      this.connected = true;
-      logger.info('Database connected successfully');
-      return true;
-    } catch (error) {
-      logger.error('Failed to connect to database', { error });
-      this.connected = false;
-      return false;
+    const maxRetries = 3;
+    const retryDelayMs = 2000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await db.select().from(agents).limit(1);
+        this.connected = true;
+        logger.info('Database connected successfully via DatabaseStore');
+        return true;
+      } catch (error) {
+        logger.warn(`DatabaseStore connection attempt ${attempt}/${maxRetries} failed`, {
+          error: (error as Error).message,
+        });
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        }
+      }
     }
+
+    logger.error('Failed to connect to database after all retries');
+    this.connected = false;
+    return false;
   }
 
   isConnected(): boolean {

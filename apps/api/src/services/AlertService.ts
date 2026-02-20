@@ -14,10 +14,23 @@ export class AlertService {
    * Check all active budgets and send alerts if thresholds are exceeded
    */
   async checkAndSendAlerts(): Promise<void> {
-    const budgetsWithUsers = await db.select()
-      .from(budgets)
-      .leftJoin(users, eq(budgets.userId, users.id))
-      .where(eq(budgets.status, 'active'));
+    let budgetsWithUsers;
+    try {
+      budgetsWithUsers = await db.select()
+        .from(budgets)
+        .leftJoin(users, eq(budgets.userId, users.id))
+        .where(eq(budgets.status, 'active'));
+    } catch (error) {
+      // Log once at debug level — this fires every 5 min so don't spam error logs
+      logger.debug('Alert check skipped: budgets query failed', {
+        error: (error as Error).message,
+      });
+      return;
+    }
+
+    if (!budgetsWithUsers || budgetsWithUsers.length === 0) {
+      return; // No active budgets — nothing to check
+    }
 
     for (const row of budgetsWithUsers) {
       if (row.budgets && row.users) {
@@ -86,7 +99,8 @@ export class AlertService {
         budgetId: budget.id,
         error: (error as Error).message,
       });
-      throw error;
+      // Don't re-throw — error is logged. Re-throwing would cause double-logging
+      // from the setInterval handler in index.ts.
     } finally {
       client.release();
     }

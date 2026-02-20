@@ -312,4 +312,4 @@ El proyecto tiene una arquitectura sólida y buen uso de patrones de resiliencia
 | `CORS_ORIGINS`               | Lista de orígenes CORS separados por coma            | Defaults hardcodeados   |
 | `ALLOWED_OAUTH_REDIRECTS`    | Whitelist de redirects OAuth separados por coma      | Mismos defaults de CORS |
 
-> Ver `BACKEND_AUDIT_V2.md` para detalles completos de cada fix y el plan de 3 semanas.
+> Ver `BACKEND_AUDIT.md` para detalles completos de cada fix y el plan de 3 semanas.

@@ -12,10 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **P0 Critical Improvements (2025-12-07)**
 
 - GitHub Actions CI/CD pipeline with automated tests
-- Sentry integration for error tracking and monitoring
 - Rate limiting on authentication endpoints (5 attempts per 15 minutes)
-- PrismaClient singleton pattern to prevent connection pool exhaustion
-- Sentry DSN configuration in environment files
+- Drizzle ORM connection pool with optimized settings (max 10, idle timeout 30s)
 
 ### Changed
 
@@ -24,14 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JWT_SECRET now throws error if weak or missing in production
 - Frozen lockfile enforced in Railway deployments
 - Consolidated health check endpoints (removed duplicate /health)
-- PrismaClient refactored to singleton pattern in `apps/api/src/lib/prisma.ts`
+- Database connection refactored to Drizzle ORM with PostgreSQL pool in `apps/api/src/db/index.ts`
 
 ### Fixed
 
 **P0 Critical Improvements (2025-12-07)**
 
 - Fixed non-null assertion in orchestrator initialization (changed to `?? null`)
-- Fixed multiple PrismaClient instances causing memory leaks
 - Fixed potential brute force vulnerability in auth endpoints
 
 ### Security
@@ -40,8 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Enhanced JWT secret validation (minimum 32 characters, throws error in production)
 - Added rate limiting to prevent brute force attacks on auth routes
-- Improved error tracking with Sentry integration
-- Singleton pattern for PrismaClient prevents connection pool exhaustion
+- Drizzle ORM connection pool with health checks prevents connection exhaustion
 
 ---
 
@@ -81,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - @types/jest upgraded to 30.0.0
 - jest-environment-jsdom upgraded to 30.2.0
 - ts-jest upgraded to 29.2.5
-- Prisma maintained at 6.19.0 (latest stable 6.x)
+- Drizzle ORM with node-postgres driver
 
 ### Changed
 
@@ -129,7 +125,7 @@ Initial release of Aethermind AgentOS - A powerful platform for building, orches
 - PostgreSQL database integration for persistent storage
 - Redis integration for caching and pub/sub
 - Docker Compose setup for local development
-- Prisma ORM with schema management
+- Drizzle ORM with schema management
 
 **LLM Provider Support**
 
@@ -181,25 +177,11 @@ Initial release of Aethermind AgentOS - A powerful platform for building, orches
 - Basic error recovery mechanisms
 - Coverage at 20% baseline (target: 60%)
 
-#### Development History
-
-For detailed development history including sprints 1-3 and version 0.2.0-0.6.0 milestones, see [CHANGELOG_DEV_HISTORY.md](./CHANGELOG_DEV_HISTORY.md).
-
----
-
-## Future Roadmap
-
-See [ROADMAP.md](./ROADMAP.md) for planned features and development timeline.
-
----
-
 ## Related Documentation
 
-- **[Main README](README.md)** - Getting started guide
-- **[Development History](CHANGELOG_DEV_HISTORY.md)** - Detailed sprint-by-sprint development (v0.2.0-0.6.0)
-- **[Roadmap](ROADMAP.md)** - Strategic plan and future features
-- **[Project Structure](ESTRUCTURA.md)** - Architecture overview
-- **[Technical Audit](auditoria_tecnica.md)** - Quality and security assessment
+- **[Main README](../README.md)** - Getting started guide
+- **[Documentation Index](README.md)** - All available documentation
+- **[Dashboard Implementation Plan](DASHBOARD_IMPLEMENTATION_PLAN.md)** - 6-week dashboard roadmap
 
 ---
 

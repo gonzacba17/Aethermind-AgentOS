@@ -44,9 +44,9 @@ describe('OpenAIInterceptor', () => {
 
       interceptor.instrument();
 
-      // Since OpenAI SDK is not installed in test env
+      // SDK may be partially resolvable but lack the expected method
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('OpenAI SDK not found')
+        expect.stringMatching(/OpenAI (SDK not found|chat\.completions\.create not found)/)
       );
     });
 
@@ -138,9 +138,9 @@ describe('AnthropicInterceptor', () => {
 
       interceptor.instrument();
 
-      // Since Anthropic SDK is not installed in test env
+      // SDK may be partially resolvable but lack the expected method
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Anthropic SDK not found')
+        expect.stringMatching(/Anthropic (SDK not found|messages\.create not found)/)
       );
     });
   });
