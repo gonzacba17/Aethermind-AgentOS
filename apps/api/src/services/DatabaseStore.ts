@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db, pool } from '../db';
 import { agents, logs, traces, costs, executions } from '../db/schema';
 import { eq, and, count as countFn, desc, sql, sum } from 'drizzle-orm';
 import type { LogEntry, Trace, CostInfo, ExecutionResult, LogLevel, AgentStatus, TraceNode } from '@aethermind/core';
@@ -7,7 +7,11 @@ import logger from '../utils/logger';
 
 /**
  * DatabaseStore - Type-safe data access using Drizzle ORM
- * Replaces PrismaStore with Drizzle for enhanced type safety
+ *
+ * Uses the shared pool from db/index.ts (same connection string and SSL
+ * config as every other database consumer). The connect() method tests
+ * connectivity with SELECT 1 — the same lightweight probe used by
+ * verifyDatabaseOnStartup() — so both paths succeed or fail together.
  */
 export class DatabaseStore implements StoreInterface {
   private connected = false;
@@ -20,13 +24,24 @@ export class DatabaseStore implements StoreInterface {
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        await db.select().from(agents).limit(1);
+        // Use the same lightweight query as verifyDatabaseOnStartup().
+        // Previous code queried the `agents` table here, which fails if
+        // migrations haven't run — even though the database is reachable.
+        await pool.query('SELECT 1');
         this.connected = true;
-        logger.info('Database connected successfully via DatabaseStore');
+        logger.info('DatabaseStore connected (shared pool, same SSL config as main pool)');
         return true;
       } catch (error) {
+        const err = error as Error & { code?: string };
         logger.warn(`DatabaseStore connection attempt ${attempt}/${maxRetries} failed`, {
-          error: (error as Error).message,
+          error: err.message,
+          code: err.code,
+          stack: err.stack,
+          databaseUrl: process.env['DATABASE_URL']
+            ? `${process.env['DATABASE_URL'].substring(0, 25)}...`
+            : 'NOT SET',
+          sslRejectUnauthorized: process.env['DB_SSL_REJECT_UNAUTHORIZED'] ?? 'not set (defaults to true)',
+          nodeEnv: process.env['NODE_ENV'],
         });
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, retryDelayMs));
@@ -34,7 +49,7 @@ export class DatabaseStore implements StoreInterface {
       }
     }
 
-    logger.error('Failed to connect to database after all retries');
+    logger.error('DatabaseStore failed to connect after all retries — falling back to InMemoryStore');
     this.connected = false;
     return false;
   }

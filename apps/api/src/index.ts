@@ -211,12 +211,18 @@ async function initializeStore(): Promise<StoreInterface> {
         logger.info("Using DatabaseStore (Drizzle) for data persistence");
         return databaseStore;
       }
+      // connect() returned false — detailed error already logged inside DatabaseStore
+      logger.warn("DatabaseStore.connect() returned false, falling back to InMemoryStore");
     } catch (error) {
-      logger.warn(
-        "Failed to connect via DatabaseStore, falling back to InMemoryStore:",
-        error
-      );
+      const err = error as Error & { code?: string };
+      logger.warn("Unexpected error initializing DatabaseStore, falling back to InMemoryStore", {
+        error: err.message,
+        code: err.code,
+        stack: err.stack,
+      });
     }
+  } else {
+    logger.warn("DATABASE_URL not set — skipping DatabaseStore");
   }
   logger.info("Using InMemoryStore (data will not persist across restarts)");
   return new InMemoryStore();
