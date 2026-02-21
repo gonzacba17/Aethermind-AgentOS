@@ -215,67 +215,70 @@ export async function findOrCreateOAuthUser(
   
   try {
     // Use retry logic for database operations
-    const user = await retryDatabaseOperation(async () => {
+    const result = await retryDatabaseOperation(async () => {
       // 1. Check if user exists with this OAuth provider ID
+      logger.info('[OAuth] Step 1: Looking up user by provider ID', { provider, providerId: providerId.substring(0, 10) + '...' });
       let foundUser = null;
-      
+
       if (provider === 'google') {
-        const [result] = await db.select()
+        const [found] = await db.select()
           .from(users)
           .where(eq(users.googleId, providerId))
           .limit(1);
-        foundUser = result || null;
+        foundUser = found || null;
       } else { // github
-        const [result] = await db.select()
+        const [found] = await db.select()
           .from(users)
           .where(eq(users.githubId, providerId))
           .limit(1);
-        foundUser = result || null;
+        foundUser = found || null;
       }
-      
+
       if (foundUser) {
-        logger.info('✅ Existing OAuth user found in database', {
+        logger.info('[OAuth] Existing user found by provider ID', {
           userId: foundUser.id,
           provider,
           email: foundUser.email,
+          hasCompletedOnboarding: foundUser.hasCompletedOnboarding,
         });
-        
+
         // Update last login
         await db.update(users)
           .set({ lastLoginAt: new Date() })
           .where(eq(users.id, foundUser.id));
-        
-        return foundUser;
+
+        return { user: foundUser, isNewUser: false };
       }
-      
+
       // 2. Check if user exists with this email (possibly registered with password)
+      logger.info('[OAuth] Step 2: Looking up user by email', { email });
       const [existingUser] = await db.select()
         .from(users)
         .where(eq(users.email, email))
         .limit(1);
-      
+
       if (existingUser) {
         // Link OAuth account to existing user
-        logger.info('🔗 Linking OAuth provider to existing user', {
+        logger.info('[OAuth] Linking OAuth provider to existing email account', {
           userId: existingUser.id,
           provider,
           email,
         });
-        
-        const updateData = provider === 'google' 
+
+        const updateData = provider === 'google'
           ? { googleId: providerId, lastLoginAt: new Date() }
           : { githubId: providerId, lastLoginAt: new Date() };
-        
+
         const [updatedUser] = await db.update(users)
           .set(updateData)
           .where(eq(users.id, existingUser.id))
           .returning();
-        
-        return updatedUser!;
+
+        return { user: updatedUser!, isNewUser: false };
       }
-      
+
       // 3. Create new user with OAuth data
-      logger.info('Creating new OAuth user in database', { provider, email, name });
+      logger.info('[OAuth] Step 3: Creating new user in database', { provider, email, name });
 
       const newUserData = {
         id: `user_${randomBytes(16).toString('hex')}`,
@@ -301,25 +304,29 @@ export async function findOrCreateOAuthUser(
           .values(newUserData)
           .returning();
 
-        logger.info('New OAuth user created in database', {
+        logger.info('[OAuth] New user created successfully', {
           userId: newUser!.id,
           provider,
           email: newUser!.email,
         });
 
-        return newUser!;
+        return { user: newUser!, isNewUser: true };
       } catch (insertError: unknown) {
         // Handle race condition: user created by concurrent request
         const error = insertError as { code?: string; message?: string };
+        logger.error('[OAuth] Insert failed', {
+          code: error.code,
+          message: error.message,
+          email,
+        });
         if (error.code === '23505' || error.message?.includes('unique')) {
-          logger.info('Race condition handled: user created by concurrent request', { email });
-          // User was created by another request - fetch and return
+          logger.info('[OAuth] Race condition: user created by concurrent request, fetching', { email });
           const [existingUser] = await db.select()
             .from(users)
             .where(eq(users.email, email))
             .limit(1);
           if (existingUser) {
-            return existingUser;
+            return { user: existingUser, isNewUser: false };
           }
         }
         throw insertError;
@@ -330,14 +337,24 @@ export async function findOrCreateOAuthUser(
       backoffMultiplier: 2,
     });
 
+    // Attach isNewUser flag to the user object for the callback handler
+    const user = result.user as any;
+    user._isNewUser = result.isNewUser;
     return user;
-    
+
   } catch (error) {
+    const err = error as Error & { code?: string };
     // FALLBACK: Database unavailable after all retries - create temporary in-memory user
-    logger.error('❌ Database unavailable for OAuth after 3 retries - creating temporary user', {
+    logger.error('[OAuth] DATABASE UNAVAILABLE - creating temporary user', {
       provider,
       email,
-      error: (error as Error).message,
+      errorMessage: err.message,
+      errorCode: err.code,
+      errorName: err.name,
+      stack: err.stack?.split('\n').slice(0, 5).join('\n'),
+      databaseUrl: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 30) + '...' : 'NOT SET',
+      sslRejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED ?? 'not set (defaults to true)',
+      nodeEnv: process.env.NODE_ENV,
     });
     
     // Create a temporary user object that works with JWT
@@ -351,6 +368,8 @@ export async function findOrCreateOAuthUser(
       usageLimit: 100,
       apiKeyHash: `temp-${uuidv4()}`, // Temp user, not a real hash
       emailVerified: true,
+      hasCompletedOnboarding: false,
+      _isNewUser: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

@@ -29,21 +29,35 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
-          logger.info('Google OAuth callback received', {
+          const email = profile.emails?.[0]?.value || '';
+          const name = profile.displayName || email.split('@')[0] || 'User';
+
+          logger.info('[Passport:Google] Verify callback started', {
             profileId: profile.id,
-            email: profile.emails?.[0]?.value,
+            email,
+            name,
           });
 
           const user = await findOrCreateOAuthUser({
             provider: 'google',
             providerId: profile.id,
-            email: profile.emails?.[0]?.value || '',
-            name: profile.displayName || profile.emails?.[0]?.value?.split('@')[0] || 'User',
+            email,
+            name,
+          });
+
+          logger.info('[Passport:Google] Verify callback completed', {
+            userId: user?.id,
+            email: user?.email,
+            isTemp: user?.id?.startsWith('temp-'),
+            isNewUser: (user as any)?._isNewUser,
           });
 
           done(null, user);
         } catch (error) {
-          logger.error('Google OAuth error', { error: (error as Error).message });
+          logger.error('[Passport:Google] Verify callback FAILED', {
+            error: (error as Error).message,
+            stack: (error as Error).stack?.split('\n').slice(0, 3).join('\n'),
+          });
           done(error as Error);
         }
       }

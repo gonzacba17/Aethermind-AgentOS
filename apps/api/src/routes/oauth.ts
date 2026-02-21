@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import passport from '../config/passport';
 import jwt from 'jsonwebtoken';
 import logger from '../utils/logger';
-import { isValidRedirectUrl, getSafeRedirectUrl, generateUserToken } from '../utils/auth-helpers';
+import { isValidRedirectUrl, generateUserToken } from '../utils/auth-helpers';
 import { AUTH_COOKIE_MAX_AGE_MS } from '../config/constants';
 
 const router: express.Router = express.Router();
@@ -80,34 +80,43 @@ router.get(
     try {
       const user = req.user as any;
 
+      logger.info('[OAuth:Google] Callback handler entered', {
+        hasUser: !!user,
+        userId: user?.id,
+        email: user?.email,
+        isTemp: user?.id?.startsWith('temp-'),
+        isNewUser: user?._isNewUser,
+        hasCompletedOnboarding: user?.hasCompletedOnboarding,
+        queryState: !!req.query.state,
+        sessionRedirect: req.session?.oauthRedirect,
+      });
+
       if (!user) {
         throw new Error('No user returned from OAuth');
       }
 
-      // Get redirect URL from state parameter (primary) or session (fallback)
-      let redirect: string;
-      const state = req.query.state as string;
-
-      if (state) {
-        try {
-          const decoded = JSON.parse(Buffer.from(state, 'base64').toString());
-          redirect = getSafeRedirectUrl(decoded.redirect);
-        } catch {
-          redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
-        }
+      // Determine redirect destination based on user state
+      const dashboardBase = process.env.DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
+      let redirectPath: string;
+      if (user._isNewUser === true) {
+        redirectPath = '/pricing?checkout=true';
+      } else if (user.hasCompletedOnboarding === false) {
+        redirectPath = '/home';
       } else {
-        redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+        redirectPath = '/dashboard';
       }
+      const redirect = `${dashboardBase}${redirectPath}`;
+
+      logger.info('[OAuth:Google] Redirect decision', {
+        userId: user.id,
+        _isNewUser: user._isNewUser,
+        hasCompletedOnboarding: user.hasCompletedOnboarding,
+        redirectPath,
+        finalRedirect: redirect,
+      });
 
       // Generate JWT token using centralized helper
       const token = generateUserToken(user);
-
-      logger.info('OAuth login successful', {
-        userId: user.id,
-        email: user.email,
-        provider: 'google',
-        redirectingTo: redirect,
-      });
 
       // Clear session
       if (req.session) {
@@ -123,16 +132,21 @@ router.get(
       // Also set cookie for same-domain requests
       res.cookie(AUTH_COOKIE_NAME, token, AUTH_COOKIE_OPTIONS);
 
-      res.redirect(redirectUrl.toString());
-    } catch (error) {
-      logger.error('OAuth callback error', {
-        error: (error as Error).message,
-        provider: 'google',
+      logger.info('[OAuth:Google] Redirecting user', {
+        userId: user.id,
+        email: user.email,
+        redirectUrl: redirectUrl.origin + redirectUrl.pathname,
       });
 
-      // SECURITY: Use safe redirect and generic error message
-      const redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
-      res.redirect(`${redirect}?error=oauth_failed`);
+      res.redirect(redirectUrl.toString());
+    } catch (error) {
+      logger.error('[OAuth:Google] Callback error', {
+        error: (error as Error).message,
+        stack: (error as Error).stack?.split('\n').slice(0, 3).join('\n'),
+      });
+
+      const dashboardBase = process.env.DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
+      res.redirect(`${dashboardBase}?error=oauth_failed`);
     }
   }
 );
@@ -191,33 +205,40 @@ router.get(
     try {
       const user = req.user as any;
 
+      logger.info('[OAuth:GitHub] Callback handler entered', {
+        hasUser: !!user,
+        userId: user?.id,
+        email: user?.email,
+        isTemp: user?.id?.startsWith('temp-'),
+        isNewUser: user?._isNewUser,
+        hasCompletedOnboarding: user?.hasCompletedOnboarding,
+      });
+
       if (!user) {
         throw new Error('No user returned from OAuth');
       }
 
-      // Get redirect URL from state parameter (primary) or session (fallback)
-      let redirect: string;
-      const state = req.query.state as string;
-
-      if (state) {
-        try {
-          const decoded = JSON.parse(Buffer.from(state, 'base64').toString());
-          redirect = getSafeRedirectUrl(decoded.redirect);
-        } catch {
-          redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
-        }
+      // Determine redirect destination based on user state
+      const dashboardBase = process.env.DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
+      let redirectPath: string;
+      if (user._isNewUser === true) {
+        redirectPath = '/pricing?checkout=true';
+      } else if (user.hasCompletedOnboarding === false) {
+        redirectPath = '/home';
       } else {
-        redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
+        redirectPath = '/dashboard';
       }
+      const redirect = `${dashboardBase}${redirectPath}`;
 
       // Generate JWT token using centralized helper
       const token = generateUserToken(user);
 
-      logger.info('OAuth login successful', {
+      logger.info('[OAuth:GitHub] Redirecting user', {
         userId: user.id,
         email: user.email,
-        provider: 'github',
-        redirectingTo: redirect,
+        _isNewUser: user._isNewUser,
+        hasCompletedOnboarding: user.hasCompletedOnboarding,
+        redirectPath,
       });
 
       // Clear session
@@ -227,7 +248,6 @@ router.get(
 
       // For cross-domain OAuth (API on Railway, Frontend on Vercel),
       // we must pass the token in the URL since cookies won't work across domains.
-      // The frontend will save it to localStorage and clear the URL.
       const redirectUrl = new URL(redirect);
       redirectUrl.searchParams.set('token', token);
 
@@ -236,14 +256,13 @@ router.get(
 
       res.redirect(redirectUrl.toString());
     } catch (error) {
-      logger.error('OAuth callback error', {
+      logger.error('[OAuth:GitHub] Callback error', {
         error: (error as Error).message,
-        provider: 'github',
+        stack: (error as Error).stack?.split('\n').slice(0, 3).join('\n'),
       });
 
-      // SECURITY: Use safe redirect and generic error message
-      const redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
-      res.redirect(`${redirect}?error=oauth_failed`);
+      const dashboardBase = process.env.DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
+      res.redirect(`${dashboardBase}?error=oauth_failed`);
     }
   }
 );
@@ -252,10 +271,9 @@ router.get(
  * OAuth error handler
  */
 router.get('/oauth-error', (req: Request, res: Response) => {
-  // SECURITY: Use safe redirect URL
-  const redirect = getSafeRedirectUrl(req.session?.oauthRedirect);
-  logger.warn('OAuth authentication failed');
-  res.redirect(`${redirect}?error=oauth_failed`);
+  logger.warn('[OAuth] Authentication failed at passport level');
+  const dashboardBase = process.env.DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
+  res.redirect(`${dashboardBase}?error=oauth_failed`);
 });
 
 /**
