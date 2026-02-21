@@ -1,4 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
+import { sql as drizzleSql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from './schema';
 
@@ -15,6 +16,14 @@ const sslConfig = process.env.NODE_ENV === 'production'
       rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
     }
   : false;
+
+console.log('[DB] Initializing PostgreSQL pool', {
+  hasConnectionString: !!process.env.DATABASE_URL,
+  connectionStringPrefix: process.env.DATABASE_URL?.substring(0, 30) + '...',
+  nodeEnv: process.env.NODE_ENV,
+  sslConfig: JSON.stringify(sslConfig),
+  dbSslEnvVar: process.env.DB_SSL_REJECT_UNAUTHORIZED ?? 'not set',
+});
 
 // Create PostgreSQL connection pool (optimized for Railway)
 const pool = new Pool({
@@ -90,8 +99,68 @@ export function getConnectionStatus() {
   };
 }
 
-// Create and export Drizzle instance
+// Create and export Drizzle instance (wraps the same pool — no separate connection)
 export const db = drizzle(pool, { schema });
+
+console.log('[DB] Drizzle ORM initialized (using shared pool)');
+
+/**
+ * Verify both raw pool and Drizzle ORM can execute queries.
+ * Call once at startup to detect SSL or schema issues early.
+ */
+export async function verifyDrizzleConnection(): Promise<boolean> {
+  // 1. Test raw pool
+  try {
+    const poolResult = await pool.query('SELECT 1 AS ok');
+    console.log('[DB] Raw pool query OK:', poolResult.rows[0]);
+  } catch (err) {
+    const e = err as Error & { code?: string };
+    console.error('[DB] Raw pool query FAILED', {
+      message: e.message,
+      code: e.code,
+      name: e.name,
+    });
+    return false;
+  }
+
+  // 2. Test Drizzle ORM using the same pool
+  try {
+    const drizzleResult = await db.execute(drizzleSql`SELECT 1 AS ok`);
+    console.log('[DB] Drizzle query OK:', drizzleResult.rows?.[0] ?? drizzleResult);
+  } catch (err) {
+    const e = err as Error & { code?: string };
+    console.error('[DB] Drizzle query FAILED (same pool, different codepath)', {
+      message: e.message,
+      code: e.code,
+      name: e.name,
+      stack: e.stack?.split('\n').slice(0, 4).join('\n'),
+    });
+    return false;
+  }
+
+  // 3. Test Drizzle schema query (checks if tables exist)
+  try {
+    const tableCheck = await db.execute(
+      drizzleSql`SELECT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'users'
+      ) AS users_table_exists`
+    );
+    const exists = (tableCheck.rows?.[0] as any)?.users_table_exists;
+    console.log('[DB] Users table exists:', exists);
+    if (!exists) {
+      console.error('[DB] WARNING: users table does not exist — run migrations');
+    }
+  } catch (err) {
+    const e = err as Error & { code?: string };
+    console.error('[DB] Schema check FAILED', {
+      message: e.message,
+      code: e.code,
+    });
+  }
+
+  return true;
+}
 
 // Export schema for use in queries
 export { schema };

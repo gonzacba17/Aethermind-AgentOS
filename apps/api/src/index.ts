@@ -237,7 +237,16 @@ async function startServer(): Promise<void> {
     logger.warn("⚠️ Server starting with degraded database connectivity");
     logger.warn("   OAuth users may be created as temporary (in-memory) users");
   }
-  
+
+  // Verify Drizzle ORM can execute queries (not just raw pool)
+  if (dbConnected) {
+    const { verifyDrizzleConnection } = await import("./db");
+    const drizzleOk = await verifyDrizzleConnection();
+    if (!drizzleOk) {
+      logger.error("⚠️ Drizzle ORM cannot query the database — OAuth will use temp users");
+    }
+  }
+
   store = await initializeStore();
 
   // Initialize Budget and Alert services
