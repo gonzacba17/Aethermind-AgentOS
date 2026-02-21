@@ -39,25 +39,37 @@ async function main() {
     
     try {
       const { stdout, stderr } = await execAsync(
-        'npx tsx ./node_modules/drizzle-kit/bin.cjs migrate --config=./drizzle.config.ts 2>&1', 
+        'npx tsx ./node_modules/drizzle-kit/bin.cjs migrate --config=./drizzle.config.ts',
         {
           cwd: __dirname,
           env: { ...process.env, NODE_OPTIONS: '' },
           timeout: 30000,
         }
       );
-      
+
+      if (stderr) {
+        console.error('⚠️  Migration stderr:', stderr);
+      }
       if (stdout) {
-        console.log('📋 Migration output:', stdout.slice(0, 500));
+        console.log('📋 Migration output:', stdout);
       }
       console.log('✅ Database migrations completed');
     } catch (error) {
+      console.error('❌ Migration failed!');
+      console.error('   Command:', error.cmd || 'unknown');
+      console.error('   Exit code:', error.code);
+      if (error.stdout) {
+        console.error('   stdout:', error.stdout);
+      }
+      if (error.stderr) {
+        console.error('   stderr:', error.stderr);
+      }
+      console.error('   Error message:', error.message);
+
       if (process.env.NODE_ENV === 'production') {
-        console.error('❌ FATAL: Database migration failed in production:', error.message);
-        console.error('   This is a blocking error. Fix migrations before deploying.');
+        console.error('   This is a blocking error. Fix migrations or set SKIP_DB_MIGRATE=true to bypass.');
         process.exit(1);
       } else {
-        console.warn('⚠️  Migration failed (non-production):', error.message);
         console.log('ℹ️  Run migrations manually: pnpm drizzle:push');
       }
     }
