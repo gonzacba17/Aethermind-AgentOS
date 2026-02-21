@@ -96,23 +96,23 @@ router.get(
       }
 
       // Determine redirect destination based on user state
+      // Pricing page lives on the landing site, dashboard pages on DASHBOARD_URL
       const dashboardBase = process.env.DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
-      let redirectPath: string;
+      const landingBase = process.env.FRONTEND_URL || 'https://aethermind-page.vercel.app';
+      let redirect: string;
       if (user._isNewUser === true) {
-        redirectPath = '/pricing?checkout=true';
+        redirect = `${landingBase}/pricing?checkout=true`;
       } else if (user.hasCompletedOnboarding === false) {
-        redirectPath = '/home';
+        redirect = `${dashboardBase}/home`;
       } else {
-        redirectPath = '/dashboard';
+        redirect = `${dashboardBase}/dashboard`;
       }
-      const redirect = `${dashboardBase}${redirectPath}`;
 
       logger.info('[OAuth:Google] Redirect decision', {
         userId: user.id,
         _isNewUser: user._isNewUser,
         hasCompletedOnboarding: user.hasCompletedOnboarding,
-        redirectPath,
-        finalRedirect: redirect,
+        redirect,
       });
 
       // Generate JWT token using centralized helper
@@ -220,15 +220,15 @@ router.get(
 
       // Determine redirect destination based on user state
       const dashboardBase = process.env.DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
-      let redirectPath: string;
+      const landingBase = process.env.FRONTEND_URL || 'https://aethermind-page.vercel.app';
+      let redirect: string;
       if (user._isNewUser === true) {
-        redirectPath = '/pricing?checkout=true';
+        redirect = `${landingBase}/pricing?checkout=true`;
       } else if (user.hasCompletedOnboarding === false) {
-        redirectPath = '/home';
+        redirect = `${dashboardBase}/home`;
       } else {
-        redirectPath = '/dashboard';
+        redirect = `${dashboardBase}/dashboard`;
       }
-      const redirect = `${dashboardBase}${redirectPath}`;
 
       // Generate JWT token using centralized helper
       const token = generateUserToken(user);
@@ -238,7 +238,7 @@ router.get(
         email: user.email,
         _isNewUser: user._isNewUser,
         hasCompletedOnboarding: user.hasCompletedOnboarding,
-        redirectPath,
+        redirect,
       });
 
       // Clear session
