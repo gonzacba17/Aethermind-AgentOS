@@ -100,45 +100,48 @@ export function getConnectionStatus() {
 }
 
 // Create and export Drizzle instance (wraps the same pool — no separate connection)
+console.log('[Drizzle] Using pool:', !!pool);
 export const db = drizzle(pool, { schema });
-
-console.log('[DB] Drizzle ORM initialized (using shared pool)');
 
 /**
  * Verify both raw pool and Drizzle ORM can execute queries.
- * Call once at startup to detect SSL or schema issues early.
  */
 export async function verifyDrizzleConnection(): Promise<boolean> {
-  // 1. Test raw pool
+  // 1. Raw pool test (baseline)
   try {
     const poolResult = await pool.query('SELECT 1 AS ok');
     console.log('[DB] Raw pool query OK:', poolResult.rows[0]);
   } catch (err) {
-    const e = err as Error & { code?: string };
+    const e = err as Error & { code?: string; cause?: unknown };
     console.error('[DB] Raw pool query FAILED', {
       message: e.message,
       code: e.code,
       name: e.name,
+      cause: e.cause,
     });
     return false;
   }
 
-  // 2. Test Drizzle ORM using the same pool
+  // 2. Drizzle ORM test
+  console.log('[Drizzle] Test query starting...');
   try {
-    const drizzleResult = await db.execute(drizzleSql`SELECT 1 AS ok`);
-    console.log('[DB] Drizzle query OK:', drizzleResult.rows?.[0] ?? drizzleResult);
+    const result = await db.execute(drizzleSql`SELECT 1 AS ok`);
+    console.log('[Drizzle] Test query SUCCESS:', JSON.stringify(result.rows?.[0] ?? result));
   } catch (err) {
-    const e = err as Error & { code?: string };
-    console.error('[DB] Drizzle query FAILED (same pool, different codepath)', {
+    const e = err as Error & { code?: string; cause?: unknown };
+    console.error('[Drizzle] Test query FAILED', {
       message: e.message,
       code: e.code,
       name: e.name,
-      stack: e.stack?.split('\n').slice(0, 4).join('\n'),
+      cause: e.cause ? String(e.cause) : undefined,
+      causeMessage: (e.cause as any)?.message,
+      causeCode: (e.cause as any)?.code,
+      stack: e.stack?.split('\n').slice(0, 5).join('\n'),
     });
     return false;
   }
 
-  // 3. Test Drizzle schema query (checks if tables exist)
+  // 3. Check users table exists
   try {
     const tableCheck = await db.execute(
       drizzleSql`SELECT EXISTS (
@@ -153,10 +156,7 @@ export async function verifyDrizzleConnection(): Promise<boolean> {
     }
   } catch (err) {
     const e = err as Error & { code?: string };
-    console.error('[DB] Schema check FAILED', {
-      message: e.message,
-      code: e.code,
-    });
+    console.error('[DB] Schema check FAILED', { message: e.message, code: e.code });
   }
 
   return true;
