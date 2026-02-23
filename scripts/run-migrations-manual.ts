@@ -26,6 +26,21 @@ const migrations = [
   '0015_rename_user_api_key_to_hash.sql',
 ];
 
+async function showColumns(client: import('pg').PoolClient, table: string) {
+  const res = await client.query(
+    `SELECT column_name, data_type, is_nullable
+     FROM information_schema.columns
+     WHERE table_name = $1
+     ORDER BY ordinal_position`,
+    [table]
+  );
+  console.log(`  Columns in "${table}":`);
+  for (const row of res.rows) {
+    console.log(`    - ${row.column_name} (${row.data_type}, nullable: ${row.is_nullable})`);
+  }
+  console.log();
+}
+
 async function run() {
   console.log('Connecting to database...');
   console.log('  URL prefix:', DATABASE_URL!.substring(0, 30) + '...');
@@ -37,6 +52,14 @@ async function run() {
     await client.query('SELECT 1');
     console.log('✅ Connected successfully\n');
 
+    // ── BEFORE: show current state ──
+    console.log('════════════════════════════════════════');
+    console.log('  BEFORE MIGRATIONS — Current DB state');
+    console.log('════════════════════════════════════════');
+    await showColumns(client, 'users');
+    await showColumns(client, 'organizations');
+
+    // ── Run migrations ──
     for (const file of migrations) {
       const filePath = path.join(MIGRATIONS_DIR, file);
       console.log(`── Running ${file} ──`);
@@ -60,10 +83,21 @@ async function run() {
         break;
       }
     }
+
+    // ── AFTER: confirm final state ──
+    console.log('════════════════════════════════════════');
+    console.log('  AFTER MIGRATIONS — Updated DB state');
+    console.log('════════════════════════════════════════');
+    await showColumns(client, 'users');
+    await showColumns(client, 'organizations');
+
+    console.log('Done. Verify that:');
+    console.log('  ✓ users has "api_key_hash" (NOT "api_key")');
+    console.log('  ✓ organizations has "api_key_prefix"');
   } finally {
     client.release();
     await pool.end();
-    console.log('Connection closed.');
+    console.log('\nConnection closed.');
   }
 }
 
