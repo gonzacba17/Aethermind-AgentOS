@@ -1,152 +1,64 @@
 /**
- * Authentication Utilities
- * 
- * Provides centralized token management and authentication helpers
- * for the Aethermind dashboard.
+ * Authentication Utilities — B2B Beta
+ *
+ * Uses sessionStorage with a client access token (no JWT, no OAuth).
+ * Token is provided via URL ?token= param on first visit.
+ *
+ * Previous version used localStorage + JWT — kept as reference below.
  */
 
-import { LANDING_PAGE_URL } from './config';
+// ─── Previous JWT-based implementation (commented out, not deleted) ───
+// import { LANDING_PAGE_URL } from './config';
+// const AUTH_TOKEN_KEY = 'auth_token';
+// export function getAuthToken() { return localStorage.getItem(AUTH_TOKEN_KEY); }
+// export function setAuthToken(token: string) { localStorage.setItem(AUTH_TOKEN_KEY, token); }
+// export function clearAuthToken() { localStorage.removeItem(AUTH_TOKEN_KEY); }
+// export function isAuthenticated() { return !!getAuthToken(); }
+// export function getUserFromToken(token: string) { /* JWT decode */ }
+// export interface AuthUser { ... }
+// export interface AuthMeResponse extends AuthUser {}
 
-const AUTH_TOKEN_KEY = 'auth_token';
+const CLIENT_TOKEN_KEY = 'client_token';
 
 /**
- * Retrieves the JWT authentication token from localStorage
- * @returns JWT token string or null if not found
+ * Retrieves the client access token from sessionStorage
  */
 export function getAuthToken(): string | null {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  
+  if (typeof window === 'undefined') return null;
   try {
-    return localStorage.getItem(AUTH_TOKEN_KEY);
-  } catch (error) {
-    console.error('Error reading auth token from localStorage:', error);
+    return sessionStorage.getItem(CLIENT_TOKEN_KEY);
+  } catch {
     return null;
   }
 }
 
 /**
- * Stores the JWT authentication token in localStorage
- * @param token - JWT token to store
+ * Stores the client access token in sessionStorage
  */
 export function setAuthToken(token: string): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  
+  if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(AUTH_TOKEN_KEY, token);
-    console.log('[Auth] Token stored successfully');
+    sessionStorage.setItem(CLIENT_TOKEN_KEY, token);
   } catch (error) {
-    console.error('Error storing auth token in localStorage:', error);
+    console.error('Error storing client token:', error);
   }
 }
 
 /**
- * Removes the JWT authentication token from localStorage
+ * Removes the client access token from sessionStorage
  */
 export function clearAuthToken(): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  
+  if (typeof window === 'undefined') return;
   try {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    console.log('[Auth] Token cleared');
+    sessionStorage.removeItem(CLIENT_TOKEN_KEY);
   } catch (error) {
-    console.error('Error clearing auth token from localStorage:', error);
+    console.error('Error clearing client token:', error);
   }
 }
 
 /**
- * Checks if user is authenticated (has valid token)
- * Note: This only checks for token existence, not validity
- * @returns true if token exists, false otherwise
+ * Checks if a client token exists in sessionStorage
  */
 export function isAuthenticated(): boolean {
-  const token = getAuthToken();
-  return !!token;
-}
-
-/**
- * Redirects user to the landing page login
- * @param returnUrl - Optional URL to return to after login
- */
-export function redirectToLogin(returnUrl?: string): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-  
-  const returnParam = returnUrl ? `?return=${encodeURIComponent(returnUrl)}` : '';
-  
-  console.log('[Auth] Redirecting to login...');
-  window.location.href = `${LANDING_PAGE_URL}${returnParam}`;
-}
-
-/**
- * Decodes a JWT token and extracts basic user info
- * Note: This only decodes, it does not verify the signature
- * @param token - JWT token to decode
- * @returns Decoded user info or null if invalid
- */
-export function getUserFromToken(token: string): { id: string; email: string } | null {
-  if (!token) return null;
-  
-  try {
-    // JWT structure: header.payload.signature
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    
-    // Decode the payload (base64url)
-    const payload = parts[1];
-    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-    const data = JSON.parse(decoded);
-    
-    // Check expiration
-    if (data.exp && data.exp * 1000 < Date.now()) {
-      console.log('[Auth] Token expired');
-      return null;
-    }
-    
-    return {
-      id: data.sub || data.userId || data.id || '',
-      email: data.email || '',
-    };
-  } catch (error) {
-    console.error('Error decoding token:', error);
-    return null;
-  }
-}
-
-/**
- * User information from /auth/me endpoint
- */
-export interface AuthUser {
-  id: string;
-  name: string | null;
-  email: string;
-  plan: string;
-  apiKey: string;
-  emailVerified: boolean;
-  usageCount: number;
-  usageLimit: number;
-  subscription: {
-    status: string;
-    plan: string;
-  } | null;
-  createdAt: string;
-}
-
-/**
- * Response from /auth/me endpoint
- */
-export interface AuthMeResponse extends AuthUser {}
-
-/**
- * Error response from authentication endpoints
- */
-export interface AuthErrorResponse {
-  error: string;
-  message: string;
+  return !!getAuthToken();
 }

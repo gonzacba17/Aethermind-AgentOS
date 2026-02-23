@@ -8,6 +8,13 @@
       "when": 1768595379347,
       "tag": "0000_awesome_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1740307200000,
+      "tag": "0016_add_clients_table",
+      "breakpoints": true
     }
   ]
 }

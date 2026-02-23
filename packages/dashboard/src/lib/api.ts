@@ -1,128 +1,67 @@
-import { getAuthToken, clearAuthToken, setAuthToken } from './auth-utils';
-import { LANDING_PAGE_URL } from './config';
+import { getAuthToken, clearAuthToken } from './auth-utils';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 // Retry configuration
 const DEFAULT_RETRIES = 3;
-const RETRY_DELAY_BASE = 1000; // 1 second
-const MAX_RETRY_DELAY = 30000; // 30 seconds
+const RETRY_DELAY_BASE = 1000;
+const MAX_RETRY_DELAY = 30000;
 
-// Track if we're currently refreshing the token
-let isRefreshing = false;
-let refreshPromise: Promise<string | null> | null = null;
+// ─── Previous JWT refresh logic (commented out, not deleted) ───
+// let isRefreshing = false;
+// let refreshPromise: Promise<string | null> | null = null;
+// async function refreshToken(): Promise<string | null> { ... }
 
-/**
- * Calculate delay for retry with exponential backoff
- */
 function getRetryDelay(attempt: number): number {
   const delay = RETRY_DELAY_BASE * Math.pow(2, attempt);
-  // Add some jitter to prevent thundering herd
   const jitter = Math.random() * 1000;
   return Math.min(delay + jitter, MAX_RETRY_DELAY);
 }
 
-/**
- * Sleep for a given number of milliseconds
- */
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Helper to include JWT token in headers
+/**
+ * Build headers for API requests.
+ * Sends X-Client-Token instead of Authorization: Bearer (B2B beta).
+ */
 function getHeaders(additionalHeaders?: Record<string, string>): HeadersInit {
   const headers: Record<string, string> = {
     ...(additionalHeaders || {}),
   };
-  
-  // Get JWT token from localStorage (client-side only)
+
   if (typeof window !== 'undefined') {
     const token = getAuthToken();
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers['X-Client-Token'] = token;
     }
   }
-  
+
   return headers;
 }
 
-/**
- * Attempt to refresh the authentication token
- */
-async function refreshToken(): Promise<string | null> {
-  // If already refreshing, wait for that to complete
-  if (isRefreshing && refreshPromise) {
-    return refreshPromise;
-  }
-  
-  isRefreshing = true;
-  refreshPromise = (async () => {
-    try {
-      const currentToken = getAuthToken();
-      if (!currentToken) return null;
-      
-      const response = await fetch(`${API_BASE}/api/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.token) {
-          setAuthToken(data.token);
-          return data.token;
-        }
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('[API] Token refresh failed:', error);
-      return null;
-    } finally {
-      isRefreshing = false;
-      refreshPromise = null;
-    }
-  })();
-  
-  return refreshPromise;
-}
-
-// Helper to handle API errors
-// Note: Auto-redirect disabled - dashboard should handle auth errors internally
 async function handleApiError(response: Response, endpoint: string): Promise<never> {
   const status = response.status;
-  
-  // Handle 401 Unauthorized - token expired or invalid
+
   if (status === 401) {
-    console.error(`[API] 401 Unauthorized on ${endpoint} - Not authenticated`);
-    
-    // Clear invalid token
+    console.error(`[API] 401 on ${endpoint}`);
     if (typeof window !== 'undefined') {
       clearAuthToken();
-      
-      // REDIRECT DISABLED: Dashboard should stay accessible without auth
-      // Previously this redirected to: LANDING_PAGE_URL
-      // To re-enable auth: uncomment line below OR implement /login route in dashboard
-      // window.location.href = LANDING_PAGE_URL;
     }
   }
-  
-  // Try to parse error message from response
+
   let errorMessage = `API request failed: ${status}`;
   let errorCode = 'API_ERROR';
-  
+
   try {
     const errorData = await response.json();
     errorMessage = errorData.message || errorData.error || errorMessage;
     errorCode = errorData.code || errorCode;
   } catch {
-    // Use default error message if JSON parsing fails
+    // Use default
   }
-  
+
   const error = new Error(errorMessage) as Error & { status: number; code: string };
   error.status = status;
   error.code = errorCode;
@@ -130,8 +69,8 @@ async function handleApiError(response: Response, endpoint: string): Promise<nev
 }
 
 /**
- * Make an API request with automatic retry and token refresh
- * Includes credentials for cookie-based auth (OAuth)
+ * Make an API request with automatic retry.
+ * No token refresh — B2B beta tokens don't expire.
  */
 async function apiRequest<T>(
   endpoint: string,
@@ -144,49 +83,25 @@ async function apiRequest<T>(
     try {
       const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
-        credentials: 'include', // Send cookies for OAuth auth
         headers: getHeaders(options.headers as Record<string, string>),
       });
-      
-      // Handle 401 - try to refresh token once
-      if (response.status === 401 && attempt === 0) {
-        const newToken = await refreshToken();
-        if (newToken) {
-          // Retry with new token
-          const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
-            ...options,
-            credentials: 'include',
-            headers: {
-              ...getHeaders(options.headers as Record<string, string>),
-              'Authorization': `Bearer ${newToken}`,
-            },
-          });
-          
-          if (retryResponse.ok) {
-            return retryResponse.json();
-          }
-        }
-      }
-      
+
       if (!response.ok) {
         await handleApiError(response, endpoint);
       }
-      
-      // Handle empty responses
+
       const text = await response.text();
       if (!text) return {} as T;
-      
+
       return JSON.parse(text);
     } catch (error) {
       lastError = error as Error;
-      
-      // Don't retry auth errors or client errors (4xx except 429)
+
       const status = (error as any).status;
       if (status && status >= 400 && status < 500 && status !== 429) {
         throw error;
       }
-      
-      // Don't retry on last attempt
+
       if (attempt < retries) {
         const delay = getRetryDelay(attempt);
         console.log(`[API] Retrying ${endpoint} in ${delay}ms (attempt ${attempt + 1}/${retries})`);
@@ -194,11 +109,10 @@ async function apiRequest<T>(
       }
     }
   }
-  
+
   throw lastError || new Error('API request failed after retries');
 }
 
-// Export apiRequest for use in hooks
 export { apiRequest, API_BASE }
 
 export interface Agent {
@@ -310,7 +224,6 @@ export interface CostInfo {
 
 export async function fetchAgents(): Promise<Agent[]> {
   const res = await fetch(`${API_BASE}/api/agents`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/agents');
@@ -319,7 +232,6 @@ export async function fetchAgents(): Promise<Agent[]> {
 
 export async function fetchAgent(id: string): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents/${id}`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, `/api/agents/${id}`);
@@ -338,7 +250,6 @@ export async function createAgent(data: {
 }): Promise<Agent> {
   const res = await fetch(`${API_BASE}/api/agents`, {
     method: 'POST',
-    credentials: 'include',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(data),
   });
@@ -352,7 +263,6 @@ export async function executeAgent(
 ): Promise<ExecutionResult> {
   const res = await fetch(`${API_BASE}/api/agents/${id}/execute`, {
     method: 'POST',
-    credentials: 'include',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
@@ -375,7 +285,6 @@ export async function fetchLogs(params?: {
   if (params?.offset) searchParams.set('offset', String(params.offset));
 
   const res = await fetch(`${API_BASE}/api/logs?${searchParams}`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/logs');
@@ -384,7 +293,6 @@ export async function fetchLogs(params?: {
 
 export async function fetchTraces(): Promise<Trace[]> {
   const res = await fetch(`${API_BASE}/api/traces`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/traces');
@@ -393,7 +301,6 @@ export async function fetchTraces(): Promise<Trace[]> {
 
 export async function fetchTrace(id: string): Promise<Trace> {
   const res = await fetch(`${API_BASE}/api/traces/${id}`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, `/api/traces/${id}`);
@@ -402,7 +309,6 @@ export async function fetchTrace(id: string): Promise<Trace> {
 
 export async function fetchCostSummary(): Promise<CostSummary> {
   const res = await fetch(`${API_BASE}/api/costs/summary`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/costs/summary');
@@ -411,7 +317,6 @@ export async function fetchCostSummary(): Promise<CostSummary> {
 
 export async function fetchExecutions(): Promise<ExecutionResult[]> {
   const res = await fetch(`${API_BASE}/api/executions`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/executions');
@@ -420,7 +325,6 @@ export async function fetchExecutions(): Promise<ExecutionResult[]> {
 
 export async function fetchHealth(): Promise<{ status: string; timestamp: string }> {
   const res = await fetch(`${API_BASE}/api/health`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/health');
@@ -433,7 +337,6 @@ export async function estimateWorkflowCost(
 ): Promise<CostEstimate> {
   const res = await fetch(`${API_BASE}/api/workflows/${workflowName}/estimate`, {
     method: 'POST',
-    credentials: 'include',
     headers: getHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ input }),
   });
@@ -454,7 +357,6 @@ export async function fetchCostHistory(params?: {
   if (params?.workflowName) searchParams.set('workflowName', params.workflowName);
 
   const res = await fetch(`${API_BASE}/api/costs?${searchParams}`, {
-    credentials: 'include',
     headers: getHeaders(),
   });
   if (!res.ok) await handleApiError(res, '/api/costs');

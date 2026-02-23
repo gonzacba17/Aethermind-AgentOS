@@ -376,6 +376,21 @@ export const backupHistory = pgTable('backup_history', {
 }));
 
 // ============================================
+// CLIENTS TABLE (B2B Beta Access)
+// ============================================
+export const clients = pgTable('clients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  companyName: varchar('company_name', { length: 255 }).notNull(),
+  accessToken: varchar('access_token', { length: 80 }).notNull().unique(),
+  sdkApiKey: varchar('sdk_api_key', { length: 255 }).notNull(),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+  notes: text('notes'),
+}, (table) => ({
+  accessTokenIdx: index('idx_clients_access_token').on(table.accessToken),
+}));
+
+// ============================================
 // TYPESCRIPT TYPE EXPORTS
 // ============================================
 export type Organization = typeof organizations.$inferSelect;
@@ -425,3 +440,6 @@ export type NewAuditLog = typeof auditLogs.$inferInsert;
 
 export type BackupHistory = typeof backupHistory.$inferSelect;
 export type NewBackupHistory = typeof backupHistory.$inferInsert;
+
+export type Client = typeof clients.$inferSelect;
+export type NewClient = typeof clients.$inferInsert;

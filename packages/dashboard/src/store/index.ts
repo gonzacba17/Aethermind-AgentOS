@@ -5,7 +5,7 @@
  */
 
 export { useAuthStore } from './useAuthStore';
-export type { User } from './useAuthStore';
+export type { ClientInfo } from './useAuthStore';
 
 export { useUIStore } from './useUIStore';
 

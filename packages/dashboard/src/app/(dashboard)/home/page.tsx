@@ -1,10 +1,15 @@
 "use client"
 
-import { Home, ArrowRight, Bot, GitBranch, FileText, DollarSign, BarChart3 } from "lucide-react"
+import { useState } from "react"
+import { Home, ArrowRight, Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
-import { SDKConnectCard } from "@/components/dashboard/SDKConnectCard"
+import { useAuthStore } from "@/store/useAuthStore"
+
+// ─── Previous version used SDKConnectCard with useUserProfile hook ───
+// import { SDKConnectCard } from "@/components/dashboard/SDKConnectCard"
 
 const quickLinks = [
   {
@@ -49,11 +54,163 @@ const quickLinks = [
   },
 ]
 
+function SDKKeyCard() {
+  const client = useAuthStore((s) => s.client)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [showKey, setShowKey] = useState(false)
+
+  const sdkApiKey = client?.sdkApiKey || ''
+  const maskedKey = sdkApiKey
+    ? `${sdkApiKey.slice(0, 14)}${'•'.repeat(20)}${sdkApiKey.slice(-4)}`
+    : ''
+
+  const handleCopy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(label)
+      setTimeout(() => setCopied(null), 2000)
+    } catch {
+      // ignore
+    }
+  }
+
+  const installCode = `npm install @aethermind/sdk`
+
+  const connectCode = `import { createAgent, startOrchestrator } from '@aethermind/sdk';
+
+const orchestrator = startOrchestrator({
+  apiKey: '${showKey ? sdkApiKey : 'YOUR_SDK_API_KEY'}',
+  baseUrl: '${process.env.NEXT_PUBLIC_API_URL || 'https://api.aethermind.io'}',
+});
+
+const agent = createAgent({
+  name: 'my-assistant',
+  model: 'gpt-4',
+  systemPrompt: 'You are a helpful assistant.',
+});
+
+const result = await orchestrator.execute('my-assistant', {
+  input: 'Hello, world!'
+});
+
+console.log(result);`
+
+  return (
+    <Card className="relative overflow-hidden border-2 border-primary bg-gradient-to-br from-primary/10 via-primary/5 to-background shadow-lg shadow-primary/10">
+      <div className="absolute inset-0 bg-grid-pattern opacity-5" />
+      <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+
+      <CardHeader className="relative">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-primary text-primary-foreground">
+            <Key className="h-6 w-6" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl">
+              {client?.companyName ? `Welcome, ${client.companyName}` : 'Your SDK API Key'}
+            </CardTitle>
+            <CardDescription className="text-base mt-1">
+              Use this key to connect the @aethermind/sdk to your application
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="relative space-y-6">
+        {/* API Key */}
+        <div className="p-4 rounded-xl bg-card border border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Key className="h-4 w-4 text-primary" />
+              <span className="font-medium">SDK API Key</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowKey(!showKey)}>
+                {showKey ? 'Hide' : 'Show'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleCopy(sdkApiKey, 'SDK Key')}
+              >
+                {copied === 'SDK Key' ? (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+          <code className="block p-3 rounded-lg bg-muted font-mono text-sm break-all">
+            {showKey ? sdkApiKey : maskedKey}
+          </code>
+        </div>
+
+        {/* Install / Connect tabs */}
+        <Tabs defaultValue="install" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="install" className="gap-2">
+              <Terminal className="h-4 w-4" />
+              1. Install
+            </TabsTrigger>
+            <TabsTrigger value="connect" className="gap-2">
+              <Code2 className="h-4 w-4" />
+              2. Connect
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="install" className="mt-4">
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Install the Aethermind SDK in your project:
+              </p>
+              <div className="relative">
+                <pre className="p-4 rounded-lg bg-zinc-950 text-zinc-100 font-mono text-sm overflow-x-auto">
+                  <code>{installCode}</code>
+                </pre>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-2 right-2 text-zinc-400 hover:text-zinc-100"
+                  onClick={() => handleCopy(installCode, 'Install')}
+                >
+                  {copied === 'Install' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="connect" className="mt-4">
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Add this code to connect your application:
+              </p>
+              <div className="relative">
+                <pre className="p-4 rounded-lg bg-zinc-950 text-zinc-100 font-mono text-sm overflow-x-auto max-h-64">
+                  <code>{connectCode}</code>
+                </pre>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute top-2 right-2 text-zinc-400 hover:text-zinc-100"
+                  onClick={() => handleCopy(connectCode, 'Connect')}
+                >
+                  {copied === 'Connect' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function HomePage() {
   return (
     <div className="space-y-8">
-      {/* SDK Connection Card - Prominent and Required */}
-      <SDKConnectCard />
+      {/* SDK Key Card */}
+      <SDKKeyCard />
 
       {/* Welcome Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-border p-8">

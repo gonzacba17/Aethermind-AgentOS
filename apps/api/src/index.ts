@@ -50,17 +50,21 @@ import { costRoutes } from "./routes/costs";
 import { workflowRoutes } from "./routes/workflows";
 import { budgetRoutes } from "./routes/budgets";
 import ingestionRoutes from "./routes/ingestion";
-import authRoutes from "./routes/auth";
-import oauthRoutes from "./routes/oauth";
-import onboardingRoutes from "./routes/onboarding";
-import stripeRoutes from "./routes/stripe";
+// [B2B BETA] Old auth routes — commented out, not deleted
+// import authRoutes from "./routes/auth";
+// import oauthRoutes from "./routes/oauth";
+// import onboardingRoutes from "./routes/onboarding";
+// import stripeRoutes from "./routes/stripe";
+import clientRoutes from "./routes/client";
+import { clientAuth } from "./middleware/clientAuth";
 import userApiKeysRoutes from "./routes/user-api-keys";
 import optimizationRoutes from "./routes/optimization.routes";
 import forecastingRoutes from "./routes/forecasting.routes";
 import organizationRoutes from "./routes/organizations";
-import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import passportConfig from "./config/passport";
+// [B2B BETA] Session/passport — commented out, not deleted
+// import session from "express-session";
+// import connectPgSimple from "connect-pg-simple";
+// import passportConfig from "./config/passport";
 import { WebSocketManager } from "./websocket/WebSocketManager";
 import { InMemoryStore } from "./services/InMemoryStore";
 import { DatabaseStore } from "./services/DatabaseStore";
@@ -68,13 +72,16 @@ import redisCache, { RedisCache } from "./services/RedisCache";
 import { BudgetService } from "./services/BudgetService";
 import { AlertService } from "./services/AlertService";
 import type { StoreInterface } from "./services/PostgresStore";
-import { authMiddleware, configureAuth, verifyApiKey } from "./middleware/auth";
+// [B2B BETA] authMiddleware and configureAuth disabled — verifyApiKey still used by WebSocket
+import { /* authMiddleware, configureAuth, */ verifyApiKey } from "./middleware/auth";
 import { verifyDatabaseOnStartup, measureDatabaseLatency, getDatabaseStatus } from "./middleware/database";
 import { requestIdMiddleware, withRequestId } from "./middleware/request-id.middleware";
-import { csrfProtection, csrfTokenHandler } from "./middleware/csrf.middleware";
-import { authRateLimiter } from "./middleware/rateLimiter";
+// [B2B BETA] CSRF and auth rate limiter — commented out, not deleted
+// import { csrfProtection, csrfTokenHandler } from "./middleware/csrf.middleware";
+// import { authRateLimiter } from "./middleware/rateLimiter";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
-import { getTemporaryUsersCount } from "./services/OAuthService";
+// [B2B BETA] OAuth service — commented out, not deleted
+// import { getTemporaryUsersCount } from "./services/OAuthService";
 import { sanitizeLog, sanitizeObject } from "./utils/sanitizer";
 import logger, { stream } from "./utils/logger";
 import {
@@ -99,14 +106,14 @@ if (process.env["NODE_ENV"] === "production" && !process.env["API_KEY_HASH"]) {
   process.exit(1);
 }
 
-// Validate session secret
-if (!process.env.SESSION_SECRET && !process.env.JWT_SECRET) {
-  logger.error("❌ FATAL: SESSION_SECRET or JWT_SECRET must be configured");
-  process.exit(1);
-}
-if (!process.env.SESSION_SECRET) {
-  logger.warn("⚠️ SESSION_SECRET not set, using JWT_SECRET as fallback for sessions");
-}
+// [B2B BETA] Session secret validation — commented out, not deleted
+// if (!process.env.SESSION_SECRET && !process.env.JWT_SECRET) {
+//   logger.error("❌ FATAL: SESSION_SECRET or JWT_SECRET must be configured");
+//   process.exit(1);
+// }
+// if (!process.env.SESSION_SECRET) {
+//   logger.warn("⚠️ SESSION_SECRET not set, using JWT_SECRET as fallback for sessions");
+// }
 
 const authCache = redisCache;
 
@@ -134,21 +141,22 @@ console.log(
   }\n`
 );
 
-configureAuth({
-  apiKeyHash: process.env["API_KEY_HASH"],
-  enabled:
-    process.env["DISABLE_AUTH"] === "true"
-      ? false
-      : process.env["NODE_ENV"] === "production" ||
-        !!process.env["API_KEY_HASH"],
-  cache: authCache,
-});
+// [B2B BETA] configureAuth — commented out, not deleted
+// configureAuth({
+//   apiKeyHash: process.env["API_KEY_HASH"],
+//   enabled:
+//     process.env["DISABLE_AUTH"] === "true"
+//       ? false
+//       : process.env["NODE_ENV"] === "production" ||
+//         !!process.env["API_KEY_HASH"],
+//   cache: authCache,
+// });
 
 const corsOptions: cors.CorsOptions = {
   origin: CORS_ORIGINS,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Client-Token"],
 };
 
 const limiter = rateLimit({
@@ -377,35 +385,34 @@ async function startServer(): Promise<void> {
     })
   );
 
-  // Create PostgreSQL session store to replace in-memory store
-  const PgSession = connectPgSimple(session);
+  // [B2B BETA] PostgreSQL session store — commented out, not deleted
+  // const PgSession = connectPgSimple(session);
+  // app.use(
+  //   session({
+  //     store: new PgSession({
+  //       conObject: {
+  //         connectionString: process.env.DATABASE_URL,
+  //         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  //       },
+  //       tableName: 'user_sessions',
+  //       createTableIfMissing: true,
+  //       errorLog: (err: Error) => logger.error('Session store error:', { error: err.message })
+  //     }),
+  //     secret: process.env.SESSION_SECRET || process.env.JWT_SECRET!,
+  //     resave: false,
+  //     saveUninitialized: false,
+  //     cookie: {
+  //       maxAge: 30 * 24 * 60 * 60 * 1000,
+  //       secure: process.env.NODE_ENV === 'production',
+  //       httpOnly: true,
+  //       sameSite: 'lax'
+  //     }
+  //   })
+  // );
+  // logger.info('✅ PostgreSQL session store initialized (table: user_sessions)');
 
-  app.use(
-    session({
-      store: new PgSession({
-        conObject: {
-          connectionString: process.env.DATABASE_URL,
-          ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-        },
-        tableName: 'user_sessions',
-        createTableIfMissing: true,
-        errorLog: (err: Error) => logger.error('Session store error:', { error: err.message })
-      }),
-      secret: process.env.SESSION_SECRET || process.env.JWT_SECRET!,
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        sameSite: 'lax'
-      }
-    })
-  );
-  logger.info('✅ PostgreSQL session store initialized (table: user_sessions)');
-
-  // Initialize Passport
-  app.use(passportConfig.initialize());
+  // [B2B BETA] Passport initialization — commented out, not deleted
+  // app.use(passportConfig.initialize());
 
   // Cookie parser middleware - required for httpOnly auth cookies
   app.use(cookieParser());
@@ -436,13 +443,12 @@ async function startServer(): Promise<void> {
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
-  // Stripe webhook endpoint - MUST use raw body for signature verification
-  // Mount BEFORE express.json() middleware to get raw buffer
-  app.use(
-    "/stripe/webhook",
-    express.raw({ type: "application/json" }),
-    stripeRoutes
-  );
+  // [B2B BETA] Stripe webhook — commented out, not deleted
+  // app.use(
+  //   "/stripe/webhook",
+  //   express.raw({ type: "application/json" }),
+  //   stripeRoutes
+  // );
 
   // HTTP request metrics middleware - DISABLED TEMPORARILY
   // TODO: Fix metrics module initialization before re-enabling
@@ -512,36 +518,30 @@ async function startServer(): Promise<void> {
     checks.redis = authCache.isConnected();
     details.redis = checks.redis ? "connected" : "disconnected";
 
-    // Check Stripe service
-    try {
-      const { StripeService } = await import("./services/StripeService");
-      const stripeService = new StripeService();
-      checks.stripe = stripeService.isConfigured();
-      details.stripe = checks.stripe ? "configured" : "not configured";
-    } catch (error) {
-      checks.stripe = false;
-      details.stripe = "error";
-      details.stripeError = (error as Error).message;
-    }
+    // [B2B BETA] Stripe and email health checks — commented out, not deleted
+    // try {
+    //   const { StripeService } = await import("./services/StripeService");
+    //   const stripeService = new StripeService();
+    //   checks.stripe = stripeService.isConfigured();
+    //   details.stripe = checks.stripe ? "configured" : "not configured";
+    // } catch (error) {
+    //   checks.stripe = false;
+    //   details.stripe = "error";
+    // }
 
-    // Check Email service
-    try {
-      const { emailService } = await import("./services/EmailService");
-      checks.email = emailService.isConfigured();
-      details.email = emailService.isConfigured()
-        ? `configured (${emailService.getProvider()})`
-        : "not configured";
-    } catch (error) {
-      checks.email = false;
-      details.email = "error";
-      details.emailError = (error as Error).message;
-    }
+    // try {
+    //   const { emailService } = await import("./services/EmailService");
+    //   checks.email = emailService.isConfigured();
+    //   details.email = emailService.isConfigured()
+    //     ? `configured (${emailService.getProvider()})`
+    //     : "not configured";
+    // } catch (error) {
+    //   checks.email = false;
+    //   details.email = "error";
+    // }
 
-    // Get temporary users count
-    const temporaryUsersCount = getTemporaryUsersCount();
-    if (temporaryUsersCount > 0) {
-      details.temporaryUsersWarning = `${temporaryUsersCount} user(s) in temporary storage (database was unavailable during login)`;
-    }
+    // const temporaryUsersCount = getTemporaryUsersCount();
+    const temporaryUsersCount = 0;
 
     // Determine overall health status
     // NOTE: Always return 200 for Railway healthcheck compatibility
@@ -568,9 +568,9 @@ async function startServer(): Promise<void> {
     });
   });
 
-  // CSRF token endpoint - public, returns token for state-changing requests
-  app.get("/csrf-token", csrfTokenHandler);
-  app.get("/api/csrf-token", csrfTokenHandler);
+  // [B2B BETA] CSRF token endpoints — commented out, not deleted
+  // app.get("/csrf-token", csrfTokenHandler);
+  // app.get("/api/csrf-token", csrfTokenHandler);
 
   // Detailed database diagnostics endpoint
   app.get("/health/db", async (req, res) => {
@@ -711,25 +711,24 @@ async function startServer(): Promise<void> {
     }
   });
 
-  // Public routes - OAuth and auth (MUST be before authMiddleware!)
-  // Apply auth rate limiter to prevent brute force attacks
-  // Mount at BOTH /auth and /api/auth for maximum compatibility
-  app.use("/auth", authRateLimiter, oauthRoutes); // Direct /auth/google, /auth/github
-  app.use("/auth", authRateLimiter, authRoutes); // Direct /auth/login, /auth/signup
-  app.use("/api/auth", authRateLimiter, oauthRoutes); // Also at /api/auth/google
-  app.use("/api/auth", authRateLimiter, authRoutes); // Also at /api/auth/login
+  // [B2B BETA] Old OAuth/auth routes — commented out, not deleted
+  // app.use("/auth", authRateLimiter, oauthRoutes);
+  // app.use("/auth", authRateLimiter, authRoutes);
+  // app.use("/api/auth", authRateLimiter, oauthRoutes);
+  // app.use("/api/auth", authRateLimiter, authRoutes);
 
-  // Public ingestion endpoint - uses its own auth middleware
-  // Must be before general authMiddleware
+  // Public ingestion endpoint - uses its own auth middleware (unchanged)
   app.use("/v1", ingestionRoutes);
 
-  // Apply auth middleware to all OTHER /api routes
-  // This will NOT affect routes already defined above
-  app.use("/api", authMiddleware);
+  // Client routes — protected by clientAuth
+  app.use("/api/client", clientAuth, clientRoutes);
 
-  // Apply CSRF protection to state-changing API requests
-  // Exempts: webhooks, SDK ingestion, API-key authenticated requests
-  app.use("/api", csrfProtection);
+  // [B2B BETA] Old JWT authMiddleware — commented out, replaced with clientAuth
+  // app.use("/api", authMiddleware);
+  app.use("/api", clientAuth);
+
+  // [B2B BETA] CSRF protection — commented out, not deleted
+  // app.use("/api", csrfProtection);
 
   app.use((req, _res, next) => {
     req.runtime = runtime;
@@ -753,8 +752,9 @@ async function startServer(): Promise<void> {
   app.use("/api/costs", costRoutes);
   app.use("/api/workflows", workflowRoutes);
   app.use("/api/budgets", budgetRoutes);
-  app.use("/api/onboarding", onboardingRoutes);
-  app.use("/api/stripe", stripeRoutes); // Protected Stripe endpoints (checkout, portal)
+  // [B2B BETA] Onboarding and Stripe routes — commented out, not deleted
+  // app.use("/api/onboarding", onboardingRoutes);
+  // app.use("/api/stripe", stripeRoutes);
   app.use("/api/user/api-keys", userApiKeysRoutes); // User API keys management
   app.use("/api/organizations", organizationRoutes); // Organization management
   app.use("/api/optimization", optimizationRoutes); // Auto-optimization engine
@@ -881,6 +881,7 @@ declare global {
       budgetService: BudgetService;
       alertService: AlertService;
       drizzle: any;
+      client?: import("./middleware/clientAuth").ClientData;
       // user is defined by @types/passport, use (req.user as any)?.id where needed
     }
   }

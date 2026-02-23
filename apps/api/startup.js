@@ -1,85 +1,90 @@
 /**
  * Railway Startup Script
- * Runs Drizzle migrations and starts the API server
+ * Ensures clients table exists, then starts the API server.
+ *
+ * Previous version ran drizzle-kit migrate here — kept commented out
+ * so it can be restored if we return to migration-based deploys.
  */
 
-const { exec } = require('child_process');
-const { promisify } = require('util');
+const { Pool } = require('pg');
 const path = require('path');
-const fs = require('fs');
-const execAsync = promisify(exec);
 
 async function main() {
   console.log('==========================================');
   console.log('🚀 Aethermind API - Startup');
   console.log('==========================================');
-  
-  // Detect working directory
+
   const cwd = process.cwd();
   console.log('📁 Current directory:', cwd);
   console.log('📁 __dirname:', __dirname);
-  
-  // Check if migrations exist
-  const migrationsPath = path.join(__dirname, 'src', 'db', 'migrations');
-  console.log('🔍 Checking migrations at:', migrationsPath);
-  
-  if (fs.existsSync(migrationsPath)) {
-    console.log('✅ Migrations folder found');
-    const files = fs.readdirSync(migrationsPath);
-    console.log('📄 Migration files:', files.filter(f => f.endsWith('.sql')));
-  } else {
-    console.warn('⚠️  Migrations folder not found!');
-  }
-  
   console.log('');
-  
-  // Run drizzle-kit migrate (NOT push — push is destructive)
-  if (process.env.SKIP_DB_MIGRATE !== 'true') {
-    console.log('🔄 Running database migrations...');
-    
+
+  // ── Ensure clients table exists ──────────────────────────
+  if (process.env.SKIP_DB_MIGRATE !== 'true' && process.env.DATABASE_URL) {
+    console.log('🔄 Ensuring clients table exists...');
+
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false,
+      connectionTimeoutMillis: 10000,
+    });
+
     try {
-      const { stdout, stderr } = await execAsync(
-        'npx tsx ./node_modules/drizzle-kit/bin.cjs migrate --config=./drizzle.config.ts',
-        {
-          cwd: __dirname,
-          env: { ...process.env, NODE_OPTIONS: '' },
-          timeout: 30000,
-        }
-      );
-
-      if (stderr) {
-        console.error('⚠️  Migration stderr:', stderr);
-      }
-      if (stdout) {
-        console.log('📋 Migration output:', stdout);
-      }
-      console.log('✅ Database migrations completed');
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS clients (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          company_name VARCHAR(255) NOT NULL,
+          access_token VARCHAR(80) NOT NULL UNIQUE,
+          sdk_api_key VARCHAR(255) NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          notes TEXT
+        );
+      `);
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_clients_access_token ON clients(access_token);
+      `);
+      console.log('✅ clients table ready');
     } catch (error) {
-      console.error('❌ Migration failed!');
-      console.error('   Command:', error.cmd || 'unknown');
-      console.error('   Exit code:', error.code);
-      if (error.stdout) {
-        console.error('   stdout:', error.stdout);
-      }
-      if (error.stderr) {
-        console.error('   stderr:', error.stderr);
-      }
-      console.error('   Error message:', error.message);
-
+      console.error('❌ Failed to ensure clients table:', error.message);
       if (process.env.NODE_ENV === 'production') {
-        console.error('   This is a blocking error. Fix migrations or set SKIP_DB_MIGRATE=true to bypass.');
         process.exit(1);
-      } else {
-        console.log('ℹ️  Run migrations manually: pnpm drizzle:push');
       }
+    } finally {
+      await pool.end();
     }
   } else {
-    console.log('ℹ️  SKIP_DB_MIGRATE=true - skipping database migrations');
+    console.log('ℹ️  Skipping DB setup (SKIP_DB_MIGRATE=true or no DATABASE_URL)');
   }
-  
+
+  // ── Old drizzle-kit migration logic (disabled for B2B beta) ──
+  // if (process.env.SKIP_DB_MIGRATE !== 'true') {
+  //   console.log('🔄 Running database migrations...');
+  //   try {
+  //     const { stdout, stderr } = await execAsync(
+  //       'npx tsx ./node_modules/drizzle-kit/bin.cjs migrate --config=./drizzle.config.ts',
+  //       {
+  //         cwd: __dirname,
+  //         env: { ...process.env, NODE_OPTIONS: '' },
+  //         timeout: 30000,
+  //       }
+  //     );
+  //     if (stderr) console.error('⚠️  Migration stderr:', stderr);
+  //     if (stdout) console.log('📋 Migration output:', stdout);
+  //     console.log('✅ Database migrations completed');
+  //   } catch (error) {
+  //     console.error('❌ Migration failed!', error.message);
+  //     if (process.env.NODE_ENV === 'production') {
+  //       process.exit(1);
+  //     }
+  //   }
+  // }
+
   console.log('');
   console.log('🚀 Starting application server...');
-  
+
   // Start the main application
   require('./dist/index.js');
 }

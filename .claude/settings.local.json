@@ -80,7 +80,9 @@
       "Bash(git pull:*)",
       "Bash(git merge:*)",
       "Bash(head:*)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(git log:*)",
+      "Bash(railway:*)"
     ],
     "deny": []
   }
