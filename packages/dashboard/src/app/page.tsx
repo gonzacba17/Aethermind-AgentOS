@@ -20,16 +20,26 @@ export default function RootPage() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
 
+    console.log('[RootPage] URL search params:', window.location.search);
+    console.log('[RootPage] Token from URL:', token ? `${token.slice(0, 8)}…` : 'null');
+
     if (token) {
       // 2. Persist to sessionStorage (synchronous)
       setAuthToken(token);
-      console.log('[RootPage] Token captured and saved to sessionStorage');
+
+      // 3. Verify the value actually persisted
+      const verification = sessionStorage.getItem('client_token');
+      console.log('[RootPage] Verification read from sessionStorage:', verification ? `${verification.slice(0, 8)}…` : 'null');
+      console.log('[RootPage] Token persisted successfully:', !!verification);
+    } else {
+      console.warn('[RootPage] No token found in URL — navigating to /home without token');
     }
 
-    // 3. Navigate to /home — AuthGuard there will read sessionStorage
-    //    Using window.location.replace guarantees sessionStorage is
-    //    committed before the navigation starts (same-origin, same tab).
-    window.location.replace('/home');
+    // 4. Navigate to /home — AuthGuard there will read sessionStorage
+    //    Using href instead of replace() to test if replace() was racing
+    //    against sessionStorage persistence.
+    console.log('[RootPage] Navigating to /home via window.location.href...');
+    window.location.href = '/home';
   }, []);
 
   return (

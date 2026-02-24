@@ -22,18 +22,29 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function check() {
+      // Diagnostic: dump sessionStorage state at mount time
+      console.log('[AuthGuard] Mounting — reading sessionStorage...');
+      const allKeys = Object.keys(sessionStorage);
+      console.log('[AuthGuard] sessionStorage keys:', allKeys);
+      console.log('[AuthGuard] Raw client_token value:', sessionStorage.getItem('client_token'));
+
       const token = getAuthToken();
+      console.log('[AuthGuard] getAuthToken() returned:', token ? `${token.slice(0, 8)}…` : 'null');
 
       if (!token) {
+        console.warn('[AuthGuard] No token found — setting status to denied');
         setStatus('denied');
         return;
       }
 
       try {
         const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+        console.log('[AuthGuard] Calling /api/client/me with API_BASE:', API_BASE);
         const res = await fetch(`${API_BASE}/api/client/me`, {
           headers: { 'X-Client-Token': token },
         });
+
+        console.log('[AuthGuard] /api/client/me response status:', res.status);
 
         if (!res.ok) {
           clearAuthToken();
@@ -43,7 +54,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
         await initialize();
         setStatus('authenticated');
-      } catch {
+      } catch (err) {
+        console.error('[AuthGuard] /api/client/me fetch error:', err);
         clearAuthToken();
         setStatus('denied');
       }

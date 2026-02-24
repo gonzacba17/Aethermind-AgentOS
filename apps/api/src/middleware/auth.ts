@@ -248,8 +248,8 @@ export async function verifyApiKey(apiKey: string | undefined): Promise<boolean>
   }
 
   if (!authConfig.apiKeyHash) {
-    logger.warn('API_KEY_HASH not configured - authentication disabled');
-    return true;
+    logger.warn('API_KEY_HASH not configured - rejecting authentication (deny by default)');
+    return false;
   }
 
   if (!apiKey) {
