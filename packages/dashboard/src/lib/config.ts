@@ -19,4 +19,4 @@ export const LOGIN_PATH = '/login';
 export const LOGIN_URL = `${LANDING_PAGE_URL}${LOGIN_PATH}`;
 
 // API URL
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');

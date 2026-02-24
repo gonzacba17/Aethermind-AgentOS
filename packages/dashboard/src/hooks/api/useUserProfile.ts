@@ -57,7 +57,7 @@ export function useTestSDKConnection() {
   return useMutation({
     mutationFn: async (apiKey: string): Promise<SDKConnectionStatus> => {
       // Test the connection by hitting the health endpoint with the API key
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/health`, {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')}/api/health`, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'X-API-Key': apiKey,

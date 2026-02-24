@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { shouldUseMockData } from '@/lib/mock-data';
 import { getAuthToken } from '@/lib/auth-utils';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {

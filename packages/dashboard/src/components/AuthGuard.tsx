@@ -38,7 +38,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+        const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
         console.log('[AuthGuard] Calling /api/client/me with API_BASE:', API_BASE);
         const res = await fetch(`${API_BASE}/api/client/me`, {
           headers: { 'X-Client-Token': token },

@@ -110,7 +110,7 @@ export function useBudget(
         };
       }
       
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/costs/budget`, {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')}/api/costs/budget`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
         },

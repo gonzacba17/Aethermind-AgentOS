@@ -21,7 +21,8 @@ interface AuthState {
   logout: () => void;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE = RAW_API_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
 export const useAuthStore = create<AuthState>()((set) => ({
   client: null,

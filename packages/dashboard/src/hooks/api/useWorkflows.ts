@@ -4,7 +4,7 @@ import { getAuthToken } from '@/lib/auth-utils';
 import { shouldUseMockData } from '@/lib/mock-data';
 import { useMockDataContext } from '@/contexts/MockDataContext';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {

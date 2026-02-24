@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-utils';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
 /**
  * Query key factory for budgets

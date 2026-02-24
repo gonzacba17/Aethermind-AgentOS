@@ -197,7 +197,7 @@ export function useUpdateAgent() {
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Agent['config']> }) => {
       // Note: Update endpoint may need to be added to API
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents/${id}`, {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')}/api/agents/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -223,7 +223,7 @@ export function useDeleteAgent() {
   
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents/${id}`, {
+      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')}/api/agents/${id}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete agent');
