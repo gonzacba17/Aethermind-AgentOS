@@ -90,6 +90,15 @@ describe('Auth Middleware', () => {
       expect(mockRes.status).not.toHaveBeenCalled();
     });
 
+    it('returns 503 for admin routes when apiKeyHash not configured', async () => {
+      configureAuth({ apiKeyHash: undefined, enabled: true });
+
+      await authMiddleware(mockReq as Request, mockRes as Response, mockNext);
+
+      expect(mockRes.status).toHaveBeenCalledWith(503);
+      expect(mockNext).not.toHaveBeenCalled();
+    });
+
     it('requires JWT for non-admin API routes', async () => {
       mockReq.originalUrl = '/api/agents';
       mockReq.url = '/api/agents';
@@ -142,11 +151,11 @@ describe('Auth Middleware', () => {
       expect(result).toBe(true);
     });
 
-    it('returns true when no hash configured', async () => {
+    it('returns false when no hash configured (deny by default)', async () => {
       configureAuth({ apiKeyHash: undefined, enabled: true });
 
       const result = await verifyApiKey('any-key');
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
 

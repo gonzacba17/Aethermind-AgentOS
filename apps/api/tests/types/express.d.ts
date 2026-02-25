@@ -1,5 +1,5 @@
 import type { StoreInterface } from '../../src/services/PostgresStore';
-import type { RedisCache } from '../../src/services/RedisCache';
+import type { RedisService } from '../../src/services/RedisService';
 import type { BudgetService } from '../../src/services/BudgetService';
 import type { AlertService } from '../../src/services/AlertService';
 import type { WebSocketManager } from '../../src/websocket/WebSocketManager';

@@ -6,34 +6,23 @@
 import { jest, describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 import Stripe from 'stripe';
 
-// Mock dependencies before importing StripeService
-jest.mock('../../src/db', () => ({
-  db: {
-    select: jest.fn(() => ({
-      from: jest.fn(() => ({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => Promise.resolve([]))
-        }))
-      }))
-    })),
-    update: jest.fn(() => ({
-      set: jest.fn(() => ({
-        where: jest.fn(() => Promise.resolve())
-      }))
-    })),
-    insert: jest.fn(() => ({
-      values: jest.fn(() => Promise.resolve())
-    }))
-  }
-}));
+// Mutable mock objects — factory returns plain objects, 
+// then we assign jest.fn() in beforeEach so ESM works.
+const mockDb: any = {
+  select: null,
+  update: null,
+  insert: null,
+};
 
-jest.mock('../../src/services/EmailService', () => ({
-  emailService: {
-    sendPaymentFailedEmail: jest.fn(() => Promise.resolve()),
-    sendSubscriptionCanceledEmail: jest.fn(() => Promise.resolve()),
-    sendWelcomeEmail: jest.fn(() => Promise.resolve()),
-  }
-}));
+const mockEmailService: any = {
+  sendPaymentFailedEmail: null,
+  sendSubscriptionCanceledEmail: null,
+  sendWelcomeEmail: null,
+};
+
+// Mock dependencies before importing StripeService
+jest.mock('../../src/db', () => ({ db: mockDb }));
+jest.mock('../../src/services/EmailService', () => ({ emailService: mockEmailService }));
 
 // Import after mocks
 import { StripeService } from '../../src/services/StripeService';
@@ -43,11 +32,37 @@ import { emailService } from '../../src/services/EmailService';
 // Mock environment variables
 const originalEnv = process.env;
 
+// Helper to create a fresh chainable select mock
+function createSelectMock(result: any[] = []) {
+  return jest.fn<any>().mockReturnValue({
+    from: jest.fn<any>().mockReturnValue({
+      where: jest.fn<any>().mockReturnValue({
+        limit: jest.fn<any>().mockResolvedValue(result),
+      }),
+    }),
+  });
+}
+
 describe('StripeService', () => {
   let stripeService: StripeService;
   
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Assign real jest.fn() mocks
+    mockDb.select = createSelectMock([]);
+    mockDb.update = jest.fn<any>().mockReturnValue({
+      set: jest.fn<any>().mockReturnValue({
+        where: jest.fn<any>().mockResolvedValue(undefined),
+      }),
+    });
+    mockDb.insert = jest.fn<any>().mockReturnValue({
+      values: jest.fn<any>().mockResolvedValue(undefined),
+    });
+    mockEmailService.sendPaymentFailedEmail = jest.fn<any>().mockResolvedValue(undefined);
+    mockEmailService.sendSubscriptionCanceledEmail = jest.fn<any>().mockResolvedValue(undefined);
+    mockEmailService.sendWelcomeEmail = jest.fn<any>().mockResolvedValue(undefined);
+
     process.env = {
       ...originalEnv,
       STRIPE_SECRET_KEY: 'sk_test_mock_key_12345',
@@ -117,13 +132,7 @@ describe('StripeService', () => {
 
     beforeEach(() => {
       // Setup db mock to return user
-      (db.select as jest.Mock).mockReturnValue({
-        from: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([mockUser])
-          })
-        })
-      });
+      mockDb.select = createSelectMock([mockUser]);
     });
 
     test('should process customer.subscription.created event', async () => {
@@ -258,13 +267,7 @@ describe('StripeService', () => {
 
     test('should handle missing user gracefully', async () => {
       // Setup db mock to return no user
-      (db.select as jest.Mock).mockReturnValue({
-        from: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([])
-          })
-        })
-      });
+      mockDb.select = createSelectMock([]);
 
       const mockSubscription = {
         id: 'sub_123',
@@ -321,13 +324,7 @@ describe('StripeService', () => {
     });
 
     test('should throw error when user not found', async () => {
-      (db.select as jest.Mock).mockReturnValue({
-        from: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([])
-          })
-        })
-      });
+      mockDb.select = createSelectMock([]);
 
       await expect(
         stripeService.createCheckoutSession(
@@ -351,13 +348,7 @@ describe('StripeService', () => {
     });
 
     test('should throw error when user has no Stripe customer', async () => {
-      (db.select as jest.Mock).mockReturnValue({
-        from: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([{ id: 'user_123', stripeCustomerId: null }])
-          })
-        })
-      });
+      mockDb.select = createSelectMock([{ id: 'user_123', stripeCustomerId: null }]);
 
       await expect(
         stripeService.createPortalSession('user_123', 'https://example.com/return')
@@ -365,13 +356,7 @@ describe('StripeService', () => {
     });
 
     test('should throw error when user not found', async () => {
-      (db.select as jest.Mock).mockReturnValue({
-        from: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            limit: jest.fn().mockResolvedValue([])
-          })
-        })
-      });
+      mockDb.select = createSelectMock([]);
 
       await expect(
         stripeService.createPortalSession('nonexistent_user', 'https://example.com/return')

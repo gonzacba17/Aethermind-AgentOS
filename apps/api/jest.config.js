@@ -38,5 +38,5 @@ export default {
   verbose: true,
   testTimeout: 10000,
   rootDir: '.',
-  setupFilesAfterEnv: ['./tests/setup.js'],
+  setupFilesAfterEnv: ['./tests/setup.mjs'],
 };
