@@ -1,8 +1,8 @@
 /**
- * PostgresStore Type Definitions
+ * Store Type Definitions
  * 
  * This file contains type definitions for the store interface.
- * The actual implementation is in PrismaStore.ts
+ * The actual implementation is in DatabaseStore.ts
  */
 
 import type { LogEntry, Trace, CostInfo, ExecutionResult } from '@aethermind/core';

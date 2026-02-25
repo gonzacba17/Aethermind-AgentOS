@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-utils';
 import { shouldUseMockData } from '@/lib/mock-data';
+import { API_URL } from '@/lib/config';
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
+const API_BASE = API_URL;
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = {

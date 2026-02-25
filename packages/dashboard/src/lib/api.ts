@@ -1,9 +1,7 @@
 import { getAuthToken, clearAuthToken } from './auth-utils';
+import { API_URL } from './config';
 
-const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-// Normalize: strip trailing /api and trailing slashes to prevent /api/api/... duplication.
-// All endpoints in this file already prepend /api/, so API_BASE must be the bare origin.
-const API_BASE = RAW_API_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+const API_BASE = API_URL;
 
 // Retry configuration
 const DEFAULT_RETRIES = 3;

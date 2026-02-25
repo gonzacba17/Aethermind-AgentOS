@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import { clients } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
-import crypto from 'crypto';
 import { LRUCache } from 'lru-cache';
+import { hashForCache } from '../utils/crypto';
 
 /**
  * Client data attached to authenticated requests.
@@ -21,12 +21,7 @@ export interface ClientAuthenticatedRequest extends Request {
   client?: ClientData;
 }
 
-/**
- * Hash a token for use as a cache key (never store plaintext).
- */
-function hashForCache(token: string): string {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
+
 
 /**
  * LRU cache for client token lookups.

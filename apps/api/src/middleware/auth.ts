@@ -238,9 +238,7 @@ async function validateApiKey(
   }
 }
 
-export function skipAuth(_req: Request, _res: Response, next: NextFunction): void {
-  next();
-}
+
 
 export async function verifyApiKey(apiKey: string | undefined): Promise<boolean> {
   if (!authConfig.enabled) {

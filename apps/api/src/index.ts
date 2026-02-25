@@ -132,16 +132,8 @@ const hasApiKey = !!process.env["API_KEY_HASH"];
 const isProduction = process.env["NODE_ENV"] === "production";
 logger.info(`Auth enabled: ${!shouldDisableAuth && (isProduction || hasApiKey)}`);
 
-// [B2B BETA] configureAuth — commented out, not deleted
-// configureAuth({
-//   apiKeyHash: process.env["API_KEY_HASH"],
-//   enabled:
-//     process.env["DISABLE_AUTH"] === "true"
-//       ? false
-//       : process.env["NODE_ENV"] === "production" ||
-//         !!process.env["API_KEY_HASH"],
-//   cache: authCache,
-// });
+
+
 
 const corsOptions: cors.CorsOptions = {
   origin: CORS_ORIGINS,
@@ -809,15 +801,12 @@ async function startServer(): Promise<void> {
   }
 }
 
-process.on("SIGINT", async () => {
-  console.log("\nShutting down...");
+async function gracefulShutdown(signal: string) {
+  logger.info(`Received ${signal}, shutting down...`);
   try {
     await orchestrator.shutdown();
   } catch (error) {
-    console.warn(
-      "⚠️ Error during orchestrator shutdown:",
-      (error as Error).message
-    );
+    logger.warn(`Error during orchestrator shutdown: ${(error as Error).message}`);
   }
   if (databaseStore) {
     await databaseStore.close();
@@ -825,33 +814,14 @@ process.on("SIGINT", async () => {
   try {
     await authCache.close();
   } catch (error) {
-    console.warn("⚠️ Error closing auth cache:", (error as Error).message);
+    logger.warn(`Error closing auth cache: ${(error as Error).message}`);
   }
   server.close();
   process.exit(0);
-});
+}
 
-process.on("SIGTERM", async () => {
-  console.log("\nShutting down...");
-  try {
-    await orchestrator.shutdown();
-  } catch (error) {
-    console.warn(
-      "⚠️ Error during orchestrator shutdown:",
-      (error as Error).message
-    );
-  }
-  if (databaseStore) {
-    await databaseStore.close();
-  }
-  try {
-    await authCache.close();
-  } catch (error) {
-    console.warn("⚠️ Error closing auth cache:", (error as Error).message);
-  }
-  server.close();
-  process.exit(0);
-});
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 startServer().catch((error) => {
   console.error("Failed to start server:", error);

@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { fetchCostSummary, fetchCostHistory, CostSummary, CostInfo } from '@/lib/api';
 import { MOCK_COST_SUMMARY, MOCK_COST_HISTORY, shouldUseMockData } from '@/lib/mock-data';
 import { useMockDataContext } from '@/contexts/MockDataContext';
+import { API_URL } from '@/lib/config';
 import { 
   startOfDay, 
   startOfWeek, 
@@ -110,7 +111,7 @@ export function useBudget(
         };
       }
       
-      const response = await fetch(`${(process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '')}/api/costs/budget`, {
+      const response = await fetch(`${API_URL}/api/costs/budget`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
         },

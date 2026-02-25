@@ -3,8 +3,8 @@ import { db } from '../db';
 import { organizations } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
 import { LRUCache } from 'lru-cache';
+import { hashForCache } from '../utils/crypto';
 
 /**
  * Extended request with organization context
@@ -30,12 +30,7 @@ function extractKeyPrefix(apiKey: string): string {
   return withoutPrefix.substring(0, 8);
 }
 
-/**
- * Hash an API key for use as a cache key (never store plaintext).
- */
-function hashForCache(apiKey: string): string {
-  return crypto.createHash('sha256').update(apiKey).digest('hex');
-}
+
 
 /**
  * API Key authentication middleware for ingestion endpoint

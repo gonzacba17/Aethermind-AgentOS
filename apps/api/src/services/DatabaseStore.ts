@@ -62,10 +62,7 @@ export class DatabaseStore implements StoreInterface {
     return db;
   }
 
-  // Legacy alias for backward compatibility
-  getPrisma(): any {
-    return db;
-  }
+
 
   async close(): Promise<void> {
     this.connected = false;
