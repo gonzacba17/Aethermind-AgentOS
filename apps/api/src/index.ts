@@ -428,6 +428,26 @@ async function startServer(): Promise<void> {
 
   const PORT = DEFAULT_PORT;
 
+  function logStartupBanner(host: string, protocol: string = "HTTP") {
+    console.log(`\n✅ Aethermind ${protocol} server running on ${host}:${PORT}`);
+    console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
+    console.log(`Health check: http://localhost:${PORT}/health (public)`);
+    console.log(
+      `Storage: ${databaseStore?.isConnected() ? "Drizzle" : "InMemory"}`
+    );
+    console.log(
+      `Redis: ${authCache.isConnected() ? "Connected" : "Disconnected"}`
+    );
+    console.log(`Queue: ${queueService ? "Enabled" : "Disabled"}`);
+    const authEnabled =
+      process.env["DISABLE_AUTH"] === "true"
+        ? false
+        : !!process.env["API_KEY_HASH"];
+    console.log(
+      `Auth: ${authEnabled ? "Enabled" : "Disabled (set API_KEY_HASH or DISABLE_AUTH)"}\n`
+    );
+  }
+
   // === HTTPS Server (for production with SSL) ===
   if (
     process.env.NODE_ENV === "production" &&
@@ -438,47 +458,11 @@ async function startServer(): Promise<void> {
     const credentials = { key: privateKey, cert: certificate };
 
     const httpsServer = https.createServer(credentials, app);
-    httpsServer.listen(PORT, () => {
-      console.log(`✅ HTTPS Server running on port ${PORT}`);
-      console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
-      console.log(`Health check: http://localhost:${PORT}/health (public)`);
-      console.log(
-        `Storage: ${databaseStore?.isConnected() ? "Drizzle" : "InMemory"}`
-      );
-      console.log(
-        `Redis: ${authCache.isConnected() ? "Connected" : "Disconnected"}`
-      );
-      console.log(`Queue: ${queueService ? "Enabled" : "Disabled"}`);
-      console.log(
-        `Auth: ${
-          process.env["API_KEY_HASH"]
-            ? "Enabled"
-            : "Disabled (set API_KEY_HASH to enable)"
-        }\n`
-      );
-    });
+    httpsServer.listen(PORT, () => logStartupBanner("0.0.0.0", "HTTPS"));
   } else {
     // === HTTP Server (for development and production) ===
     const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
-    server.listen(PORT, HOST, () => {
-      console.log(`\n✅ Aethermind API server running on ${HOST}:${PORT}`);
-      console.log(`WebSocket server: ws://localhost:${PORT}/ws`);
-      console.log(`Health check: http://localhost:${PORT}/health (public)`);
-      console.log(
-        `Storage: ${databaseStore?.isConnected() ? "Drizzle" : "InMemory"}`
-      );
-      console.log(
-        `Redis: ${authCache.isConnected() ? "Connected" : "Disconnected"}`
-      );
-      console.log(`Queue: ${queueService ? "Enabled" : "Disabled"}`);
-      const authEnabled =
-        process.env["DISABLE_AUTH"] === "true"
-          ? false
-          : !!process.env["API_KEY_HASH"];
-      console.log(
-        `Auth: ${authEnabled ? "Enabled" : "Disabled (DISABLE_AUTH=true)"}\n`
-      );
-    });
+    server.listen(PORT, HOST, () => logStartupBanner(HOST));
   }
 }
 
