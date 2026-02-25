@@ -18,11 +18,10 @@ const AUTH_COOKIE_OPTIONS = {
   path: '/',
 };
 
-// Extend Express Request type for session
-declare module 'express-session' {
-  interface SessionData {
-    oauthRedirect?: string;
-  }
+// Session type for optional session usage (session may not be configured)
+interface OAuthSession {
+  oauthRedirect?: string;
+  destroy?: (callback: (err?: any) => void) => void;
 }
 
 /**
@@ -49,8 +48,9 @@ router.get('/google', (req: Request, res: Response, next: NextFunction) => {
   }
 
   // Store validated redirect URL in session for callback (backup)
-  if (req.session) {
-    req.session.oauthRedirect = redirect;
+  const session = (req as any).session as OAuthSession | undefined;
+  if (session) {
+    session.oauthRedirect = redirect;
   }
 
   logger.info('Initiating Google OAuth', { redirect });
@@ -88,7 +88,7 @@ router.get(
         isNewUser: user?._isNewUser,
         hasCompletedOnboarding: user?.hasCompletedOnboarding,
         queryState: !!req.query.state,
-        sessionRedirect: req.session?.oauthRedirect,
+        sessionRedirect: ((req as any).session as OAuthSession | undefined)?.oauthRedirect,
       });
 
       if (!user) {
@@ -119,8 +119,9 @@ router.get(
       const token = generateUserToken(user);
 
       // Clear session
-      if (req.session) {
-        req.session.oauthRedirect = undefined;
+      const cbSession = (req as any).session as OAuthSession | undefined;
+      if (cbSession) {
+        cbSession.oauthRedirect = undefined;
       }
 
       // For cross-domain OAuth (API on Railway, Frontend on Vercel),
@@ -175,8 +176,9 @@ router.get('/github', (req: Request, res: Response, next: NextFunction) => {
   }
 
   // Store validated redirect URL in session for callback (backup)
-  if (req.session) {
-    req.session.oauthRedirect = redirect;
+  const ghSession = (req as any).session as OAuthSession | undefined;
+  if (ghSession) {
+    ghSession.oauthRedirect = redirect;
   }
 
   logger.info('Initiating GitHub OAuth', { redirect });
@@ -242,8 +244,9 @@ router.get(
       });
 
       // Clear session
-      if (req.session) {
-        req.session.oauthRedirect = undefined;
+      const ghCbSession = (req as any).session as OAuthSession | undefined;
+      if (ghCbSession) {
+        ghCbSession.oauthRedirect = undefined;
       }
 
       // For cross-domain OAuth (API on Railway, Frontend on Vercel),
@@ -291,8 +294,9 @@ router.post('/logout', (req: Request, res: Response) => {
   });
 
   // Clear session if exists
-  if (req.session) {
-    req.session.destroy((err) => {
+  const logoutSession = (req as any).session as OAuthSession | undefined;
+  if (logoutSession?.destroy) {
+    logoutSession.destroy((err: any) => {
       if (err) {
         logger.error('Error destroying session', { error: err.message });
       }

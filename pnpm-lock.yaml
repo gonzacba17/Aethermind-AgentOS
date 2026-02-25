@@ -231,7 +231,7 @@ importers:
         specifier: ^4.17.21
         version: 4.17.25
       '@types/express-session':
-        specifier: ^1.18.0
+        specifier: ^1.18.2
         version: 1.18.2
       '@types/jsonwebtoken':
         specifier: ^9.0.0
