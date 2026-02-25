@@ -154,7 +154,7 @@ export async function verifyDatabaseOnStartup(): Promise<boolean> {
     console.error('╔══════════════════════════════════════════════════════════════╗');
     console.error('║  ❌ DATABASE_URL NOT CONFIGURED                              ║');
     console.error('╠══════════════════════════════════════════════════════════════╣');
-    console.error('║  OAuth users will be created as TEMPORARY (in-memory) users  ║');
+    console.error('║  Users will NOT be persisted (in-memory only)                 ║');
     console.error('║  These users CANNOT update their plan or persist data        ║');
     console.error('║                                                              ║');
     console.error('║  To fix: Set DATABASE_URL in Railway environment variables   ║');
@@ -177,7 +177,7 @@ export async function verifyDatabaseOnStartup(): Promise<boolean> {
     console.log('║  ✅ DATABASE CONNECTION ESTABLISHED                          ║');
     console.log('╠══════════════════════════════════════════════════════════════╣');
     console.log(`║  Server time: ${connected.time}                      ║`);
-    console.log('║  OAuth users will be persisted correctly                     ║');
+    console.log('║  Users will be persisted correctly                           ║');
     console.log('╚══════════════════════════════════════════════════════════════╝\n');
     
     dbStatus.isConnected = true;
@@ -188,7 +188,7 @@ export async function verifyDatabaseOnStartup(): Promise<boolean> {
     console.error('╠══════════════════════════════════════════════════════════════╣');
     console.error(`║  Error: ${(error as Error).message.substring(0, 50).padEnd(50)} ║`);
     console.error('║                                                              ║');
-    console.error('║  OAuth users will be created as TEMPORARY (in-memory) users  ║');
+    console.error('║  Users will NOT be persisted (in-memory only)                 ║');
     console.error('║  The server will continue but with degraded functionality    ║');
     console.error('╚══════════════════════════════════════════════════════════════╝\n');
     

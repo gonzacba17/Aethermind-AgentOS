@@ -41,9 +41,6 @@ export const JWT_EXPIRES_IN = '7d';
 export const PASSWORD_MIN_LENGTH = 8;
 export const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 export const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
-export const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-export const AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
 // =============================================================================
 // Alert & Budget Configuration
 // =============================================================================
@@ -74,20 +71,6 @@ export const CORS_ORIGINS = process.env.NODE_ENV === 'production'
       'https://aethermind-page.vercel.app',
       'https://aethermind-agent-os-dashboard.vercel.app',
     ]);
-
-// =============================================================================
-// OAuth Redirect Whitelist - SECURITY: Only allow redirects to known domains
-// Configurable via ALLOWED_OAUTH_REDIRECTS env var (comma-separated)
-// =============================================================================
-export const ALLOWED_OAUTH_REDIRECTS = process.env.NODE_ENV === 'production'
-  ? (process.env['ALLOWED_OAUTH_REDIRECTS']?.split(',').map(s => s.trim()).filter(Boolean) || DEFAULT_PROD_ORIGINS)
-  : [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:5173',
-      'https://aethermind-page.vercel.app',
-      'https://aethermind-agent-os-dashboard.vercel.app',
-    ];
 
 // =============================================================================
 // Redis Configuration

@@ -62,9 +62,9 @@ export async function authMiddleware(
   // Use originalUrl to catch full path including /api prefix
   const url = req.originalUrl || req.url;
   
-  // Debug logging for OAuth routes
+  // Debug logging for auth routes
   if (url.includes('/auth/')) {
-    logger.debug('Auth middleware processing OAuth route', {
+    logger.debug('Auth middleware processing auth route', {
       url,
       path: req.path,
       originalUrl: req.originalUrl,

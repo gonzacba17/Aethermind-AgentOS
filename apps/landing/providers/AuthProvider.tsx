@@ -20,8 +20,6 @@ export interface AuthContextValue {
   login: (data: LoginData, rememberMe?: boolean) => Promise<User>;
   signup: (data: SignupData) => Promise<User>;
   logout: () => void;
-  loginWithGoogle: () => void;
-  loginWithGitHub: () => void;
   refreshUser: () => Promise<void>;
   clearError: () => void;
 }
@@ -124,14 +122,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
   }, []);
 
-  const loginWithGoogle = useCallback(() => {
-    authAPI.loginWithGoogle();
-  }, []);
-
-  const loginWithGitHub = useCallback(() => {
-    authAPI.loginWithGitHub();
-  }, []);
-
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -146,8 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       signup,
       logout,
-      loginWithGoogle,
-      loginWithGitHub,
       refreshUser,
       clearError,
     }),
@@ -159,8 +147,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       signup,
       logout,
-      loginWithGoogle,
-      loginWithGitHub,
       refreshUser,
       clearError,
     ]

@@ -200,7 +200,6 @@ async function startServer(): Promise<void> {
   const dbConnected = await verifyDatabaseOnStartup();
   if (!dbConnected) {
     logger.warn("⚠️ Server starting with degraded database connectivity");
-    logger.warn("   OAuth users may be created as temporary (in-memory) users");
   }
 
   // Verify Drizzle ORM can execute queries (not just raw pool)
@@ -208,7 +207,7 @@ async function startServer(): Promise<void> {
     const { verifyDrizzleConnection } = await import("./db");
     const drizzleOk = await verifyDrizzleConnection();
     if (!drizzleOk) {
-      logger.error("⚠️ Drizzle ORM cannot query the database — OAuth will use temp users");
+      logger.error("⚠️ Drizzle ORM cannot query the database");
     }
   }
 
@@ -506,7 +505,7 @@ declare global {
       alertService: AlertService;
       drizzle: any;
       client?: import("./middleware/clientAuth").ClientData;
-      // user is defined by @types/passport, use (req.user as any)?.id where needed
+      user?: { id: string; email: string; plan: string; usageCount: number; usageLimit: number };
     }
   }
 }

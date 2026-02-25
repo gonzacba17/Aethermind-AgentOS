@@ -5,14 +5,7 @@ import logger from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { retryDatabaseOperation, checkDatabaseConnection } from '../middleware/database';
-
-interface OAuthUserData {
-  provider: 'google' | 'github';
-  providerId: string;
-  email: string;
-  name: string;
-}
+import { checkDatabaseConnection } from '../middleware/database';
 
 /**
  * In-memory store for temporary users
@@ -21,7 +14,7 @@ interface OAuthUserData {
  */
 export const temporaryUsersStore = new Map<string, {
   tempId: string;
-  provider: 'google' | 'github';
+  provider: string;
   providerId: string;
   email: string;
   name: string;
@@ -97,8 +90,8 @@ export async function convertTemporaryUser(tempId: string): Promise<any | null> 
       .limit(1);
 
     if (existingUser) {
-      // User exists - update with OAuth provider ID and remove from temp store
-      logger.info('👤 Found existing user with same email, linking OAuth', {
+      // User exists - link provider ID and remove from temp store
+      logger.info('👤 Found existing user with same email, linking account', {
         existingUserId: existingUser.id,
         email: tempUser.email,
       });
@@ -193,208 +186,3 @@ export async function convertTemporaryUser(tempId: string): Promise<any | null> 
   }
 }
 
-/**
- * Find or create user from OAuth login
- * Handles three scenarios:
- * 1. User exists with this OAuth ID -> return user
- * 2. User exists with this email -> link OAuth ID to account
- * 3. New user -> create with OAuth ID
- * 
- * FALLBACK: If database is unavailable after retries, creates temporary in-memory user
- */
-export async function findOrCreateOAuthUser(
-  data: OAuthUserData
-) {
-  const { provider, providerId, email, name } = data;
-  
-  logger.info('🔐 OAuth user lookup started', { 
-    provider, 
-    email, 
-    providerId: providerId.substring(0, 10) + '...' 
-  });
-  
-  try {
-    // Use retry logic for database operations
-    const result = await retryDatabaseOperation(async () => {
-      // 1. Check if user exists with this OAuth provider ID
-      logger.info('[OAuth] Step 1: Looking up user by provider ID', { provider, providerId: providerId.substring(0, 10) + '...' });
-      let foundUser = null;
-
-      if (provider === 'google') {
-        const [found] = await db.select()
-          .from(users)
-          .where(eq(users.googleId, providerId))
-          .limit(1);
-        foundUser = found || null;
-      } else { // github
-        const [found] = await db.select()
-          .from(users)
-          .where(eq(users.githubId, providerId))
-          .limit(1);
-        foundUser = found || null;
-      }
-
-      if (foundUser) {
-        logger.info('[OAuth] Existing user found by provider ID', {
-          userId: foundUser.id,
-          provider,
-          email: foundUser.email,
-          hasCompletedOnboarding: foundUser.hasCompletedOnboarding,
-        });
-
-        // Update last login
-        await db.update(users)
-          .set({ lastLoginAt: new Date() })
-          .where(eq(users.id, foundUser.id));
-
-        return { user: foundUser, isNewUser: false };
-      }
-
-      // 2. Check if user exists with this email (possibly registered with password)
-      logger.info('[OAuth] Step 2: Looking up user by email', { email });
-      const [existingUser] = await db.select()
-        .from(users)
-        .where(eq(users.email, email))
-        .limit(1);
-
-      if (existingUser) {
-        // Link OAuth account to existing user
-        logger.info('[OAuth] Linking OAuth provider to existing email account', {
-          userId: existingUser.id,
-          provider,
-          email,
-        });
-
-        const updateData = provider === 'google'
-          ? { googleId: providerId, lastLoginAt: new Date() }
-          : { githubId: providerId, lastLoginAt: new Date() };
-
-        const [updatedUser] = await db.update(users)
-          .set(updateData)
-          .where(eq(users.id, existingUser.id))
-          .returning();
-
-        return { user: updatedUser!, isNewUser: false };
-      }
-
-      // 3. Create new user with OAuth data
-      logger.info('[OAuth] Step 3: Creating new user in database', { provider, email, name });
-
-      const newUserData = {
-        id: `user_${randomBytes(16).toString('hex')}`,
-        email,
-        name,
-        plan: 'free' as const,
-        usageLimit: 100,
-        usageCount: 0,
-        apiKeyHash: await bcrypt.hash(`aethermind_${uuidv4()}`, 10),
-        emailVerified: true, // OAuth emails are pre-verified
-        hasCompletedOnboarding: false,
-        onboardingStep: 'welcome',
-        subscriptionStatus: 'free' as const,
-        maxAgents: 3,
-        logRetentionDays: 30,
-        firstLoginAt: new Date(),
-        lastLoginAt: new Date(),
-        ...(provider === 'google' ? { googleId: providerId } : { githubId: providerId }),
-      };
-
-      try {
-        const [newUser] = await db.insert(users)
-          .values(newUserData)
-          .returning();
-
-        logger.info('[OAuth] New user created successfully', {
-          userId: newUser!.id,
-          provider,
-          email: newUser!.email,
-        });
-
-        return { user: newUser!, isNewUser: true };
-      } catch (insertError: unknown) {
-        // Handle race condition: user created by concurrent request
-        const error = insertError as { code?: string; message?: string };
-        logger.error('[OAuth] Insert failed', {
-          code: error.code,
-          message: error.message,
-          email,
-        });
-        if (error.code === '23505' || error.message?.includes('unique')) {
-          logger.info('[OAuth] Race condition: user created by concurrent request, fetching', { email });
-          const [existingUser] = await db.select()
-            .from(users)
-            .where(eq(users.email, email))
-            .limit(1);
-          if (existingUser) {
-            return { user: existingUser, isNewUser: false };
-          }
-        }
-        throw insertError;
-      }
-    }, {
-      maxRetries: 3,
-      initialDelayMs: 1000,
-      backoffMultiplier: 2,
-    });
-
-    // Attach isNewUser flag to the user object for the callback handler
-    const user = result.user as any;
-    user._isNewUser = result.isNewUser;
-    return user;
-
-  } catch (error) {
-    const err = error as Error & { code?: string };
-    // FALLBACK: Database unavailable after all retries - create temporary in-memory user
-    logger.error('[OAuth] DATABASE UNAVAILABLE - creating temporary user', {
-      provider,
-      email,
-      errorMessage: err.message,
-      errorCode: err.code,
-      errorName: err.name,
-      stack: err.stack?.split('\n').slice(0, 5).join('\n'),
-      databaseUrl: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 30) + '...' : 'NOT SET',
-      sslRejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED ?? 'not set (defaults to true)',
-      nodeEnv: process.env.NODE_ENV,
-    });
-    
-    // Create a temporary user object that works with JWT
-    const tempId = `temp-${providerId}`;
-    const tempUser = {
-      id: tempId,
-      email,
-      name,
-      plan: 'free',
-      usageCount: 0,
-      usageLimit: 100,
-      apiKeyHash: `temp-${uuidv4()}`, // Temp user, not a real hash
-      emailVerified: true,
-      hasCompletedOnboarding: false,
-      _isNewUser: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    // Store in memory for potential conversion later
-    temporaryUsersStore.set(tempId, {
-      tempId,
-      provider,
-      providerId,
-      email,
-      name,
-      createdAt: new Date(),
-      plan: 'free',
-      usageCount: 0,
-      usageLimit: 100,
-    });
-    
-    logger.warn('⚠️ Temporary OAuth user created (in-memory)', {
-      userId: tempUser.id,
-      provider,
-      email: tempUser.email,
-      temporaryUsersCount: temporaryUsersStore.size,
-      note: 'This user will NOT persist. Configure PostgreSQL for persistence.',
-    });
-    
-    return tempUser as any;
-  }
-}

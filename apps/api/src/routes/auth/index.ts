@@ -11,7 +11,6 @@
  *   plan.ts      → POST /auth/update-plan
  *   profile.ts   → GET /auth/me + PATCH /auth/me + POST /auth/regenerate-api-key
  *   session.ts   → POST /auth/create-temp-session + POST /auth/session + PATCH /auth/onboarding
- *   oauth.ts     → re-exports routes/oauth.ts (GET /auth/google, /auth/github + callbacks)
  */
 
 import { Router } from 'express';

@@ -52,9 +52,6 @@ const secretsSchema = z.object({
     .optional()
     .describe('SendGrid API key for email'),
 
-  // OAuth secrets
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GITHUB_CLIENT_SECRET: z.string().optional(),
 });
 
 export type SecretsConfig = z.infer<typeof secretsSchema>;
@@ -91,8 +88,6 @@ export function validateSecrets(): SecretsConfig {
       REDIS_URL: process.env.REDIS_URL,
       STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
       SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
-      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-      GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
     });
 
     // Additional security validations
@@ -105,12 +100,6 @@ export function validateSecrets(): SecretsConfig {
       }
       if (!secrets.API_KEY_HASH) {
         throw new Error('API_KEY_HASH is required in production');
-      }
-      if (!secrets.SESSION_SECRET) {
-        throw new Error(
-          'FATAL: SESSION_SECRET is required in production. ' +
-          'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
-        );
       }
       if (!secrets.ENCRYPTION_KEY) {
         throw new Error(

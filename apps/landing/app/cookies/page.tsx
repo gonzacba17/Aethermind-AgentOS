@@ -89,7 +89,7 @@ export default function CookiesPage() {
                 <strong className="text-white">Vercel Analytics:</strong> To understand website performance and usage patterns
               </li>
               <li>
-                <strong className="text-white">Authentication Providers:</strong> For secure login functionality (when using OAuth)
+                <strong className="text-white">Authentication:</strong> For secure login functionality
               </li>
             </ul>
           </section>

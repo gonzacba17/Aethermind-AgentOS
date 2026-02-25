@@ -1,5 +1,4 @@
 import { apiClient } from './client';
-import { API_BASE_URL } from '@/lib/config';
 import { saveToken, removeToken } from '@/lib/auth-utils';
 
 export interface User {
@@ -72,22 +71,6 @@ export const authAPI = {
       removeToken();
       localStorage.removeItem('user');
     }
-  },
-
-  /**
-   * Initiate Google OAuth
-   */
-  loginWithGoogle() {
-    const callbackUrl = `${window.location.origin}/auth/callback`;
-    window.location.href = `${API_BASE_URL}/auth/google?redirect=${encodeURIComponent(callbackUrl)}`;
-  },
-
-  /**
-   * Initiate GitHub OAuth
-   */
-  loginWithGitHub() {
-    const callbackUrl = `${window.location.origin}/auth/callback`;
-    window.location.href = `${API_BASE_URL}/auth/github?redirect=${encodeURIComponent(callbackUrl)}`;
   },
 
   /**
