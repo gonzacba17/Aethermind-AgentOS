@@ -59,7 +59,7 @@ import organizationRoutes from "./routes/organizations";
 import { WebSocketManager } from "./websocket/WebSocketManager";
 import { InMemoryStore } from "./services/InMemoryStore";
 import { DatabaseStore } from "./services/DatabaseStore";
-import redisCache, { RedisCache } from "./services/RedisCache";
+import redisCache, { RedisService } from "./services/RedisService";
 import { BudgetService } from "./services/BudgetService";
 import { AlertService } from "./services/AlertService";
 import type { StoreInterface } from "./services/PostgresStore";
@@ -723,7 +723,7 @@ declare global {
       workflowEngine: typeof workflowEngine;
       store: StoreInterface;
       wsManager: WebSocketManager;
-      cache: RedisCache;
+      cache: RedisService;
       budgetService: BudgetService;
       alertService: AlertService;
       drizzle: any;

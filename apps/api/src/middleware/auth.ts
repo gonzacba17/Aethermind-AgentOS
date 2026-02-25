@@ -17,7 +17,7 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import type { RedisCache } from '../services/RedisCache.js';
+import type { RedisService } from '../services/RedisService.js';
 import logger from '../utils/logger';
 import { verifyJWT } from '../utils/auth-helpers';
 
@@ -28,7 +28,7 @@ const AUTH_COOKIE_NAME = 'auth_token';
 export interface AuthConfig {
   apiKeyHash?: string;
   enabled?: boolean;
-  cache?: RedisCache;
+  cache?: RedisService;
 }
 
 let authConfig: AuthConfig = {

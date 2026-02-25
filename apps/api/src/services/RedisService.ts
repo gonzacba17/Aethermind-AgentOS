@@ -1,8 +1,11 @@
 /**
- * Redis Service for Session Exchange and Caching
+ * Redis Service for Caching and Session Exchange
  * 
- * This is the REAL Redis implementation using ioredis.
+ * Real Redis implementation using ioredis.
  * Falls back gracefully to in-memory Map if Redis is not available.
+ * 
+ * This is the single cache service for the entire API — replaces the old
+ * no-op RedisCache stub that was previously used as `authCache`.
  */
 import Redis from 'ioredis';
 
@@ -21,7 +24,7 @@ setInterval(() => {
 
 class RedisService {
   private client: Redis | null = null;
-  private isConnected: boolean = false;
+  private _isConnected: boolean = false;
   private useMemoryFallback: boolean = false;
 
   constructor() {
@@ -51,12 +54,12 @@ class RedisService {
 
       this.client.on('connect', () => {
         console.log('✅ Redis connected successfully');
-        this.isConnected = true;
+        this._isConnected = true;
       });
 
       this.client.on('error', (err) => {
         console.error('❌ Redis connection error:', err.message);
-        this.isConnected = false;
+        this._isConnected = false;
         
         // Fallback to memory if Redis fails after initial connection
         if (!this.useMemoryFallback) {
@@ -67,7 +70,7 @@ class RedisService {
 
       this.client.on('close', () => {
         console.log('🔌 Redis connection closed');
-        this.isConnected = false;
+        this._isConnected = false;
       });
 
       this.client.on('reconnecting', () => {
@@ -84,14 +87,21 @@ class RedisService {
    * Check if Redis is available
    */
   isAvailable(): boolean {
-    return this.isConnected && !this.useMemoryFallback;
+    return this._isConnected && !this.useMemoryFallback;
+  }
+
+  /**
+   * Alias for isAvailable() — used by health check and Express.Request augmentation
+   */
+  isConnected(): boolean {
+    return this._isConnected;
   }
 
   /**
    * Set a key with expiration (seconds)
    */
   async setex(key: string, seconds: number, value: string): Promise<void> {
-    if (this.client && this.isConnected && !this.useMemoryFallback) {
+    if (this.client && this._isConnected && !this.useMemoryFallback) {
       try {
         await this.client.setex(key, seconds, value);
         return;
@@ -112,7 +122,7 @@ class RedisService {
    * Get a key's value
    */
   async get(key: string): Promise<string | null> {
-    if (this.client && this.isConnected && !this.useMemoryFallback) {
+    if (this.client && this._isConnected && !this.useMemoryFallback) {
       try {
         return await this.client.get(key);
       } catch (error) {
@@ -138,7 +148,7 @@ class RedisService {
    * Delete a key
    */
   async del(key: string): Promise<void> {
-    if (this.client && this.isConnected && !this.useMemoryFallback) {
+    if (this.client && this._isConnected && !this.useMemoryFallback) {
       try {
         await this.client.del(key);
         return;
@@ -155,14 +165,16 @@ class RedisService {
   /**
    * Set a key (without expiration)
    */
-  async set(key: string, value: string): Promise<void> {
-    if (this.client && this.isConnected && !this.useMemoryFallback) {
+  async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
+    if (ttlSeconds) {
+      return this.setex(key, ttlSeconds, value);
+    }
+    if (this.client && this._isConnected && !this.useMemoryFallback) {
       try {
         await this.client.set(key, value);
         return;
       } catch (error) {
         console.error(`Redis SET error for key ${key}:`, error);
-        // Fall through to memory fallback
       }
     }
 
@@ -176,8 +188,58 @@ class RedisService {
   /**
    * Check if a key exists
    */
+  async has(key: string): Promise<boolean> {
+    return this.exists(key);
+  }
+
+  /**
+   * Invalidate keys matching a pattern (e.g. "workflow:*")
+   */
+  async invalidatePattern(pattern: string): Promise<number> {
+    if (this.client && this._isConnected && !this.useMemoryFallback) {
+      try {
+        const keys = await this.client.keys(pattern);
+        if (keys.length > 0) {
+          await this.client.del(...keys);
+        }
+        return keys.length;
+      } catch (error) {
+        console.error(`Redis INVALIDATE error for pattern ${pattern}:`, error);
+      }
+    }
+
+    // Memory fallback
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+    let count = 0;
+    for (const key of memoryStore.keys()) {
+      if (regex.test(key)) {
+        memoryStore.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Clear all cached data
+   */
+  async clear(): Promise<void> {
+    if (this.client && this._isConnected && !this.useMemoryFallback) {
+      try {
+        await this.client.flushdb();
+        return;
+      } catch (error) {
+        console.error('Redis FLUSHDB error:', error);
+      }
+    }
+    memoryStore.clear();
+  }
+
+  /**
+   * Check if a key exists
+   */
   async exists(key: string): Promise<boolean> {
-    if (this.client && this.isConnected && !this.useMemoryFallback) {
+    if (this.client && this._isConnected && !this.useMemoryFallback) {
       try {
         const result = await this.client.exists(key);
         return result === 1;
@@ -206,7 +268,7 @@ class RedisService {
     if (this.client) {
       await this.client.quit();
       this.client = null;
-      this.isConnected = false;
+      this._isConnected = false;
     }
   }
 }
