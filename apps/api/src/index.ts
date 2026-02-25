@@ -50,21 +50,12 @@ import { costRoutes } from "./routes/costs";
 import { workflowRoutes } from "./routes/workflows";
 import { budgetRoutes } from "./routes/budgets";
 import ingestionRoutes from "./routes/ingestion";
-// [B2B BETA] Old auth routes — commented out, not deleted
-// import authRoutes from "./routes/auth";
-// import oauthRoutes from "./routes/oauth";
-// import onboardingRoutes from "./routes/onboarding";
-// import stripeRoutes from "./routes/stripe";
 import clientRoutes from "./routes/client";
 import { clientAuth } from "./middleware/clientAuth";
 import userApiKeysRoutes from "./routes/user-api-keys";
 import optimizationRoutes from "./routes/optimization.routes";
 import forecastingRoutes from "./routes/forecasting.routes";
 import organizationRoutes from "./routes/organizations";
-// [B2B BETA] Session/passport — commented out, not deleted
-// import session from "express-session";
-// import connectPgSimple from "connect-pg-simple";
-// import passportConfig from "./config/passport";
 import { WebSocketManager } from "./websocket/WebSocketManager";
 import { InMemoryStore } from "./services/InMemoryStore";
 import { DatabaseStore } from "./services/DatabaseStore";
@@ -72,22 +63,14 @@ import redisCache, { RedisCache } from "./services/RedisCache";
 import { BudgetService } from "./services/BudgetService";
 import { AlertService } from "./services/AlertService";
 import type { StoreInterface } from "./services/PostgresStore";
-// [B2B BETA] authMiddleware and configureAuth disabled — verifyApiKey still used by WebSocket
-import { /* authMiddleware, configureAuth, */ verifyApiKey } from "./middleware/auth";
+import { verifyApiKey } from "./middleware/auth";
 import { verifyDatabaseOnStartup, measureDatabaseLatency, getDatabaseStatus } from "./middleware/database";
 import { requestIdMiddleware, withRequestId } from "./middleware/request-id.middleware";
-// [B2B BETA] CSRF and auth rate limiter — commented out, not deleted
-// import { csrfProtection, csrfTokenHandler } from "./middleware/csrf.middleware";
-// import { authRateLimiter } from "./middleware/rateLimiter";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
-// [B2B BETA] OAuth service — commented out, not deleted
-// import { getTemporaryUsersCount } from "./services/OAuthService";
 import { sanitizeLog, sanitizeObject } from "./utils/sanitizer";
 import logger, { stream } from "./utils/logger";
 import {
   register,
-  httpRequestDuration,
-  httpRequestTotal,
 } from "./utils/metrics";
 import {
   CORS_ORIGINS,
@@ -106,14 +89,6 @@ if (process.env["NODE_ENV"] === "production" && !process.env["API_KEY_HASH"]) {
   process.exit(1);
 }
 
-// [B2B BETA] Session secret validation — commented out, not deleted
-// if (!process.env.SESSION_SECRET && !process.env.JWT_SECRET) {
-//   logger.error("❌ FATAL: SESSION_SECRET or JWT_SECRET must be configured");
-//   process.exit(1);
-// }
-// if (!process.env.SESSION_SECRET) {
-//   logger.warn("⚠️ SESSION_SECRET not set, using JWT_SECRET as fallback for sessions");
-// }
 
 const authCache = redisCache;
 
@@ -366,34 +341,7 @@ async function startServer(): Promise<void> {
     })
   );
 
-  // [B2B BETA] PostgreSQL session store — commented out, not deleted
-  // const PgSession = connectPgSimple(session);
-  // app.use(
-  //   session({
-  //     store: new PgSession({
-  //       conObject: {
-  //         connectionString: process.env.DATABASE_URL,
-  //         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-  //       },
-  //       tableName: 'user_sessions',
-  //       createTableIfMissing: true,
-  //       errorLog: (err: Error) => logger.error('Session store error:', { error: err.message })
-  //     }),
-  //     secret: process.env.SESSION_SECRET || process.env.JWT_SECRET!,
-  //     resave: false,
-  //     saveUninitialized: false,
-  //     cookie: {
-  //       maxAge: 30 * 24 * 60 * 60 * 1000,
-  //       secure: process.env.NODE_ENV === 'production',
-  //       httpOnly: true,
-  //       sameSite: 'lax'
-  //     }
-  //   })
-  // );
-  // logger.info('✅ PostgreSQL session store initialized (table: user_sessions)');
 
-  // [B2B BETA] Passport initialization — commented out, not deleted
-  // app.use(passportConfig.initialize());
 
   // Cookie parser middleware - required for httpOnly auth cookies
   app.use(cookieParser());
@@ -424,31 +372,7 @@ async function startServer(): Promise<void> {
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
-  // [B2B BETA] Stripe webhook — commented out, not deleted
-  // app.use(
-  //   "/stripe/webhook",
-  //   express.raw({ type: "application/json" }),
-  //   stripeRoutes
-  // );
 
-  // HTTP request metrics middleware - DISABLED TEMPORARILY
-  // TODO: Fix metrics module initialization before re-enabling
-  // Issue: httpRequestDuration.labels is not a function in production
-  /*
-  app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-      const duration = (Date.now() - start) / 1000;
-      const route = req.route?.path || req.path;
-      httpRequestDuration.labels(req.method, route, res.statusCode.toString()).observe(duration);
-      httpRequestTotal.labels(req.method, route, res.statusCode.toString()).inc();
-    });
-    next();
-  });
-  */
-  logger.warn(
-    "⚠️  Prometheus metrics middleware disabled - fix metrics module before re-enabling"
-  );
 
   app.get("/api/openapi", (_req, res) => {
     res.sendFile("/docs/openapi.yaml", { root: process.cwd() });
@@ -499,29 +423,6 @@ async function startServer(): Promise<void> {
     checks.redis = authCache.isConnected();
     details.redis = checks.redis ? "connected" : "disconnected";
 
-    // [B2B BETA] Stripe and email health checks — commented out, not deleted
-    // try {
-    //   const { StripeService } = await import("./services/StripeService");
-    //   const stripeService = new StripeService();
-    //   checks.stripe = stripeService.isConfigured();
-    //   details.stripe = checks.stripe ? "configured" : "not configured";
-    // } catch (error) {
-    //   checks.stripe = false;
-    //   details.stripe = "error";
-    // }
-
-    // try {
-    //   const { emailService } = await import("./services/EmailService");
-    //   checks.email = emailService.isConfigured();
-    //   details.email = emailService.isConfigured()
-    //     ? `configured (${emailService.getProvider()})`
-    //     : "not configured";
-    // } catch (error) {
-    //   checks.email = false;
-    //   details.email = "error";
-    // }
-
-    // const temporaryUsersCount = getTemporaryUsersCount();
     const temporaryUsersCount = 0;
 
     // Determine overall health status
@@ -549,9 +450,7 @@ async function startServer(): Promise<void> {
     });
   });
 
-  // [B2B BETA] CSRF token endpoints — commented out, not deleted
-  // app.get("/csrf-token", csrfTokenHandler);
-  // app.get("/api/csrf-token", csrfTokenHandler);
+
 
   // Detailed database diagnostics endpoint
   app.get("/health/db", async (req, res) => {
@@ -692,11 +591,6 @@ async function startServer(): Promise<void> {
     }
   });
 
-  // [B2B BETA] Old OAuth/auth routes — commented out, not deleted
-  // app.use("/auth", authRateLimiter, oauthRoutes);
-  // app.use("/auth", authRateLimiter, authRoutes);
-  // app.use("/api/auth", authRateLimiter, oauthRoutes);
-  // app.use("/api/auth", authRateLimiter, authRoutes);
 
   // Public ingestion endpoint - uses its own auth middleware (unchanged)
   app.use("/v1", ingestionRoutes);
@@ -704,12 +598,7 @@ async function startServer(): Promise<void> {
   // Client routes — protected by clientAuth
   app.use("/api/client", clientAuth, clientRoutes);
 
-  // [B2B BETA] Old JWT authMiddleware — commented out, replaced with clientAuth
-  // app.use("/api", authMiddleware);
   app.use("/api", clientAuth);
-
-  // [B2B BETA] CSRF protection — commented out, not deleted
-  // app.use("/api", csrfProtection);
 
   app.use((req, _res, next) => {
     req.runtime = runtime;
@@ -733,9 +622,7 @@ async function startServer(): Promise<void> {
   app.use("/api/costs", costRoutes);
   app.use("/api/workflows", workflowRoutes);
   app.use("/api/budgets", budgetRoutes);
-  // [B2B BETA] Onboarding and Stripe routes — commented out, not deleted
-  // app.use("/api/onboarding", onboardingRoutes);
-  // app.use("/api/stripe", stripeRoutes);
+
   app.use("/api/user/api-keys", userApiKeysRoutes); // User API keys management
   app.use("/api/organizations", organizationRoutes); // Organization management
   app.use("/api/optimization", optimizationRoutes); // Auto-optimization engine

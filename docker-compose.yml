@@ -107,7 +107,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./backups:/backups
     restart: unless-stopped
     networks:
       - aethermind
