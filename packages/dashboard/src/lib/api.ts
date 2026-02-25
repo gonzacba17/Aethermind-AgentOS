@@ -10,10 +10,6 @@ const DEFAULT_RETRIES = 3;
 const RETRY_DELAY_BASE = 1000;
 const MAX_RETRY_DELAY = 30000;
 
-// ─── Previous JWT refresh logic (commented out, not deleted) ───
-// let isRefreshing = false;
-// let refreshPromise: Promise<string | null> | null = null;
-// async function refreshToken(): Promise<string | null> { ... }
 
 function getRetryDelay(attempt: number): number {
   const delay = RETRY_DELAY_BASE * Math.pow(2, attempt);

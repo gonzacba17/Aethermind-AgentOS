@@ -7,16 +7,6 @@
  * Previous version used localStorage + JWT — kept as reference below.
  */
 
-// ─── Previous JWT-based implementation (commented out, not deleted) ───
-// import { LANDING_PAGE_URL } from './config';
-// const AUTH_TOKEN_KEY = 'auth_token';
-// export function getAuthToken() { return localStorage.getItem(AUTH_TOKEN_KEY); }
-// export function setAuthToken(token: string) { localStorage.setItem(AUTH_TOKEN_KEY, token); }
-// export function clearAuthToken() { localStorage.removeItem(AUTH_TOKEN_KEY); }
-// export function isAuthenticated() { return !!getAuthToken(); }
-// export function getUserFromToken(token: string) { /* JWT decode */ }
-// export interface AuthUser { ... }
-// export interface AuthMeResponse extends AuthUser {}
 
 const CLIENT_TOKEN_KEY = 'client_token';
 

@@ -126,20 +126,11 @@ logger.info(
   }`
 );
 
-// DEBUG: Show auth configuration
-console.log("\n🔍 AUTH CONFIGURATION DEBUG:");
-console.log(`   DISABLE_AUTH env var: "${process.env["DISABLE_AUTH"]}"`);
-console.log(`   API_KEY_HASH exists: ${!!process.env["API_KEY_HASH"]}`);
-console.log(`   NODE_ENV: ${process.env["NODE_ENV"]}`);
+// Auth state (used at startup log below)
 const shouldDisableAuth = process.env["DISABLE_AUTH"] === "true";
 const hasApiKey = !!process.env["API_KEY_HASH"];
 const isProduction = process.env["NODE_ENV"] === "production";
-console.log(`   Should disable auth: ${shouldDisableAuth}`);
-console.log(
-  `   Calculated auth enabled: ${
-    !shouldDisableAuth && (isProduction || hasApiKey)
-  }\n`
-);
+logger.info(`Auth enabled: ${!shouldDisableAuth && (isProduction || hasApiKey)}`);
 
 // [B2B BETA] configureAuth — commented out, not deleted
 // configureAuth({
@@ -352,8 +343,6 @@ async function startServer(): Promise<void> {
   runtime.getEmitter().on("workflow:failed", (event: any) => {
     wsManager.broadcast("workflow:failed", event);
   });
-
-  console.log("[Hot Reload] Feature deprecated - use API to update agents");
 
   app.use(
     helmet({
