@@ -64,14 +64,13 @@ import { BudgetService } from "./services/BudgetService";
 import { AlertService } from "./services/AlertService";
 import type { StoreInterface } from "./services/PostgresStore";
 import { verifyApiKey } from "./middleware/auth";
-import { verifyDatabaseOnStartup, measureDatabaseLatency, getDatabaseStatus } from "./middleware/database";
+import { verifyDatabaseOnStartup } from "./middleware/database";
+import { createHealthRouter } from "./server/health";
 import { requestIdMiddleware, withRequestId } from "./middleware/request-id.middleware";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
 import { sanitizeLog, sanitizeObject } from "./utils/sanitizer";
 import logger, { stream } from "./utils/logger";
-import {
-  register,
-} from "./utils/metrics";
+
 import {
   CORS_ORIGINS,
   RATE_LIMIT_WINDOW_MS,
@@ -378,218 +377,13 @@ async function startServer(): Promise<void> {
     res.sendFile("/docs/openapi.yaml", { root: process.cwd() });
   });
 
-  // Prometheus metrics endpoint
-  app.get("/metrics", async (_req, res) => {
-    try {
-      res.set("Content-Type", register.contentType);
-      res.end(await register.metrics());
-    } catch (error) {
-      res.status(500).end((error as Error).message);
-    }
+  // Health check, /health/db, and /metrics endpoints
+  const healthRouter = createHealthRouter({
+    authCache,
+    databaseStore,
+    queueService,
   });
-
-  // Enhanced health check endpoint with service status monitoring
-  app.get("/health", async (_req, res) => {
-    const checks = {
-      database: false,
-      redis: false,
-      stripe: false,
-      email: false,
-    };
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const details: any = {
-      storage: databaseStore?.isConnected() ? "drizzle" : "memory",
-      queue: queueService ? "enabled" : "disabled",
-    };
-
-    // Check database connectivity with latency measurement
-    const dbLatency = await measureDatabaseLatency();
-    const dbStatus = getDatabaseStatus();
-    
-    if (dbLatency !== null) {
-      checks.database = true;
-      details.database = "connected";
-      details.databaseLatencyMs = dbLatency;
-    } else {
-      checks.database = false;
-      details.database = dbStatus.isConnected ? "connected" : "disconnected";
-      if (dbStatus.lastError) {
-        details.databaseError = dbStatus.lastError.message;
-      }
-    }
-
-    // Check Redis cache
-    checks.redis = authCache.isConnected();
-    details.redis = checks.redis ? "connected" : "disconnected";
-
-    const temporaryUsersCount = 0;
-
-    // Determine overall health status
-    // NOTE: Always return 200 for Railway healthcheck compatibility
-    // The app can run in degraded mode (InMemoryStore) without database
-    const allHealthy = Object.values(checks).every((v) => v);
-    const criticalHealthy = checks.database; // Database is only critical service
-
-    const status = allHealthy
-      ? "healthy"
-      : criticalHealthy
-      ? "degraded"
-      : "degraded";
-    // Always return 200 - Railway healthcheck needs this even in degraded mode
-    const httpStatus = 200;
-
-    res.status(httpStatus).json({
-      status,
-      version: "0.1.0",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      checks,
-      details,
-      temporaryUsersCount,
-    });
-  });
-
-
-
-  // Detailed database diagnostics endpoint
-  app.get("/health/db", async (req, res) => {
-    const diagnostics: {
-      connection: { status: string; latencyMs?: number; error?: string };
-      tables: { name: string; exists: boolean; rowCount?: number; error?: string }[];
-      schema: { column: string; type: string; nullable: boolean }[];
-      testQuery: { success: boolean; error?: string; userCount?: number };
-      userLookup?: { found: boolean; userId?: string; email?: string; error?: string };
-    } = {
-      connection: { status: 'unknown' },
-      tables: [],
-      schema: [],
-      testQuery: { success: false },
-    };
-
-    try {
-      // 1. Test basic connection
-      const startTime = Date.now();
-      const { pool } = await import('./db');
-      await pool.query('SELECT 1');
-      diagnostics.connection = {
-        status: 'connected',
-        latencyMs: Date.now() - startTime,
-      };
-
-      // 2. Check if users table exists and get row count
-      try {
-        const tableCheck = await pool.query(`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables
-            WHERE table_schema = 'public'
-            AND table_name = 'users'
-          ) as exists
-        `);
-        const usersTableExists = tableCheck.rows[0]?.exists;
-
-        if (usersTableExists) {
-          const countResult = await pool.query('SELECT COUNT(*) as count FROM users');
-          diagnostics.tables.push({
-            name: 'users',
-            exists: true,
-            rowCount: parseInt(countResult.rows[0]?.count || '0', 10),
-          });
-        } else {
-          diagnostics.tables.push({
-            name: 'users',
-            exists: false,
-            error: 'Table does not exist',
-          });
-        }
-      } catch (tableError: any) {
-        diagnostics.tables.push({
-          name: 'users',
-          exists: false,
-          error: tableError.message,
-        });
-      }
-
-      // 3. Get users table schema
-      try {
-        const schemaResult = await pool.query(`
-          SELECT column_name, data_type, is_nullable
-          FROM information_schema.columns
-          WHERE table_schema = 'public' AND table_name = 'users'
-          ORDER BY ordinal_position
-        `);
-        diagnostics.schema = schemaResult.rows.map((row: any) => ({
-          column: row.column_name,
-          type: row.data_type,
-          nullable: row.is_nullable === 'YES',
-        }));
-      } catch (schemaError: any) {
-        diagnostics.schema = [];
-      }
-
-      // 4. Test user query
-      try {
-        const userResult = await pool.query('SELECT COUNT(*) as count FROM users');
-        diagnostics.testQuery = {
-          success: true,
-          userCount: parseInt(userResult.rows[0]?.count || '0', 10),
-        };
-      } catch (queryError: any) {
-        diagnostics.testQuery = {
-          success: false,
-          error: queryError.message,
-        };
-      }
-
-      // 5. Optional: Look up specific email if provided (for debugging)
-      const emailToCheck = req.query.email as string;
-      if (emailToCheck) {
-        try {
-          const userLookup = await pool.query(
-            'SELECT id, email FROM users WHERE email = $1 LIMIT 1',
-            [emailToCheck]
-          );
-          if (userLookup.rows.length > 0) {
-            diagnostics.userLookup = {
-              found: true,
-              userId: userLookup.rows[0].id,
-              email: userLookup.rows[0].email,
-            };
-          } else {
-            diagnostics.userLookup = {
-              found: false,
-            };
-          }
-        } catch (lookupError: any) {
-          diagnostics.userLookup = {
-            found: false,
-            error: lookupError.message,
-          };
-        }
-      }
-
-      res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        diagnostics,
-      });
-    } catch (error: any) {
-      diagnostics.connection = {
-        status: 'error',
-        error: error.message,
-      };
-
-      res.status(500).json({
-        status: 'error',
-        timestamp: new Date().toISOString(),
-        diagnostics,
-        error: {
-          message: error.message,
-          code: error.code,
-        },
-      });
-    }
-  });
+  app.use(healthRouter);
 
 
   // Public ingestion endpoint - uses its own auth middleware (unchanged)

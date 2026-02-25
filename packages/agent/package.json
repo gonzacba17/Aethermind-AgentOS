@@ -52,6 +52,7 @@
     }
   },
   "dependencies": {
+    "@aethermind/core-shared": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {
