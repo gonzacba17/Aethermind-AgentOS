@@ -62,20 +62,19 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
     "zod": "3.25.76",
-    "zustand": "^4"
-  },
-  "devDependencies": {
-    "@next/swc-win32-x64-msvc": "16.0.10",
+    "zustand": "^4",
     "@tailwindcss/postcss": "^4.1.9",
     "@tanstack/react-query-devtools": "^5",
+    "postcss": "^8.5",
+    "tailwindcss": "^4.1.9",
+    "tw-animate-css": "1.3.3"
+  },
+  "devDependencies": {
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^8.57.0",
     "eslint-config-next": "^16.0.10",
-    "postcss": "^8.5",
-    "tailwindcss": "^4.1.9",
-    "tw-animate-css": "1.3.3",
     "typescript": "^5"
   }
 }
