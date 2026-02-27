@@ -62,7 +62,10 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
 
     if (user.organizationId) {
       // User already has an org — find their client
-      const [existingClient] = await db.select({ accessToken: clients.accessToken })
+      const [existingClient] = await db.select({
+          accessToken: clients.accessToken,
+          organizationId: clients.organizationId,
+        })
         .from(clients)
         .where(eq(clients.organizationId, user.organizationId))
         .limit(1);
@@ -71,36 +74,77 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       }
     }
 
+    // Also check for orphan clients belonging to this user's email with null org
     if (!clientAccessToken) {
-      // Legacy user or missing client — auto-provision org + client
+      const [orphanClient] = await db.select({
+          id: clients.id,
+          accessToken: clients.accessToken,
+          organizationId: clients.organizationId,
+        })
+        .from(clients)
+        .where(eq(clients.companyName, user.email))
+        .limit(1);
+
+      if (orphanClient && !orphanClient.organizationId) {
+        // Repair: create org and link both client + user in a transaction
+        const orgSlug = `org_${randomBytes(8).toString('hex')}`;
+        const orgApiKeyPlaintext = `aether_org_${randomBytes(32).toString('hex')}`;
+        const orgApiKeyHash = await bcrypt.hash(orgApiKeyPlaintext, 10);
+        const orgApiKeyPrefix = orgApiKeyPlaintext.slice(0, 16);
+
+        await db.transaction(async (tx) => {
+          const [org] = await tx.insert(organizations).values({
+            name: user.email,
+            slug: orgSlug,
+            apiKeyHash: orgApiKeyHash,
+            apiKeyPrefix: orgApiKeyPrefix,
+          }).returning();
+
+          if (!org) throw new Error('Failed to create organization for orphan client');
+
+          await tx.update(clients).set({ organizationId: org.id }).where(eq(clients.id, orphanClient.id));
+          await tx.update(users).set({ organizationId: org.id }).where(eq(users.id, user.id));
+        });
+
+        clientAccessToken = orphanClient.accessToken;
+      } else if (orphanClient && orphanClient.organizationId) {
+        // Client exists with an org but user wasn't linked — link user now
+        await db.update(users).set({ organizationId: orphanClient.organizationId }).where(eq(users.id, user.id));
+        clientAccessToken = orphanClient.accessToken;
+      }
+    }
+
+    // Still no client — full auto-provision in a transaction
+    if (!clientAccessToken) {
       const orgSlug = `org_${randomBytes(8).toString('hex')}`;
       const orgApiKeyPlaintext = `aether_org_${randomBytes(32).toString('hex')}`;
       const orgApiKeyHash = await bcrypt.hash(orgApiKeyPlaintext, 10);
       const orgApiKeyPrefix = orgApiKeyPlaintext.slice(0, 16);
-
-      const [org] = await db.insert(organizations).values({
-        name: user.email,
-        slug: orgSlug,
-        apiKeyHash: orgApiKeyHash,
-        apiKeyPrefix: orgApiKeyPrefix,
-      }).returning();
-
-      if (!org) {
-        return res.status(500).json({ error: 'Failed to create organization' });
-      }
-
-      clientAccessToken = `ct_${randomBytes(32).toString('hex')}`;
+      const newClientToken = `ct_${randomBytes(32).toString('hex')}`;
       const sdkApiKey = `aether_sdk_${randomBytes(24).toString('hex')}`;
 
-      await db.insert(clients).values({
-        companyName: user.email,
-        accessToken: clientAccessToken,
-        sdkApiKey,
-        organizationId: org.id,
-        isActive: true,
+      await db.transaction(async (tx) => {
+        const [org] = await tx.insert(organizations).values({
+          name: user.email,
+          slug: orgSlug,
+          apiKeyHash: orgApiKeyHash,
+          apiKeyPrefix: orgApiKeyPrefix,
+        }).returning();
+
+        if (!org) throw new Error('Failed to create organization');
+
+        await tx.insert(clients).values({
+          companyName: user.email,
+          accessToken: newClientToken,
+          sdkApiKey,
+          organizationId: org.id,
+          isActive: true,
+        });
+
+        await tx.update(users).set({ organizationId: org.id }).where(eq(users.id, user.id));
       });
 
-      await db.update(users).set({ organizationId: org.id }).where(eq(users.id, user.id));
+      clientAccessToken = newClientToken;
     }
 
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {

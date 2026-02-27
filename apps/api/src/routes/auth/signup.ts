@@ -72,66 +72,69 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
     const verificationExpiry = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
 
     const userId = `user_${randomBytes(16).toString('hex')}`;
-    
-    const [user] = await db.insert(users).values({
-      id: userId,
-      email,
-      passwordHash,
-      apiKeyHash,
-      verificationToken,
-      verificationExpiry,
-      plan: 'free',
-      usageLimit: 100,
-      usageCount: 0,
-      hasCompletedOnboarding: false,
-      onboardingStep: 'welcome',
-      subscriptionStatus: 'free',
-      maxAgents: 3,
-      logRetentionDays: 30,
-      lastLoginAt: new Date(),
-    }).returning();
 
-    // Send verification email (non-blocking)
-    emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
-      logger.error('Failed to send verification email', { error: (error as Error).message });
-    });
-
-    if (!user) {
-      return res.status(500).json({ error: 'Failed to create user' });
-    }
-
-    // Auto-provision organization + client so user can access the dashboard
+    // Pre-generate all tokens before the transaction
     const orgSlug = `org_${randomBytes(8).toString('hex')}`;
     const orgApiKeyPlaintext = `aether_org_${randomBytes(32).toString('hex')}`;
     const orgApiKeyHash = await bcrypt.hash(orgApiKeyPlaintext, 10);
     const orgApiKeyPrefix = orgApiKeyPlaintext.slice(0, 16);
-
-    const [org] = await db.insert(organizations).values({
-      name: email,
-      slug: orgSlug,
-      apiKeyHash: orgApiKeyHash,
-      apiKeyPrefix: orgApiKeyPrefix,
-    }).returning();
-
-    if (!org) {
-      return res.status(500).json({ error: 'Failed to create organization' });
-    }
-
     const clientAccessToken = `ct_${randomBytes(32).toString('hex')}`;
     const sdkApiKey = `aether_sdk_${randomBytes(24).toString('hex')}`;
 
-    await db.insert(clients).values({
-      companyName: email,
-      accessToken: clientAccessToken,
-      sdkApiKey,
-      organizationId: org.id,
-      isActive: true,
+    // Single transaction: user + org + client — all or nothing
+    const result = await db.transaction(async (tx) => {
+      // 1. Create organization first (we need its id)
+      const [org] = await tx.insert(organizations).values({
+        name: email,
+        slug: orgSlug,
+        apiKeyHash: orgApiKeyHash,
+        apiKeyPrefix: orgApiKeyPrefix,
+      }).returning();
+
+      if (!org) throw new Error('Failed to create organization');
+
+      // 2. Create user linked to organization
+      const [user] = await tx.insert(users).values({
+        id: userId,
+        email,
+        passwordHash,
+        apiKeyHash,
+        verificationToken,
+        verificationExpiry,
+        plan: 'free',
+        usageLimit: 100,
+        usageCount: 0,
+        hasCompletedOnboarding: false,
+        onboardingStep: 'welcome',
+        subscriptionStatus: 'free',
+        maxAgents: 3,
+        logRetentionDays: 30,
+        lastLoginAt: new Date(),
+        organizationId: org.id,
+      }).returning();
+
+      if (!user) throw new Error('Failed to create user');
+
+      // 3. Create client linked to same organization
+      const [client] = await tx.insert(clients).values({
+        companyName: email,
+        accessToken: clientAccessToken,
+        sdkApiKey,
+        organizationId: org.id,
+        isActive: true,
+      }).returning();
+
+      if (!client) throw new Error('Failed to create client');
+
+      return { user, org, client };
     });
 
-    // Link user to organization
-    await db.update(users).set({ organizationId: org.id }).where(eq(users.id, user.id));
+    // Send verification email (non-blocking, outside transaction)
+    emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
+      logger.error('Failed to send verification email', { error: (error as Error).message });
+    });
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+    const token = jwt.sign({ userId: result.user.id, email: result.user.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
     } as jwt.SignOptions);
 
@@ -141,10 +144,10 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       apiKeyShownOnce: true,
       clientAccessToken,
       user: {
-        id: user.id,
-        email: user.email,
-        plan: user.plan,
-        emailVerified: user.emailVerified,
+        id: result.user.id,
+        email: result.user.email,
+        plan: result.user.plan,
+        emailVerified: result.user.emailVerified,
       },
     });
   } catch (error) {
