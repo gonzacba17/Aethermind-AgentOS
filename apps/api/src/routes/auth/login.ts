@@ -5,9 +5,10 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { db } from '../../db';
-import { users } from '../../db/schema';
+import { users, organizations, clients } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import logger from '../../utils/logger';
 import {
@@ -56,12 +57,59 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Look up existing client via organizationId, or auto-provision one
+    let clientAccessToken: string | null = null;
+
+    if (user.organizationId) {
+      // User already has an org — find their client
+      const [existingClient] = await db.select({ accessToken: clients.accessToken })
+        .from(clients)
+        .where(eq(clients.organizationId, user.organizationId))
+        .limit(1);
+      if (existingClient) {
+        clientAccessToken = existingClient.accessToken;
+      }
+    }
+
+    if (!clientAccessToken) {
+      // Legacy user or missing client — auto-provision org + client
+      const orgSlug = `org_${randomBytes(8).toString('hex')}`;
+      const orgApiKeyPlaintext = `aether_org_${randomBytes(32).toString('hex')}`;
+      const orgApiKeyHash = await bcrypt.hash(orgApiKeyPlaintext, 10);
+      const orgApiKeyPrefix = orgApiKeyPlaintext.slice(0, 16);
+
+      const [org] = await db.insert(organizations).values({
+        name: user.email,
+        slug: orgSlug,
+        apiKeyHash: orgApiKeyHash,
+        apiKeyPrefix: orgApiKeyPrefix,
+      }).returning();
+
+      if (!org) {
+        return res.status(500).json({ error: 'Failed to create organization' });
+      }
+
+      clientAccessToken = `ct_${randomBytes(32).toString('hex')}`;
+      const sdkApiKey = `aether_sdk_${randomBytes(24).toString('hex')}`;
+
+      await db.insert(clients).values({
+        companyName: user.email,
+        accessToken: clientAccessToken,
+        sdkApiKey,
+        organizationId: org.id,
+        isActive: true,
+      });
+
+      await db.update(users).set({ organizationId: org.id }).where(eq(users.id, user.id));
+    }
+
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
     } as jwt.SignOptions);
 
     res.json({
       token,
+      clientAccessToken,
       user: {
         id: user.id,
         email: user.email,

@@ -1,6 +1,14 @@
 import { User } from './api/auth';
 import { config } from './config';
 
+function buildDashboardUrl(): string {
+  const clientToken = typeof window !== 'undefined' ? localStorage.getItem('clientAccessToken') : null;
+  if (clientToken) {
+    return `${config.dashboardUrl}?token=${encodeURIComponent(clientToken)}`;
+  }
+  return `${config.dashboardUrl}`;
+}
+
 /**
  * Save authentication token to storage
  * @param token JWT token from backend
@@ -73,6 +81,30 @@ export function removeToken() {
 export function isRememberMeEnabled(): boolean {
   if (typeof window === 'undefined') return false;
   return localStorage.getItem('rememberMe') === 'true';
+}
+
+/**
+ * Save client access token (B2B dashboard token) to localStorage
+ */
+export function saveClientToken(token: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('clientAccessToken', token);
+}
+
+/**
+ * Get client access token from localStorage
+ */
+export function getClientToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('clientAccessToken');
+}
+
+/**
+ * Remove client access token from localStorage
+ */
+export function removeClientToken() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem('clientAccessToken');
 }
 
 /**
@@ -228,14 +260,16 @@ export async function redirectAfterAuth(user?: User) {
       window.location.href = '/pricing?reason=canceled';
     } else if (subscriptionStatus === 'active' || subscriptionStatus === 'trialing') {
       // Has active subscription or in trial, redirect to dashboard
-      console.log('[redirectAfterAuth] Has active/trial subscription, redirecting to dashboard:', `${config.dashboardUrl}/dashboard`);
-      window.location.href = `${config.dashboardUrl}/dashboard`;
+      const dashUrl = buildDashboardUrl();
+      console.log('[redirectAfterAuth] Has active/trial subscription, redirecting to dashboard:', dashUrl);
+      window.location.href = dashUrl;
     } else {
       // No subscription, check if has paid plan
       const hasPaidPlan = user?.plan && user.plan !== 'free';
       if (hasPaidPlan) {
-        console.log('[redirectAfterAuth] Has paid plan, redirecting to dashboard');
-        window.location.href = `${config.dashboardUrl}/dashboard`;
+        const dashUrl2 = buildDashboardUrl();
+        console.log('[redirectAfterAuth] Has paid plan, redirecting to dashboard:', dashUrl2);
+        window.location.href = dashUrl2;
       } else {
         // User doesn't have membership, redirect to pricing
         console.log('[redirectAfterAuth] No membership, redirecting to pricing');

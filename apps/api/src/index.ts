@@ -52,6 +52,8 @@ import { budgetRoutes } from "./routes/budgets";
 import ingestionRoutes from "./routes/ingestion";
 import clientRoutes from "./routes/client";
 import { clientAuth } from "./middleware/clientAuth";
+import authRoutes from "./routes/auth/index";
+import { authMiddleware } from "./middleware/auth";
 import userApiKeysRoutes from "./routes/user-api-keys";
 import optimizationRoutes from "./routes/optimization.routes";
 import forecastingRoutes from "./routes/forecasting.routes";
@@ -408,10 +410,14 @@ async function startServer(): Promise<void> {
   // Public ingestion endpoint - uses its own auth middleware (unchanged)
   app.use("/v1", ingestionRoutes);
 
-  // Client routes — protected by clientAuth
+  // Auth routes — public (signup, login, etc.) — must be mounted BEFORE global auth
+  app.use("/api/auth", authRoutes);
+
+  // Client routes — protected by clientAuth (B2B token)
   app.use("/api/client", clientAuth, clientRoutes);
 
-  app.use("/api", clientAuth);
+  // Global auth middleware — JWT-based for all other /api/* routes
+  app.use("/api", authMiddleware);
 
   app.use((req, _res, next) => {
     req.runtime = runtime;

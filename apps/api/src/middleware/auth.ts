@@ -74,7 +74,7 @@ export async function authMiddleware(
   }
   
   const publicRoutes = ['/health', '/metrics'];
-  const publicPathPrefixes = ['/api/auth/', '/auth/'];
+  const publicPathPrefixes = ['/api/auth/', '/auth/', '/api/client/'];
   
   if (publicRoutes.includes(req.path) || 
       publicPathPrefixes.some(prefix => url.startsWith(prefix))) {

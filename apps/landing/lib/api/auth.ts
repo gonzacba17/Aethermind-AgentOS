@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { saveToken, removeToken } from '@/lib/auth-utils';
+import { saveToken, removeToken, saveClientToken } from '@/lib/auth-utils';
 
 export interface User {
   id: string;
@@ -17,6 +17,7 @@ export interface User {
 
 export interface AuthResponse {
   token: string;
+  clientAccessToken?: string;
   user: User;
 }
 
@@ -41,6 +42,9 @@ export const authAPI = {
       saveToken(response.token, true); // Remember user by default on signup
       localStorage.setItem('user', JSON.stringify(response.user));
     }
+    if (response.clientAccessToken) {
+      saveClientToken(response.clientAccessToken);
+    }
     return response;
   },
 
@@ -52,6 +56,9 @@ export const authAPI = {
     if (response.token) {
       saveToken(response.token, rememberMe);
       localStorage.setItem('user', JSON.stringify(response.user));
+    }
+    if (response.clientAccessToken) {
+      saveClientToken(response.clientAccessToken);
     }
     return response;
   },

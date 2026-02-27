@@ -1,44 +1,71 @@
 'use client';
 
 /**
- * Root page — captures ?token= from URL, persists to sessionStorage,
- * then redirects to /home where AuthGuard reads it back.
+ * Root page — captures ?token= or ?session= from URL, persists to
+ * sessionStorage, then redirects to /home where AuthGuard reads it back.
+ *
+ * - ?token=  → client access token (B2B), stored directly
+ * - ?session= → temp session ID, exchanged via POST /api/auth/session for
+ *               user data + client token
  *
  * We deliberately use window.location (not Next router) to parse the
  * query string because useSearchParams() requires a Suspense boundary
- * and can introduce timing issues with the redirect. A plain
- * URLSearchParams on window.location.search is synchronous and
- * guaranteed to run before we navigate away.
+ * and can introduce timing issues with the redirect.
  */
 
 import { useEffect } from 'react';
 import { setAuthToken } from '@/lib/auth-utils';
+import { API_URL } from '@/lib/config';
 
 export default function RootPage() {
   useEffect(() => {
-    // 1. Read token directly from the browser URL (synchronous, no hooks)
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
+    const session = params.get('session');
 
     console.log('[RootPage] URL search params:', window.location.search);
     console.log('[RootPage] Token from URL:', token ? `${token.slice(0, 8)}…` : 'null');
+    console.log('[RootPage] Session from URL:', session ? `${session.slice(0, 8)}…` : 'null');
 
     if (token) {
-      // 2. Persist to sessionStorage (synchronous)
+      // Direct client token — persist and redirect
       setAuthToken(token);
-
-      // 3. Verify the value actually persisted
-      const verification = sessionStorage.getItem('client_token');
-      console.log('[RootPage] Verification read from sessionStorage:', verification ? `${verification.slice(0, 8)}…` : 'null');
-      console.log('[RootPage] Token persisted successfully:', !!verification);
-    } else {
-      console.warn('[RootPage] No token found in URL — navigating to /home without token');
+      console.log('[RootPage] Client token persisted, navigating to /home');
+      window.location.href = '/home';
+      return;
     }
 
-    // 4. Navigate to /home — AuthGuard there will read sessionStorage
-    //    Using href instead of replace() to test if replace() was racing
-    //    against sessionStorage persistence.
-    console.log('[RootPage] Navigating to /home via window.location.href...');
+    if (session) {
+      // Session ID — exchange for client token via API
+      (async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: session }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.clientAccessToken) {
+              setAuthToken(data.clientAccessToken);
+              console.log('[RootPage] Session exchanged for client token, navigating to /home');
+            } else {
+              console.warn('[RootPage] Session response missing clientAccessToken');
+            }
+          } else {
+            console.error('[RootPage] Session exchange failed:', res.status);
+          }
+        } catch (err) {
+          console.error('[RootPage] Session exchange error:', err);
+        }
+        window.location.href = '/home';
+      })();
+      return;
+    }
+
+    // No token or session — navigate to /home, AuthGuard will handle
+    console.warn('[RootPage] No token or session in URL — navigating to /home');
     window.location.href = '/home';
   }, []);
 

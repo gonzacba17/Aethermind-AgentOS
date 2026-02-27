@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, Sparkles, BarChart3, Bell, ArrowRight } from 'lucide-react';
 import { config } from '@/lib/config';
-import { getToken } from '@/lib/auth-utils';
+import { getToken, getClientToken } from '@/lib/auth-utils';
 
 export default function CompletePage() {
   const router = useRouter();
@@ -14,16 +14,25 @@ export default function CompletePage() {
   const handleGoToDashboard = async () => {
     setRedirecting(true);
     setError(null);
-    
+
     try {
-      // Get the current token
+      // Mark onboarding as complete
+      localStorage.setItem('onboarding_marketing_seen', 'true');
+      localStorage.setItem('onboarding_technical_complete', 'true');
+
+      // Prefer client access token (bridged from signup/login)
+      const clientToken = getClientToken();
+      if (clientToken) {
+        window.location.href = `${config.dashboardUrl}?token=${encodeURIComponent(clientToken)}`;
+        return;
+      }
+
+      // Fallback: try creating a temp session via JWT
       const token = getToken();
-      
       if (!token) {
         throw new Error('No authentication token found');
       }
 
-      // Create temporary session in the backend
       const response = await fetch(`${config.apiUrl}/auth/create-temp-session`, {
         method: 'POST',
         headers: {
@@ -33,27 +42,19 @@ export default function CompletePage() {
       });
 
       if (!response.ok) {
-        // If endpoint doesn't exist yet, fallback to direct redirect
         console.warn('Temp session endpoint not available, using direct redirect');
-        window.location.href = `${config.dashboardUrl}/dashboard`;
+        window.location.href = `${config.dashboardUrl}`;
         return;
       }
 
       const { sessionId } = await response.json();
-
-      // Mark onboarding as complete
-      localStorage.setItem('onboarding_marketing_seen', 'true');
-      localStorage.setItem('onboarding_technical_complete', 'true');
-
-      // Redirect to dashboard with session ID
       window.location.href = `${config.dashboardUrl}?session=${sessionId}`;
     } catch (err) {
       console.error('Redirect failed:', err);
       setError('Something went wrong. Redirecting directly...');
-      
-      // Fallback: redirect without session (dashboard will handle auth)
+
       setTimeout(() => {
-        window.location.href = `${config.dashboardUrl}/dashboard`;
+        window.location.href = `${config.dashboardUrl}`;
       }, 1000);
     }
   };
