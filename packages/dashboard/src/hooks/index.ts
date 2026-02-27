@@ -81,6 +81,70 @@ export type { OptimizationReport, OptimizationRecommendation, ModelInfo, ModelAl
 export { useMetrics, useTraceTimeSeries, metricsKeys } from './api/useMetrics';
 export type { DashboardMetrics } from './api/useMetrics';
 
+// Client Metrics Hook (telemetry-based)
+export {
+  useClientMetrics,
+  useClientMetricsByModel,
+  useClientTimeseries,
+  clientMetricsKeys
+} from './api/useClientMetrics';
+export type { ClientMetrics, ClientMetricsByModel, ClientTimeseriesPoint } from './api/useClientMetrics';
+
+// Client Budgets Hook (Phase 1)
+export {
+  useClientBudgets,
+  useClientBudgetStatus,
+  useCreateClientBudget,
+  useDeleteClientBudget,
+  clientBudgetKeys
+} from './api/useClientBudgets';
+export type { ClientBudget, BudgetEvaluation, CreateClientBudgetData } from './api/useClientBudgets';
+
+// Client Analytics Hook (Phase 1)
+export {
+  useAgentCosts,
+  useWorkflowCosts,
+  usePeriodComparison,
+  exportAnalyticsCSV,
+  clientAnalyticsKeys
+} from './api/useClientAnalytics';
+export type { AgentCost, WorkflowCost, PeriodComparison } from './api/useClientAnalytics';
+
+// Client Forecast Hook (Phase 1)
+export {
+  useClientForecast,
+  useClientForecastByModel,
+  clientForecastKeys
+} from './api/useClientForecast';
+export type { ClientForecast, ModelForecast } from './api/useClientForecast';
+
+// Client Cache Hook (Phase 3)
+export {
+  useCacheStats,
+  useCacheSettings,
+  useUpdateCacheSettings,
+  usePurgeCache,
+  clientCacheKeys
+} from './api/useClientCache';
+export type { CacheSettings, CacheStats } from './api/useClientCache';
+
+// Client Insights Hook (Phase 5)
+export {
+  useClientInsights,
+  useClientInsightsHistory,
+  useApplyInsight,
+  useDismissInsight,
+  clientInsightKeys
+} from './api/useClientInsights';
+export type { ClientInsight } from './api/useClientInsights';
+
+// Client Benchmarks Hook (Phase 5)
+export {
+  useClientBenchmarks,
+  clientBenchmarkKeys
+} from './api/useClientBenchmarks';
+export type { BenchmarkData, ClientBenchmarkMetrics, BenchmarkComparison } from './api/useClientBenchmarks';
+
 // WebSocket Hook
 export { useWebSocket, useWebSocketEvent } from './useWebSocket';
 export type { ConnectionStatus, WebSocketEvent } from './useWebSocket';

@@ -12,6 +12,16 @@ export { initAethermind, type AethermindConfig } from './config/index.js';
 export { BatchTransport, getTransport, createTransport, type BatchTransportConfig } from './transport/BatchTransport.js';
 export { type TelemetryEvent, type TokenUsage, type IngestionResponse } from './transport/types.js';
 
+// Budget enforcement
+export { AethermindBudgetExceededError } from './errors/AethermindBudgetExceededError.js';
+export { budgetChecker } from './budget/BudgetChecker.js';
+
+// Cache
+export { cacheService, type CacheHit } from './cache/CacheService.js';
+
+// Compression (Phase 4)
+export { compressionService, type CompressionResult } from './compression/CompressionService.js';
+
 // Dead Letter Queue
 export { EventQueue, type EventQueueConfig, type QueueStats, type FailedEventEntry } from './queue/index.js';
 
@@ -24,4 +34,4 @@ export { AnthropicInterceptor } from './interceptors/AnthropicInterceptor.js';
 export { FetchInterceptor } from './interceptors/FetchInterceptor.js';
 
 // Version
-export const VERSION = '0.1.2';
+export const VERSION = '0.3.0';

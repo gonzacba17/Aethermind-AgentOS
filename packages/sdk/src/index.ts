@@ -14,6 +14,8 @@ import {
   TaskQueueService,
 } from '@aethermind/core';
 
+import { initAethermind, getTransport } from '@aethermind/agent';
+
 import type {
   AgentConfig,
   AgentLogic,
@@ -55,6 +57,10 @@ export interface StartOrchestratorOptions {
   workflows?: WorkflowDefinition[];
   onLog?: (entry: LogEntry) => void;
   redisUrl?: string;
+  /** Aethermind API key for telemetry. When provided, initializes @aethermind/agent. */
+  apiKey?: string;
+  /** Aethermind API base URL for telemetry (default: https://api.aethermind.io). */
+  baseUrl?: string;
 }
 
 export interface LLMProviderOptions {
@@ -102,6 +108,20 @@ export function startOrchestrator(options: StartOrchestratorOptions): Aethermind
   const runtime = globalRuntime || createRuntime();
   globalRuntime = runtime;
 
+  // Initialize telemetry if apiKey is provided
+  if (options.apiKey) {
+    try {
+      initAethermind({
+        apiKey: options.apiKey,
+        endpoint: options.baseUrl || 'https://api.aethermind.io',
+        flushInterval: 5000,
+        batchSize: 50,
+      });
+    } catch (err) {
+      console.error('[Aethermind SDK] Failed to initialize telemetry:', err);
+    }
+  }
+
   if (options.provider) {
     const provider = createProvider(options.provider);
     runtime.setDefaultProvider(provider);
@@ -115,15 +135,22 @@ export function startOrchestrator(options: StartOrchestratorOptions): Aethermind
     }
   }
 
-  // Create TaskQueueService
-  const redisUrl = options.redisUrl || process.env['REDIS_URL'] || 'redis://localhost:6379';
-  const parsedUrl = new URL(redisUrl);
-  const queueService = new TaskQueueService('aethermind-tasks', {
-    redis: {
-      host: parsedUrl.hostname,
-      port: parseInt(parsedUrl.port) || 6379,
+  // Create TaskQueueService only if redisUrl is explicitly provided
+  let queueService: TaskQueueService | null = null;
+  const redisUrl = options.redisUrl || process.env['REDIS_URL'];
+  if (redisUrl) {
+    try {
+      const parsedUrl = new URL(redisUrl);
+      queueService = new TaskQueueService('aethermind-tasks', {
+        redis: {
+          host: parsedUrl.hostname,
+          port: parseInt(parsedUrl.port) || 6379,
+        }
+      });
+    } catch (err) {
+      console.warn('[Aethermind SDK] Failed to connect to Redis, continuing without task queue:', err);
     }
-  });
+  }
 
   const orchestrator = createOrchestrator(runtime, queueService, options.config);
   globalOrchestrator = orchestrator;
@@ -171,6 +198,13 @@ export function startOrchestrator(options: StartOrchestratorOptions): Aethermind
     },
 
     async shutdown(): Promise<void> {
+      // Flush telemetry before shutting down
+      try {
+        const transport = getTransport();
+        await transport.stop();
+      } catch {
+        // Telemetry may not be initialized — ignore
+      }
       await orchestrator.shutdown();
       await runtime.shutdown();
       globalRuntime = null;

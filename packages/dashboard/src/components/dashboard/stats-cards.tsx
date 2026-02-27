@@ -1,8 +1,8 @@
 'use client';
 
 import { Card, CardContent } from "@/components/ui/card"
-import { Bot, Activity, DollarSign, Coins, TrendingUp, TrendingDown, AlertCircle } from "lucide-react"
-import { useMetrics } from "@/hooks"
+import { Bot, Activity, DollarSign, Coins, Clock, TrendingUp, TrendingDown, AlertCircle } from "lucide-react"
+import { useMetrics, useClientMetrics } from "@/hooks"
 import { StatsCardsSkeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
@@ -75,13 +75,16 @@ function StatCard({ title, value, subtitle, icon: Icon, trend, trendUp = true, s
  * Connected to real data via useMetrics hook.
  */
 export function StatsCards() {
-  const { data: metrics, isLoading, error } = useMetrics();
+  const { data: metrics, isLoading: metricsLoading, error: metricsError } = useMetrics();
+  const { data: clientMetrics, isLoading: clientLoading } = useClientMetrics('30d');
+
+  const isLoading = metricsLoading || clientLoading;
 
   if (isLoading) {
     return <StatsCardsSkeleton />;
   }
 
-  if (error) {
+  if (metricsError) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="col-span-full bg-destructive/10 border-destructive/50">
@@ -94,39 +97,46 @@ export function StatsCards() {
     );
   }
 
+  // Prefer telemetry-based client metrics when available, fall back to legacy
+  const totalCost = clientMetrics?.totalCost ?? metrics?.costMTD ?? 0;
+  const totalTokens = clientMetrics?.totalTokens ?? metrics?.tokensUsed24h ?? 0;
+  const totalEvents = clientMetrics?.totalEvents ?? metrics?.totalExecutions24h ?? 0;
+  const avgLatency = clientMetrics?.avgLatency ?? (metrics?.avgResponseTime ? metrics.avgResponseTime * 1000 : 0);
+  const successRate = clientMetrics?.successRate ?? Number(metrics?.successRate ?? 100);
+
   const stats = [
     {
-      title: "Active Agents",
-      value: metrics?.activeAgents?.toString() || "0",
-      subtitle: `${metrics?.totalAgents || 0} total`,
-      icon: Bot,
-      trend: metrics?.activeAgents && metrics.activeAgents > 0 ? `${metrics.activeAgents} running` : undefined,
+      title: "Total Cost (30d)",
+      value: formatCurrency(totalCost),
+      subtitle: `${clientMetrics?.errorCount ?? 0} errors`,
+      icon: DollarSign,
+      trend: totalCost > 0 ? formatCurrency(totalCost) : undefined,
+      trendUp: false,
+    },
+    {
+      title: "Total Tokens",
+      value: formatNumber(totalTokens),
+      subtitle: "across all models",
+      icon: Coins,
+      trend: totalTokens > 0 ? formatNumber(totalTokens) : undefined,
       trendUp: true,
       showTrend: false,
     },
     {
-      title: "Executions (24h)",
-      value: formatNumber(metrics?.totalExecutions24h || 0),
-      subtitle: `${metrics?.successRate || 0}% success rate`,
+      title: "Requests",
+      value: formatNumber(totalEvents),
+      subtitle: `${successRate.toFixed(1)}% success rate`,
       icon: Activity,
-      trend: `${metrics?.successRate || 0}%`,
-      trendUp: Number(metrics?.successRate || 0) >= 95,
+      trend: `${successRate.toFixed(1)}%`,
+      trendUp: successRate >= 95,
     },
     {
-      title: "Total Cost (MTD)",
-      value: formatCurrency(metrics?.costMTD || 0),
-      subtitle: `${formatCurrency(metrics?.costToday || 0)} today`,
-      icon: DollarSign,
-      trend: metrics?.costToday && metrics.costToday > 0 ? `+${formatCurrency(metrics.costToday)}` : undefined,
-      trendUp: false, // Cost increase is usually negative sentiment
-    },
-    {
-      title: "Tokens Used (24h)",
-      value: formatNumber(metrics?.tokensUsed24h || 0),
-      subtitle: "Total tokens",
-      icon: Coins,
-      trend: metrics?.tokensUsed24h ? formatNumber(metrics.tokensUsed24h) : undefined,
-      trendUp: true,
+      title: "Avg Latency",
+      value: `${avgLatency}ms`,
+      subtitle: `${metrics?.activeAgents ?? 0} active agents`,
+      icon: Clock,
+      trend: avgLatency > 0 ? `${avgLatency}ms` : undefined,
+      trendUp: avgLatency < 2000,
       showTrend: false,
     },
   ];

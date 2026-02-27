@@ -12,6 +12,8 @@ export interface ClientData {
   id: string;
   companyName: string;
   sdkApiKey: string;
+  organizationId: string | null;
+  rateLimitPerMin: number;
 }
 
 /**
@@ -71,6 +73,8 @@ export async function clientAuth(
         id: clients.id,
         companyName: clients.companyName,
         sdkApiKey: clients.sdkApiKey,
+        organizationId: clients.organizationId,
+        rateLimitPerMin: clients.rateLimitPerMin,
       })
       .from(clients)
       .where(and(eq(clients.accessToken, token), eq(clients.isActive, true)));
@@ -85,6 +89,8 @@ export async function clientAuth(
       id: row.id,
       companyName: row.companyName,
       sdkApiKey: row.sdkApiKey,
+      organizationId: row.organizationId,
+      rateLimitPerMin: row.rateLimitPerMin,
     };
 
     // Store in cache

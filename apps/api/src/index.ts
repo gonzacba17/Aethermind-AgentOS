@@ -62,6 +62,11 @@ import { DatabaseStore } from "./services/DatabaseStore";
 import redisCache, { RedisService } from "./services/RedisService";
 import { BudgetService } from "./services/BudgetService";
 import { AlertService } from "./services/AlertService";
+import { startBudgetAlertCron } from "./services/BudgetAlertCron";
+import { startProviderHealthCron } from "./services/ProviderHealthService";
+import { startDeterministicDetectorCron } from "./services/DeterministicDetector";
+import { startPatternDetectionCron } from "./services/PatternDetectionJob";
+import { startBenchmarkCron } from "./services/BenchmarkJob";
 import type { StoreInterface } from "./services/PostgresStore";
 import { verifyApiKey } from "./middleware/auth";
 import { verifyDatabaseOnStartup } from "./middleware/database";
@@ -261,6 +266,21 @@ async function startServer(): Promise<void> {
         isResettingBudget = false;
       }
     }, 60 * 60 * 1000);
+
+    // Start Phase 1 budget alert cron (client_budgets → alert_events)
+    startBudgetAlertCron();
+
+    // Start Phase 2 provider health cron (every 2 minutes)
+    startProviderHealthCron();
+
+    // Start Phase 3 deterministic detector cron (every 1 hour)
+    startDeterministicDetectorCron();
+
+    // Start Phase 5 pattern detection cron (every Sunday 00:00 UTC)
+    startPatternDetectionCron();
+
+    // Start Phase 5 benchmark cron (every Monday 02:00 UTC)
+    startBenchmarkCron();
   }
 
   if (process.env["OPENAI_API_KEY"]) {

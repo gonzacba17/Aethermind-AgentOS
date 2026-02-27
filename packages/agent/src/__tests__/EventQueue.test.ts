@@ -129,7 +129,7 @@ describe('EventQueue', () => {
 
       const event = createTestEvent();
       const queueEntry = {
-        id: 'test-id-123',
+        id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
         event,
         queuedAt: new Date().toISOString(),
         retryCount: 0,
@@ -151,7 +151,7 @@ describe('EventQueue', () => {
 
       const futureTime = new Date(Date.now() + 60000).toISOString();
       const queueEntry = {
-        id: 'test-id-123',
+        id: 'b1ffcc88-8d1a-4ef8-aa5c-5aa8ac270b22',
         event: createTestEvent(),
         queuedAt: new Date().toISOString(),
         retryCount: 1,
@@ -177,7 +177,7 @@ describe('EventQueue', () => {
 
       const event = createTestEvent();
       const queueEntry = {
-        id: 'test-id-123',
+        id: 'c200dd77-7e2b-4ef8-9b4d-4bb7bb160c33',
         event,
         queuedAt: new Date().toISOString(),
         retryCount: 2, // Will become 3 after this failure
@@ -210,7 +210,7 @@ describe('EventQueue', () => {
 
       const event = createTestEvent();
       const queueEntry = {
-        id: 'test-id-123',
+        id: 'd300ee66-6f3c-4ef8-8c3e-3cc6cc050d44',
         event,
         queuedAt: new Date().toISOString(),
         retryCount: 0,

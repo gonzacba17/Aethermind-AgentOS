@@ -17,7 +17,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@aethermind/core": "workspace:*"
+    "@aethermind/core": "workspace:*",
+    "@aethermind/agent": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",

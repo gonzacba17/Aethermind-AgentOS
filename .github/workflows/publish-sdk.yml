@@ -1,0 +1,39 @@
+name: Publish @aethermind/agent to npm
+
+on:
+  push:
+    tags:
+      - 'agent-v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build agent package
+        run: pnpm --filter @aethermind/agent build
+
+      - name: Typecheck
+        run: pnpm --filter @aethermind/agent typecheck
+
+      - name: Publish to npm
+        run: pnpm --filter @aethermind/agent publish --no-git-checks --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

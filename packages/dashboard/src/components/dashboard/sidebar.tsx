@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Home, LayoutDashboard, Bot, FileText, GitBranch, DollarSign, ChevronLeft, ChevronRight, Settings, Bell, Wallet, TrendingUp, Sparkles } from "lucide-react"
+import { Home, LayoutDashboard, Bot, FileText, GitBranch, DollarSign, ChevronLeft, ChevronRight, Settings, Bell, Wallet, TrendingUp, Sparkles, Route, Lightbulb } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 
@@ -31,6 +31,8 @@ const navGroups = [
       { icon: Wallet, label: "Budgets", href: "/budgets" },
       { icon: TrendingUp, label: "Forecasting", href: "/forecasting" },
       { icon: Sparkles, label: "Optimization", href: "/optimization" },
+      { icon: Route, label: "Model Routing", href: "/routing" },
+      { icon: Lightbulb, label: "Insights", href: "/insights" },
       { icon: Bell, label: "Alerts", href: "/settings/alerts" },
     ],
   },

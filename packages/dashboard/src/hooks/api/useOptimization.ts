@@ -100,6 +100,10 @@ export const optimizationKeys = {
   report: () => [...optimizationKeys.all, 'report'] as const,
   models: () => [...optimizationKeys.all, 'models'] as const,
   rules: () => [...optimizationKeys.all, 'rules'] as const,
+  compressionStats: () => [...optimizationKeys.all, 'compressionStats'] as const,
+  compressionSettings: () => [...optimizationKeys.all, 'compressionSettings'] as const,
+  systemPrompts: () => [...optimizationKeys.all, 'systemPrompts'] as const,
+  systemPromptTemplates: () => [...optimizationKeys.all, 'systemPromptTemplates'] as const,
 };
 
 // Mock data
@@ -453,5 +457,252 @@ export function useDeleteRoutingRule() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: optimizationKeys.rules() });
     },
+  });
+}
+
+// ============================================
+// Phase 4 — Compression Hooks
+// ============================================
+
+export interface CompressionStats {
+  totalRequests: number;
+  compressedRequests: number;
+  compressionRate: number;
+  totalSavedTokens: number;
+  totalSavedUsd: number;
+  avgCompressionPercent: number;
+  period: string;
+}
+
+export interface CompressionSettings {
+  compressionEnabled: boolean;
+  minCompressionRatio: number;
+  updatedAt?: string;
+}
+
+export interface PromptAnalysisResult {
+  originalTokens: number;
+  estimatedCompressedTokens: number;
+  compressionRatio: number;
+  issues: Array<{
+    type: string;
+    description: string;
+    originalSnippet: string;
+    fixedSnippet: string;
+    tokensSaved: number;
+  }>;
+  compressedPrompt: string;
+  model: string | null;
+}
+
+export interface SystemPromptDuplicate {
+  agentIds: string[];
+  similarity: number;
+  previewA: string;
+  previewB: string;
+}
+
+export interface SystemPromptTemplate {
+  useCase: string;
+  name: string;
+  template: string;
+  estimatedTokens: number;
+}
+
+/**
+ * Hook to fetch compression stats
+ */
+export function useCompressionStats(period = '30d') {
+  return useQuery({
+    queryKey: [...optimizationKeys.compressionStats(), period],
+    queryFn: async (): Promise<CompressionStats> => {
+      if (shouldUseMockData()) {
+        await new Promise(r => setTimeout(r, 400));
+        return {
+          totalRequests: 1250,
+          compressedRequests: 480,
+          compressionRate: 38.4,
+          totalSavedTokens: 125000,
+          totalSavedUsd: 4.50,
+          avgCompressionPercent: 28.5,
+          period,
+        };
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/client/optimization/stats?period=${period}`, {
+          headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Failed to fetch compression stats');
+        return response.json();
+      } catch (error) {
+        console.warn('[useCompressionStats] API failed, using mock data:', error);
+        return {
+          totalRequests: 0,
+          compressedRequests: 0,
+          compressionRate: 0,
+          totalSavedTokens: 0,
+          totalSavedUsd: 0,
+          avgCompressionPercent: 0,
+          period,
+        };
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch compression settings
+ */
+export function useCompressionSettings() {
+  return useQuery({
+    queryKey: optimizationKeys.compressionSettings(),
+    queryFn: async (): Promise<CompressionSettings> => {
+      if (shouldUseMockData()) {
+        await new Promise(r => setTimeout(r, 300));
+        return { compressionEnabled: false, minCompressionRatio: 0.15 };
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/client/optimization/settings`, {
+          headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Failed to fetch settings');
+        return response.json();
+      } catch {
+        return { compressionEnabled: false, minCompressionRatio: 0.15 };
+      }
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to update compression settings
+ */
+export function useUpdateCompressionSettings() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (settings: Partial<CompressionSettings>): Promise<CompressionSettings> => {
+      if (shouldUseMockData()) {
+        await new Promise(r => setTimeout(r, 300));
+        return {
+          compressionEnabled: settings.compressionEnabled ?? false,
+          minCompressionRatio: settings.minCompressionRatio ?? 0.15,
+        };
+      }
+
+      const response = await fetch(`${API_BASE}/api/client/optimization/settings`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(settings),
+      });
+
+      if (!response.ok) throw new Error('Failed to update settings');
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: optimizationKeys.compressionSettings() });
+    },
+  });
+}
+
+/**
+ * Hook to analyze a prompt
+ */
+export function useAnalyzePrompt() {
+  return useMutation({
+    mutationFn: async ({ prompt, model }: { prompt: string; model?: string }): Promise<PromptAnalysisResult> => {
+      if (shouldUseMockData()) {
+        await new Promise(r => setTimeout(r, 500));
+        const tokens = Math.ceil(prompt.split(/\s+/).length * 1.3);
+        return {
+          originalTokens: tokens,
+          estimatedCompressedTokens: Math.floor(tokens * 0.75),
+          compressionRatio: 0.75,
+          issues: [
+            {
+              type: 'courtesy_padding',
+              description: 'Removed courtesy phrase',
+              originalSnippet: 'Could you please',
+              fixedSnippet: '',
+              tokensSaved: 4,
+            },
+          ],
+          compressedPrompt: prompt.replace(/Could you please /gi, ''),
+          model: model || null,
+        };
+      }
+
+      const response = await fetch(`${API_BASE}/api/client/optimization/analyze`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ prompt, model }),
+      });
+
+      if (!response.ok) throw new Error('Failed to analyze prompt');
+      return response.json();
+    },
+  });
+}
+
+/**
+ * Hook to fetch system prompt analysis
+ */
+export function useSystemPrompts() {
+  return useQuery({
+    queryKey: optimizationKeys.systemPrompts(),
+    queryFn: async (): Promise<{ duplicates: SystemPromptDuplicate[] }> => {
+      if (shouldUseMockData()) {
+        await new Promise(r => setTimeout(r, 600));
+        return { duplicates: [] };
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/client/optimization/system-prompts`, {
+          headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Failed to fetch system prompts');
+        return response.json();
+      } catch {
+        return { duplicates: [] };
+      }
+    },
+    staleTime: 15 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch system prompt templates
+ */
+export function useSystemPromptTemplates() {
+  return useQuery({
+    queryKey: optimizationKeys.systemPromptTemplates(),
+    queryFn: async (): Promise<{ templates: SystemPromptTemplate[] }> => {
+      if (shouldUseMockData()) {
+        await new Promise(r => setTimeout(r, 400));
+        return {
+          templates: [
+            { useCase: 'classification', name: 'Classification Agent', template: 'You are a classification agent...', estimatedTokens: 150 },
+            { useCase: 'extraction', name: 'Data Extraction Agent', template: 'You are a data extraction agent...', estimatedTokens: 180 },
+            { useCase: 'summarization', name: 'Summarization Agent', template: 'You are a summarization agent...', estimatedTokens: 120 },
+            { useCase: 'qa', name: 'Q&A Agent', template: 'You are a Q&A agent...', estimatedTokens: 100 },
+          ],
+        };
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/client/optimization/system-prompts/templates`, {
+          headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Failed to fetch templates');
+        return response.json();
+      } catch {
+        return { templates: [] };
+      }
+    },
+    staleTime: 60 * 60 * 1000,
   });
 }

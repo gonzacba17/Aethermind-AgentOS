@@ -93,29 +93,91 @@ export class AnthropicInterceptor extends BaseInterceptor {
    */
   private async interceptCreate(originalMethod: any, args: any[]): Promise<any> {
     const config = getConfig();
-    
+
     if (!config.enabled) {
       return originalMethod.apply(this, args);
     }
 
-    const startTime = Date.now();
     const params = args[0] || {};
-    
+    const originalModel = params.model || 'claude-3-5-sonnet-20241022';
+
+    // ---- Phase 3: Cache check (before all other hooks) ----
+    const promptText = this.extractPromptText(params);
+    const cacheResult = await this.checkCache(promptText, originalModel);
+
+    if (cacheResult) {
+      // Construct synthetic Anthropic Message response
+      const syntheticResponse = {
+        id: `msg_cache_${Date.now()}`,
+        type: 'message',
+        role: 'assistant',
+        content: [{
+          type: 'text',
+          text: cacheResult.response,
+        }],
+        model: cacheResult.model,
+        stop_reason: 'end_turn',
+        stop_sequence: null,
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+        },
+      };
+
+      // Emit telemetry event with cache hit
+      if (this.eventCallback) {
+        this.eventCallback({
+          timestamp: new Date().toISOString(),
+          provider: 'anthropic',
+          model: cacheResult.model,
+          tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          cost: 0,
+          latency: 0,
+          status: 'success',
+          cacheHit: true,
+          cacheSavedUsd: cacheResult.costUsd,
+        });
+      }
+
+      return syntheticResponse;
+    }
+
+    // ---- Phase 4: Prompt compression (after cache, before budget) ----
+    const compressionResult = await this.compress(promptText, originalModel);
+    let finalPromptText = promptText;
+
+    if (compressionResult.wasCompressed) {
+      finalPromptText = compressionResult.prompt;
+      // Apply compressed prompt back to params
+      this.applyCompressedPrompt(params, compressionResult.prompt);
+      args[0] = params;
+    }
+
+    // Budget enforcement — check before executing LLM call
+    await this.checkBudget();
+
+    const startTime = Date.now();
+
+    // ---- Phase 2: Model Routing ----
+    const routingResult = await this.resolveModelWithRouter(originalModel, finalPromptText);
+
+    if (routingResult.wasRouted) {
+      params.model = routingResult.model;
+      args[0] = params;
+    }
+
     const request: RequestContext = {
-      model: params.model || 'claude-3-5-sonnet-20241022',
+      model: routingResult.model,
       timestamp: new Date().toISOString(),
       provider: 'anthropic',
     };
 
     try {
-      // Call original method
       const response = await originalMethod.apply(this, args);
-      
-      const latency = Date.now() - startTime;
 
-      // Extract usage from response
+      const latency = Date.now() - startTime;
       const usage = response.usage;
-      
+
       if (usage) {
         const responseContext: ResponseContext = {
           tokens: {
@@ -128,15 +190,116 @@ export class AnthropicInterceptor extends BaseInterceptor {
         };
 
         const event = this.captureEvent(request, responseContext);
-        
+
+        if (routingResult.wasRouted) {
+          event.originalModel = routingResult.originalModel;
+          event.routedModel = routingResult.model;
+        }
+
+        // Add compression metadata
+        if (compressionResult.wasCompressed) {
+          event.compressionApplied = true;
+          event.originalTokens = compressionResult.originalTokens;
+          event.compressedTokens = compressionResult.finalTokens;
+          event.tokensSaved = compressionResult.originalTokens - compressionResult.finalTokens;
+        }
+
         if (this.eventCallback) {
           this.eventCallback(event);
+        }
+
+        // ---- Phase 3: Store in cache (fire-and-forget) ----
+        // The compressed prompt is what goes into cache (intentional)
+        const responseText = response.content?.[0]?.type === 'text'
+          ? response.content[0].text
+          : null;
+        if (responseText) {
+          const totalTokens = (usage.input_tokens || 0) + (usage.output_tokens || 0);
+          const cost = this.calculateCost(routingResult.model, {
+            promptTokens: usage.input_tokens || 0,
+            completionTokens: usage.output_tokens || 0,
+            totalTokens,
+          });
+          this.storeInCache(
+            finalPromptText,
+            responseText,
+            routingResult.model,
+            totalTokens,
+            cost
+          );
         }
       }
 
       return response;
     } catch (error) {
       const latency = Date.now() - startTime;
+      const statusCode = (error as any)?.status || (error as any)?.statusCode || 0;
+
+      // ---- Phase 2: Automatic fallback ----
+      if (routingResult.wasRouted && statusCode >= 400) {
+        console.warn(
+          `[Aethermind] Routed model ${routingResult.model} failed (${statusCode}), ` +
+          `retrying with original model ${originalModel}`
+        );
+
+        try {
+          params.model = originalModel;
+          args[0] = params;
+
+          const fbStart = Date.now();
+          const fbResponse = await originalMethod.apply(this, args);
+          const fbLatency = Date.now() - fbStart;
+
+          const usage = fbResponse.usage;
+          if (usage) {
+            const responseContext: ResponseContext = {
+              tokens: {
+                promptTokens: usage.input_tokens || 0,
+                completionTokens: usage.output_tokens || 0,
+                totalTokens: (usage.input_tokens || 0) + (usage.output_tokens || 0),
+              },
+              latency: fbLatency,
+              status: 'success',
+            };
+
+            const event = this.captureEvent(
+              { ...request, model: originalModel },
+              responseContext
+            );
+            event.originalModel = routingResult.originalModel;
+            event.routedModel = routingResult.model;
+            event.fallbackUsed = true;
+
+            if (this.eventCallback) {
+              this.eventCallback(event);
+            }
+          }
+
+          return fbResponse;
+        } catch (fbError) {
+          const fbLatency = Date.now() - startTime;
+          const responseContext: ResponseContext = {
+            tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            latency: fbLatency,
+            status: 'error',
+            error: fbError instanceof Error ? fbError.message : String(fbError),
+          };
+
+          const event = this.captureEvent(
+            { ...request, model: originalModel },
+            responseContext
+          );
+          event.originalModel = routingResult.originalModel;
+          event.routedModel = routingResult.model;
+          event.fallbackUsed = true;
+
+          if (this.eventCallback) {
+            this.eventCallback(event);
+          }
+
+          throw fbError;
+        }
+      }
       
       const responseContext: ResponseContext = {
         tokens: {
@@ -151,12 +314,64 @@ export class AnthropicInterceptor extends BaseInterceptor {
 
       const event = this.captureEvent(request, responseContext);
       
+      if (routingResult.wasRouted) {
+        event.originalModel = routingResult.originalModel;
+        event.routedModel = routingResult.model;
+      }
+
       if (this.eventCallback) {
         this.eventCallback(event);
       }
 
       throw error;
     }
+  }
+
+  /**
+   * Apply compressed prompt back to the Anthropic params.
+   * Replaces the last user message content with the compressed version.
+   */
+  private applyCompressedPrompt(params: any, compressedPrompt: string): void {
+    if (!params.messages || !Array.isArray(params.messages)) return;
+
+    const userMessages = params.messages.filter((m: any) => m.role === 'user');
+    if (userMessages.length > 0) {
+      const lastUserMsg = userMessages[userMessages.length - 1];
+      if (typeof lastUserMsg.content === 'string') {
+        lastUserMsg.content = compressedPrompt;
+      } else if (Array.isArray(lastUserMsg.content)) {
+        // Anthropic supports content blocks — replace text blocks
+        for (const block of lastUserMsg.content) {
+          if (block.type === 'text') {
+            block.text = compressedPrompt;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Extract prompt text from Anthropic params for classification
+   */
+  private extractPromptText(params: any): string {
+    const parts: string[] = [];
+    if (params.system) {
+      parts.push(typeof params.system === 'string' ? params.system : '');
+    }
+    if (params.messages && Array.isArray(params.messages)) {
+      for (const msg of params.messages) {
+        if (msg.role === 'user') {
+          if (typeof msg.content === 'string') parts.push(msg.content);
+          else if (Array.isArray(msg.content)) {
+            for (const block of msg.content) {
+              if (block.type === 'text') parts.push(block.text || '');
+            }
+          }
+        }
+      }
+    }
+    return parts.join(' ');
   }
 
   /**

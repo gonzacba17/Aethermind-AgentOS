@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const AethermindConfigSchema = z.object({
   apiKey: z.string().min(1, 'API key is required'),
   endpoint: z.string().url().default('https://api.aethermind.io'),
-  flushInterval: z.number().positive().default(30000), // 30 seconds
+  flushInterval: z.number().positive().default(5000), // 5 seconds
   batchSize: z.number().positive().max(1000).default(50),
   enabled: z.boolean().default(true),
 });

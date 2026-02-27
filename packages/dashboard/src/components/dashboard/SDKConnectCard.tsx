@@ -105,29 +105,26 @@ export function SDKConnectCard() {
     }
   }
 
-  const installCode = `npm install @aethermind/sdk`
+  const installCode = `npm install @aethermind/agent`
 
-  const connectionCode = `import { createAgent, startOrchestrator } from '@aethermind/sdk';
+  const connectionCode = `import { initAethermind } from '@aethermind/agent';
 
-// Initialize with your API key
-const orchestrator = startOrchestrator({
+// Initialize telemetry — auto-instruments OpenAI & Anthropic SDKs
+initAethermind({
   apiKey: '${showApiKey ? apiKey : 'YOUR_API_KEY'}',
-  baseUrl: '${process.env.NEXT_PUBLIC_API_URL || 'https://api.aethermind.io'}',
+  endpoint: '${process.env.NEXT_PUBLIC_API_URL || 'https://api.aethermind.io'}',
 });
 
-// Create an AI agent
-const agent = createAgent({
-  name: 'my-assistant',
-  model: 'gpt-4',
-  systemPrompt: 'You are a helpful assistant.',
+// That's it! All OpenAI/Anthropic calls are now tracked.
+import OpenAI from 'openai';
+const openai = new OpenAI();
+
+const completion = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'Hello!' }],
 });
 
-// Execute a task
-const result = await orchestrator.execute('my-assistant', {
-  input: 'Hello, world!'
-});
-
-console.log(result);`
+// Cost, tokens, and latency are automatically reported to your dashboard.`
 
   if (isLoading) {
     return (

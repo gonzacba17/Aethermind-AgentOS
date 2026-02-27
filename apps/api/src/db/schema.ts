@@ -284,12 +284,33 @@ export const telemetryEvents = pgTable('telemetry_events', {
   latency: integer('latency').notNull(),
   status: varchar('status', { length: 20 }).notNull(),
   error: text('error'),
+  agentId: varchar('agent_id', { length: 255 }),
+  sessionId: varchar('session_id', { length: 255 }),
+  // Phase 2 — Model Routing fields
+  originalModel: varchar('original_model', { length: 255 }),
+  routedModel: varchar('routed_model', { length: 255 }),
+  fallbackUsed: boolean('fallback_used').default(false),
+  providerFallback: boolean('provider_fallback').default(false),
+  fallbackProvider: varchar('fallback_provider', { length: 50 }),
+  // Phase 2 — Quality feedback (infrastructure for Phase 5)
+  qualityRating: varchar('quality_rating', { length: 10 }),
+  // Phase 3 — Semantic caching fields
+  cacheHit: boolean('cache_hit').default(false),
+  cacheSavedUsd: decimal('cache_saved_usd', { precision: 10, scale: 6 }),
+  // Phase 4 — Prompt compression fields (all nullable — don't break existing ingestion)
+  compressionApplied: boolean('compression_applied'),
+  originalTokens: integer('original_tokens'),
+  compressedTokens: integer('compressed_tokens'),
+  tokensSaved: integer('tokens_saved'),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
 }, (table) => ({
   orgTimeIdx: index('idx_telemetry_org_time').on(table.organizationId, table.timestamp),
   providerModelIdx: index('idx_telemetry_provider_model').on(table.provider, table.model),
   statusIdx: index('idx_telemetry_status').on(table.status),
   createdAtIdx: index('idx_telemetry_created_at').on(table.createdAt),
+  agentIdIdx: index('idx_telemetry_agent_id').on(table.agentId),
+  sessionIdIdx: index('idx_telemetry_session_id').on(table.sessionId),
+  routedModelIdx: index('idx_telemetry_routed_model').on(table.routedModel),
 }));
 
 // ============================================
@@ -383,11 +404,185 @@ export const clients = pgTable('clients', {
   companyName: varchar('company_name', { length: 255 }).notNull(),
   accessToken: varchar('access_token', { length: 80 }).notNull().unique(),
   sdkApiKey: varchar('sdk_api_key', { length: 255 }).notNull(),
+  organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
+  rateLimitPerMin: integer('rate_limit_per_min').default(100).notNull(),
   isActive: boolean('is_active').default(true),
+  webhookUrl: varchar('webhook_url', { length: 500 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   notes: text('notes'),
 }, (table) => ({
   accessTokenIdx: index('idx_clients_access_token').on(table.accessToken),
+  sdkApiKeyIdx: index('idx_clients_sdk_api_key').on(table.sdkApiKey),
+  orgIdIdx: index('idx_clients_organization_id').on(table.organizationId),
+}));
+
+// ============================================
+// CLIENT BUDGETS TABLE (Phase 1 — Cost Control)
+// ============================================
+export const clientBudgets = pgTable('client_budgets', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  type: varchar('type', { length: 20 }).notNull(), // 'monthly' | 'daily'
+  limitUsd: decimal('limit_usd', { precision: 10, scale: 2 }).notNull(),
+  alertThresholds: jsonb('alert_thresholds').default([80, 90, 100]).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  clientIdIdx: index('idx_client_budgets_client_id').on(table.clientId),
+  typeIdx: index('idx_client_budgets_type').on(table.type),
+}));
+
+// ============================================
+// ALERT EVENTS TABLE (Phase 1 — Budget Alerts)
+// ============================================
+export const alertEvents = pgTable('alert_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  budgetId: uuid('budget_id').notNull().references(() => clientBudgets.id, { onDelete: 'cascade' }),
+  threshold: integer('threshold').notNull(), // 80, 90, 100
+  triggeredAt: timestamp('triggered_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  notifiedAt: timestamp('notified_at', { withTimezone: true, precision: 6 }),
+}, (table) => ({
+  clientIdIdx: index('idx_alert_events_client_id').on(table.clientId),
+  budgetIdIdx: index('idx_alert_events_budget_id').on(table.budgetId),
+  uniqueThresholdIdx: index('idx_alert_events_unique').on(table.budgetId, table.threshold, table.triggeredAt),
+}));
+
+// ============================================
+// ROUTING RULES TABLE (Phase 2 — Model Routing)
+// ============================================
+export const routingRules = pgTable('routing_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }).unique(),
+  enabled: boolean('enabled').default(false).notNull(),
+  simpleModel: varchar('simple_model', { length: 255 }).default('gpt-4o-mini').notNull(),
+  mediumModel: varchar('medium_model', { length: 255 }).default('gpt-4o-mini').notNull(),
+  complexModel: varchar('complex_model', { length: 255 }).default('gpt-4o').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  clientIdIdx: index('idx_routing_rules_client_id').on(table.clientId),
+}));
+
+// ============================================
+// PROVIDER HEALTH TABLE (Phase 2 — Provider Routing)
+// ============================================
+export const providerHealth = pgTable('provider_health', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  provider: varchar('provider', { length: 50 }).notNull().unique(), // 'openai' | 'anthropic' | 'ollama'
+  status: varchar('status', { length: 20 }).default('ok').notNull(), // 'ok' | 'degraded' | 'down'
+  latencyMs: integer('latency_ms'),
+  lastCheckedAt: timestamp('last_checked_at', { withTimezone: true, precision: 6 }),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  providerIdx: index('idx_provider_health_provider').on(table.provider),
+  statusIdx: index('idx_provider_health_status').on(table.status),
+}));
+
+// ============================================
+// SEMANTIC CACHE TABLE (Phase 3)
+// ============================================
+export const semanticCache = pgTable('semantic_cache', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  promptHash: varchar('prompt_hash', { length: 64 }).notNull(),
+  promptEmbedding: jsonb('prompt_embedding'),
+  prompt: text('prompt').notNull(),
+  response: text('response').notNull(),
+  model: varchar('model', { length: 255 }).notNull(),
+  tokensUsed: integer('tokens_used').notNull(),
+  costUsd: decimal('cost_usd', { precision: 10, scale: 6 }).notNull(),
+  hitCount: integer('hit_count').default(0).notNull(),
+  isDeterministic: boolean('is_deterministic').default(false).notNull(),
+  ttlExpiresAt: timestamp('ttl_expires_at', { withTimezone: true, precision: 6 }),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  clientHashIdx: index('idx_semantic_cache_client_hash').on(table.clientId, table.promptHash),
+  clientIdIdx: index('idx_semantic_cache_client_id').on(table.clientId),
+  deterministicIdx: index('idx_semantic_cache_deterministic').on(table.isDeterministic),
+}));
+
+// ============================================
+// CACHE SETTINGS TABLE (Phase 3)
+// ============================================
+export const cacheSettings = pgTable('cache_settings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }).unique(),
+  enabled: boolean('enabled').default(false).notNull(),
+  similarityThreshold: decimal('similarity_threshold', { precision: 3, scale: 2 }).default('0.90').notNull(),
+  ttlSeconds: integer('ttl_seconds').default(86400).notNull(),
+  deterministicTtlSeconds: integer('deterministic_ttl_seconds'),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+});
+
+// ============================================
+// PROMPT COMPRESSION LOG TABLE (Phase 4)
+// ============================================
+export const promptCompressionLog = pgTable('prompt_compression_log', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  originalTokens: integer('original_tokens').notNull(),
+  compressedTokens: integer('compressed_tokens').notNull(),
+  savedTokens: integer('saved_tokens').notNull(),
+  savedUsd: decimal('saved_usd', { precision: 10, scale: 6 }).default('0').notNull(),
+  compressionApplied: boolean('compression_applied').default(false).notNull(),
+  model: varchar('model', { length: 255 }).notNull(),
+  agentId: varchar('agent_id', { length: 255 }),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  clientIdIdx: index('idx_compression_log_client_id').on(table.clientId),
+  createdAtIdx: index('idx_compression_log_created_at').on(table.createdAt),
+  clientCreatedIdx: index('idx_compression_log_client_created').on(table.clientId, table.createdAt),
+}));
+
+// ============================================
+// OPTIMIZATION SETTINGS TABLE (Phase 4)
+// ============================================
+export const optimizationSettings = pgTable('optimization_settings', {
+  clientId: uuid('client_id').primaryKey().references(() => clients.id, { onDelete: 'cascade' }),
+  compressionEnabled: boolean('compression_enabled').default(false).notNull(),
+  minCompressionRatio: decimal('min_compression_ratio', { precision: 3, scale: 2 }).default('0.15').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+});
+
+// ============================================
+// CLIENT INSIGHTS TABLE (Phase 5 — Learning Engine)
+// ============================================
+export const clientInsights = pgTable('client_insights', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  type: varchar('type', { length: 50 }).notNull(), // peak_hours | underutilized_agent | overloaded_agent | similar_agents | routing_suggestion | cache_suggestion
+  data: jsonb('data').notNull(),
+  estimatedSavingsUsd: decimal('estimated_savings_usd', { precision: 10, scale: 2 }),
+  acknowledged: boolean('acknowledged').default(false).notNull(),
+  appliedAt: timestamp('applied_at', { withTimezone: true, precision: 6 }),
+  dismissedAt: timestamp('dismissed_at', { withTimezone: true, precision: 6 }),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  clientIdIdx: index('idx_client_insights_client_id').on(table.clientId),
+  typeIdx: index('idx_client_insights_type').on(table.type),
+  clientTypeIdx: index('idx_client_insights_client_type').on(table.clientId, table.type),
+  createdAtIdx: index('idx_client_insights_created_at').on(table.createdAt),
+}));
+
+// ============================================
+// PLATFORM BENCHMARKS TABLE (Phase 5 — Learning Engine)
+// ============================================
+export const platformBenchmarks = pgTable('platform_benchmarks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  calculatedAt: timestamp('calculated_at', { withTimezone: true, precision: 6 }).notNull(),
+  avgCostPerRequest: decimal('avg_cost_per_request', { precision: 10, scale: 6 }).notNull(),
+  p50CostPerRequest: decimal('p50_cost_per_request', { precision: 10, scale: 6 }).notNull(),
+  p90CostPerRequest: decimal('p90_cost_per_request', { precision: 10, scale: 6 }).notNull(),
+  avgCacheHitRate: decimal('avg_cache_hit_rate', { precision: 5, scale: 4 }).notNull(),
+  avgCompressionRatio: decimal('avg_compression_ratio', { precision: 5, scale: 4 }).notNull(),
+  sampleSize: integer('sample_size').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  calculatedAtIdx: index('idx_platform_benchmarks_calculated_at').on(table.calculatedAt),
 }));
 
 // ============================================
@@ -443,3 +638,33 @@ export type NewBackupHistory = typeof backupHistory.$inferInsert;
 
 export type Client = typeof clients.$inferSelect;
 export type NewClient = typeof clients.$inferInsert;
+
+export type ClientBudget = typeof clientBudgets.$inferSelect;
+export type NewClientBudget = typeof clientBudgets.$inferInsert;
+
+export type AlertEvent = typeof alertEvents.$inferSelect;
+export type NewAlertEvent = typeof alertEvents.$inferInsert;
+
+export type RoutingRule = typeof routingRules.$inferSelect;
+export type NewRoutingRule = typeof routingRules.$inferInsert;
+
+export type ProviderHealth = typeof providerHealth.$inferSelect;
+export type NewProviderHealth = typeof providerHealth.$inferInsert;
+
+export type SemanticCacheEntry = typeof semanticCache.$inferSelect;
+export type NewSemanticCacheEntry = typeof semanticCache.$inferInsert;
+
+export type CacheSettingsEntry = typeof cacheSettings.$inferSelect;
+export type NewCacheSettingsEntry = typeof cacheSettings.$inferInsert;
+
+export type PromptCompressionLogEntry = typeof promptCompressionLog.$inferSelect;
+export type NewPromptCompressionLogEntry = typeof promptCompressionLog.$inferInsert;
+
+export type OptimizationSettingsEntry = typeof optimizationSettings.$inferSelect;
+export type NewOptimizationSettingsEntry = typeof optimizationSettings.$inferInsert;
+
+export type ClientInsight = typeof clientInsights.$inferSelect;
+export type NewClientInsight = typeof clientInsights.$inferInsert;
+
+export type PlatformBenchmark = typeof platformBenchmarks.$inferSelect;
+export type NewPlatformBenchmark = typeof platformBenchmarks.$inferInsert;

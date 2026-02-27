@@ -85,7 +85,7 @@ The SDK uses three layers to capture telemetry with zero code changes:
 
 2. **SDK patching** -- Monkey-patches `OpenAI.chat.completions.create` and `Anthropic.messages.create` prototypes for SDK-specific telemetry (covers streaming and other SDK features). Only activates if the SDKs are installed.
 
-3. **Batch transport** -- Captured events are queued locally and flushed to the Aethermind API in batches (default: every 30 seconds or 50 events). Failed events are stored in a dead-letter queue for retry.
+3. **Batch transport** -- Captured events are queued locally and flushed to the Aethermind API in batches (default: every 5 seconds or 50 events). Failed events are stored in a dead-letter queue for retry.
 
 Non-LLM fetch calls (e.g. your own API routes) pass through untouched with zero overhead. All telemetry extraction is wrapped in try/catch -- the SDK never throws errors into your application.
 
@@ -97,7 +97,7 @@ import { initAethermind } from "@aethermind/agent";
 initAethermind({
   apiKey: "your-aethermind-api-key", // Required
   endpoint: "https://api.aethermind.io", // Optional
-  flushInterval: 30000, // Optional: ms between flushes (default: 30000)
+  flushInterval: 5000, // Optional: ms between flushes (default: 5000)
   batchSize: 50, // Optional: events per batch (default: 50)
   enabled: true, // Optional: enable/disable (default: true)
 });
@@ -107,7 +107,7 @@ initAethermind({
 | --------------- | --------- | --------------------------- | ---------------------------------- |
 | `apiKey`        | `string`  | _required_                  | Your Aethermind API key            |
 | `endpoint`      | `string`  | `https://api.aethermind.io` | API endpoint URL                   |
-| `flushInterval` | `number`  | `30000`                     | Milliseconds between batch flushes |
+| `flushInterval` | `number`  | `5000`                      | Milliseconds between batch flushes |
 | `batchSize`     | `number`  | `50`                        | Maximum events per batch           |
 | `enabled`       | `boolean` | `true`                      | Enable/disable monitoring          |
 
@@ -134,7 +134,7 @@ initAethermind({
 
 ### Events not appearing in dashboard?
 
-1. Wait 30 seconds (default batch interval)
+1. Wait 5 seconds (default batch interval)
 2. Verify API key is correct: `process.env.AETHERMIND_API_KEY`
 3. Check endpoint URL is correct
 4. Ensure `enabled: true` (default)
