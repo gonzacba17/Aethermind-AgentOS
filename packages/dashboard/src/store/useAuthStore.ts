@@ -1,10 +1,6 @@
 import { create } from 'zustand';
 import { getAuthToken, clearAuthToken } from '@/lib/auth-utils';
-
-// ─── Previous JWT-based store (commented out, not deleted) ───
-// export interface User { id, email, name, image, plan, organizationId, role }
-// interface AuthState { user, token, isAuthenticated, isLoading, error, initialize, setUser, updateUser, logout, clearError, refreshUser }
-// Used persist middleware + localStorage + /api/auth/me
+import { API_URL } from '@/lib/config';
 
 export interface ClientInfo {
   companyName: string;
@@ -21,9 +17,6 @@ interface AuthState {
   logout: () => void;
 }
 
-const RAW_API_URL = process.env.NEXT_PUBLIC_API_URL || '';
-const API_BASE = RAW_API_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '');
-
 export const useAuthStore = create<AuthState>()((set) => ({
   client: null,
   isAuthenticated: false,
@@ -39,7 +32,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/client/me`, {
+      const res = await fetch(`${API_URL}/api/client/me`, {
         headers: { 'X-Client-Token': token },
       });
 

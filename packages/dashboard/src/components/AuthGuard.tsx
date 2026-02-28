@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getAuthToken, clearAuthToken } from '@/lib/auth-utils';
 import { useAuthStore } from '@/store/useAuthStore';
+import { API_URL } from '@/lib/config';
 
 /**
  * Authentication Guard — B2B Beta
@@ -38,9 +39,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const API_BASE = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
-        console.log('[AuthGuard] Calling /api/client/me with API_BASE:', API_BASE);
-        const res = await fetch(`${API_BASE}/api/client/me`, {
+        console.log('[AuthGuard] Calling /api/client/me with API_URL:', API_URL);
+        const res = await fetch(`${API_URL}/api/client/me`, {
           headers: { 'X-Client-Token': token },
         });
 

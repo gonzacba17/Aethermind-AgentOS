@@ -1,7 +1,7 @@
 /**
  * Dashboard Configuration
  * Provides environment-aware URLs for cross-deployment compatibility
- * 
+ *
  * Environment Variables:
  * - NEXT_PUBLIC_LANDING_URL: Landing page URL for redirects (login, logout, etc.)
  * - NEXT_PUBLIC_API_URL: Backend API URL
@@ -18,5 +18,7 @@ export const LOGIN_PATH = '/login';
 // Full login URL
 export const LOGIN_URL = `${LANDING_PAGE_URL}${LOGIN_PATH}`;
 
-// API URL
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/api\/?$/, '').replace(/\/+$/, '');
+// API URL — strip trailing /api and slashes to get base URL
+// Production fallback ensures dashboard works even without env var on Vercel
+const FALLBACK_API_URL = 'https://aethermind-agentos-production.up.railway.app';
+export const API_URL = (process.env.NEXT_PUBLIC_API_URL || FALLBACK_API_URL).replace(/\/api\/?$/, '').replace(/\/+$/, '');
