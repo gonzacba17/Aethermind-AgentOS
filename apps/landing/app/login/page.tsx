@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { authAPI } from '@/lib/api/auth'
-import { redirectAfterAuth, removeToken, removeClientToken, buildDashboardUrl } from '@/lib/auth-utils'
+import { redirectAfterAuth, removeToken, removeClientToken, buildDashboardUrl, getClientToken } from '@/lib/auth-utils'
 import { loginSchema, type LoginFormData } from '@/lib/validations/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { config } from '@/lib/config'
@@ -30,7 +30,12 @@ function LoginForm() {
   useEffect(() => {
     if (searchParams.get('logout') === 'true') return;
     if (!isLoading && isAuthenticated) {
-      window.location.href = buildDashboardUrl();
+      // Only auto-redirect if we have a client token to pass
+      const clientToken = getClientToken();
+      if (clientToken) {
+        window.location.href = buildDashboardUrl();
+      }
+      // If no client token, let the user log in again to get one
     }
   }, [isLoading, isAuthenticated, searchParams]);
 
@@ -73,13 +78,18 @@ function LoginForm() {
     try {
       // authAPI.login now handles token storage with rememberMe preference
       const response = await authAPI.login(data, rememberMe)
-      
+
       // Check for returnTo parameter
       const returnTo = searchParams.get('returnTo');
       if (returnTo && returnTo.startsWith('/')) {
         console.log('[Login] Redirecting to returnTo:', returnTo);
         window.location.href = returnTo;
+      } else if (response.clientAccessToken) {
+        // Client token received — go directly to dashboard with token
+        console.log('[Login] clientAccessToken received, redirecting to dashboard');
+        window.location.href = buildDashboardUrl();
       } else {
+        // Fallback: use redirectAfterAuth for edge cases
         await redirectAfterAuth(response.user)
       }
     } catch (err: unknown) {

@@ -148,6 +148,7 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
         email: result.user.email,
         plan: result.user.plan,
         emailVerified: result.user.emailVerified,
+        hasCompletedOnboarding: result.user.hasCompletedOnboarding,
       },
     });
   } catch (error) {

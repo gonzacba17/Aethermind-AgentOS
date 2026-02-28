@@ -161,6 +161,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
         emailVerified: user.emailVerified,
         usageCount: user.usageCount,
         usageLimit: user.usageLimit,
+        hasCompletedOnboarding: user.hasCompletedOnboarding,
       },
     });
   } catch (error) {
