@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { getToken } from '@/lib/auth-utils';
+import { getToken, buildDashboardUrl } from '@/lib/auth-utils';
 import { config } from '@/lib/config';
 import { Check, Sparkles, Zap, Crown } from 'lucide-react';
 import { NeuralBackground } from '@/components/neural-background';
@@ -246,7 +246,7 @@ function PricingContent() {
       // Success! Redirect to dashboard
       setShowConfirmModal(false);
       setTimeout(() => {
-        window.location.href = config.dashboardUrl;
+        window.location.href = buildDashboardUrl();
       }, 500);
       
     } catch (err) {

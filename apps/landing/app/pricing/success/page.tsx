@@ -3,19 +3,20 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle, ArrowRight } from 'lucide-react';
+import { buildDashboardUrl } from '@/lib/auth-utils';
 
 export default function PaymentSuccessPage() {
   const [countdown, setCountdown] = useState(5);
+  const dashUrl = typeof window !== 'undefined' ? buildDashboardUrl() : '#';
 
   useEffect(() => {
+    const target = buildDashboardUrl();
     // Countdown to auto-redirect
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          // Redirect to dashboard
-          const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
-          window.location.href = `${dashboardUrl}/dashboard`;
+          window.location.href = target;
           return 0;
         }
         return prev - 1;
@@ -73,7 +74,7 @@ export default function PaymentSuccessPage() {
 
         {/* Manual redirect button */}
         <Link
-          href={`${process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app'}/dashboard`}
+          href={dashUrl}
           className="inline-flex items-center gap-2 bg-white text-black px-8 py-3 rounded-lg font-medium hover:bg-zinc-200 transition"
         >
           Go to Dashboard Now

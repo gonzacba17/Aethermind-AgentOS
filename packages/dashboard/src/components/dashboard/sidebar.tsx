@@ -3,9 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Home, LayoutDashboard, Bot, FileText, GitBranch, DollarSign, ChevronLeft, ChevronRight, Settings, Bell, Wallet, TrendingUp, Sparkles, Route, Lightbulb } from "lucide-react"
+import { Home, LayoutDashboard, Bot, FileText, GitBranch, DollarSign, ChevronLeft, ChevronRight, Settings, Bell, Wallet, TrendingUp, Sparkles, Route, Lightbulb, LogOut } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useAuthStore } from "@/store/useAuthStore"
+import { LANDING_PAGE_URL } from "@/lib/config"
 
 const navGroups = [
   {
@@ -47,6 +49,12 @@ const navGroups = [
 export function DashboardSidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const logout = useAuthStore((s) => s.logout)
+
+  const handleLogout = () => {
+    logout()
+    window.location.href = `${LANDING_PAGE_URL}/login?logout=true`
+  }
 
   return (
     <aside
@@ -117,10 +125,23 @@ export function DashboardSidebar() {
         ))}
       </nav>
 
-      {/* Version footer */}
-      <div className="px-4 py-3 border-t border-sidebar-border">
+      {/* Logout + Version footer */}
+      <div className="px-3 py-3 border-t border-sidebar-border space-y-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleLogout}
+          className={cn(
+            "w-full text-sidebar-foreground hover:text-red-400 hover:bg-red-500/10",
+            collapsed ? "justify-center" : "justify-start gap-3 px-3"
+          )}
+          title={collapsed ? "Logout" : undefined}
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>Logout</span>}
+        </Button>
         {!collapsed ? (
-          <span className="text-xs text-muted-foreground">Aethermind AgentOS v0.1.0</span>
+          <span className="text-xs text-muted-foreground block px-3">Aethermind AgentOS v0.1.0</span>
         ) : (
           <span className="text-xs text-muted-foreground text-center block">v0.1</span>
         )}

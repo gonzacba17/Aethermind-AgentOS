@@ -23,21 +23,23 @@ export function middleware(request: NextRequest) {
   }
 
   // Redirigir usuarios autenticados fuera de login/signup
+  // EXCEPT when ?logout=true — let the client-side handle cleanup first
   const isAuthPath = authPaths.some(path => pathname.startsWith(path));
-  if (isAuthPath && token) {
+  const url = new URL(request.url);
+  const isLogout = url.searchParams.get('logout') === 'true';
+  if (isAuthPath && token && !isLogout) {
     console.log('[Middleware] Auth route with token, redirecting to dashboard');
-    
+
     // Check if there's a returnTo parameter
-    const url = new URL(request.url);
     const returnTo = url.searchParams.get('returnTo');
-    
+
     if (returnTo && returnTo.startsWith('/')) {
       return NextResponse.redirect(new URL(returnTo, origin));
     }
-    
-    // Default redirect to dashboard
-    const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'https://aethermind-agent-os-dashboard.vercel.app';
-    return NextResponse.redirect(new URL(dashboardUrl));
+
+    // Let client-side handle redirect (it has access to localStorage for ?token= param)
+    // Server-side middleware can't access localStorage, so we pass through
+    return NextResponse.next();
   }
 
   return NextResponse.next();

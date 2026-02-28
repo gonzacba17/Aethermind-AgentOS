@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { authAPI } from '@/lib/api/auth'
-import { redirectAfterAuth } from '@/lib/auth-utils'
+import { redirectAfterAuth, removeToken, removeClientToken, buildDashboardUrl } from '@/lib/auth-utils'
 import { loginSchema, type LoginFormData } from '@/lib/validations/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { config } from '@/lib/config'
@@ -26,12 +26,27 @@ function LoginForm() {
     resolver: zodResolver(loginSchema),
   })
 
-  // Redirect authenticated users to dashboard
+  // Redirect authenticated users to dashboard (skip if just logged out)
   useEffect(() => {
+    if (searchParams.get('logout') === 'true') return;
     if (!isLoading && isAuthenticated) {
-      window.location.href = config.dashboardUrl;
+      window.location.href = buildDashboardUrl();
     }
-  }, [isLoading, isAuthenticated]);
+  }, [isLoading, isAuthenticated, searchParams]);
+
+  // Handle ?logout=true — clear all auth state from landing
+  useEffect(() => {
+    if (searchParams.get('logout') === 'true') {
+      removeToken();
+      removeClientToken();
+      localStorage.removeItem('user');
+      console.log('[Login] Logout cleanup complete — all tokens cleared');
+      // Remove ?logout=true from URL to prevent re-clearing on refresh
+      const url = new URL(window.location.href);
+      url.searchParams.delete('logout');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     // Success message if coming from signup

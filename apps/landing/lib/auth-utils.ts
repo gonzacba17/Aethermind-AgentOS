@@ -1,7 +1,7 @@
 import { User } from './api/auth';
 import { config } from './config';
 
-function buildDashboardUrl(): string {
+export function buildDashboardUrl(): string {
   const clientToken = typeof window !== 'undefined' ? localStorage.getItem('clientAccessToken') : null;
   if (clientToken) {
     return `${config.dashboardUrl}?token=${encodeURIComponent(clientToken)}`;
@@ -264,16 +264,23 @@ export async function redirectAfterAuth(user?: User) {
       console.log('[redirectAfterAuth] Has active/trial subscription, redirecting to dashboard:', dashUrl);
       window.location.href = dashUrl;
     } else {
-      // No subscription, check if has paid plan
-      const hasPaidPlan = user?.plan && user.plan !== 'free';
-      if (hasPaidPlan) {
+      // No subscription — check if user has a client token (can access dashboard)
+      const clientToken = getClientToken();
+      if (clientToken) {
         const dashUrl2 = buildDashboardUrl();
-        console.log('[redirectAfterAuth] Has paid plan, redirecting to dashboard:', dashUrl2);
+        console.log('[redirectAfterAuth] Free plan with client token, redirecting to dashboard:', dashUrl2);
         window.location.href = dashUrl2;
       } else {
-        // User doesn't have membership, redirect to pricing
-        console.log('[redirectAfterAuth] No membership, redirecting to pricing');
-        window.location.href = '/pricing?checkout=true';
+        const hasPaidPlan = user?.plan && user.plan !== 'free';
+        if (hasPaidPlan) {
+          const dashUrl3 = buildDashboardUrl();
+          console.log('[redirectAfterAuth] Has paid plan, redirecting to dashboard:', dashUrl3);
+          window.location.href = dashUrl3;
+        } else {
+          // No client token, no paid plan — redirect to pricing
+          console.log('[redirectAfterAuth] No membership and no client token, redirecting to pricing');
+          window.location.href = '/pricing?checkout=true';
+        }
       }
     }
   } catch (error) {

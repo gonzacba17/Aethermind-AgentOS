@@ -5,7 +5,7 @@ import {useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { authAPI } from '@/lib/api/auth'
-import { redirectAfterAuth } from '@/lib/auth-utils'
+import { redirectAfterAuth, buildDashboardUrl } from '@/lib/auth-utils'
 import { signupSchema, type SignupFormData } from '@/lib/validations/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { config } from '@/lib/config'
@@ -51,7 +51,7 @@ function SignupForm() {
   // Redirect authenticated users to dashboard
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      window.location.href = config.dashboardUrl;
+      window.location.href = buildDashboardUrl();
     }
   }, [isLoading, isAuthenticated]);
 
