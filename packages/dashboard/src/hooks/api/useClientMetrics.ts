@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { API_URL } from '@/lib/config';
+import { getAuthToken } from '@/lib/auth-utils';
 
 /**
  * Query key factory for client metrics
@@ -41,7 +42,7 @@ export interface ClientTimeseriesPoint {
 // ---------- Fetch helpers ----------
 
 async function fetchWithClientToken<T>(path: string): Promise<T> {
-  const token = localStorage.getItem('clientToken') || '';
+  const token = getAuthToken() || '';
   const res = await fetch(`${API_URL}${path}`, {
     headers: {
       'X-Client-Token': token,

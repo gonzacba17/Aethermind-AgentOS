@@ -13,7 +13,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 
-  initialize: () => Promise<void>;
+  initialize: () => Promise<boolean>;
   logout: () => void;
 }
 
@@ -22,13 +22,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
   isAuthenticated: false,
   isLoading: true,
 
-  initialize: async () => {
+  initialize: async (): Promise<boolean> => {
     set({ isLoading: true });
 
     const token = getAuthToken();
     if (!token) {
       set({ client: null, isAuthenticated: false, isLoading: false });
-      return;
+      return false;
     }
 
     try {
@@ -39,7 +39,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       if (!res.ok) {
         clearAuthToken();
         set({ client: null, isAuthenticated: false, isLoading: false });
-        return;
+        return false;
       }
 
       const data = await res.json();
@@ -53,8 +53,10 @@ export const useAuthStore = create<AuthState>()((set) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      return true;
     } catch {
       set({ client: null, isAuthenticated: false, isLoading: false });
+      return false;
     }
   },
 

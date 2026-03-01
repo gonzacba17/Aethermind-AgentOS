@@ -129,6 +129,15 @@ const limiter = rateLimit({
   message: { error: "Too many requests", message: "Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/api/client'),
+});
+
+const clientLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 100,
+  message: { error: "Too many requests", message: "Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 const app = express();
@@ -413,8 +422,8 @@ async function startServer(): Promise<void> {
   // Auth routes — public (signup, login, etc.) — must be mounted BEFORE global auth
   app.use("/api/auth", authRoutes);
 
-  // Client routes — protected by clientAuth (B2B token)
-  app.use("/api/client", clientAuth, clientRoutes);
+  // Client routes — protected by clientAuth (B2B token), own rate limit (100/min)
+  app.use("/api/client", clientLimiter, clientAuth, clientRoutes);
 
   // Global auth middleware — JWT-based for all other /api/* routes
   app.use("/api", authMiddleware);

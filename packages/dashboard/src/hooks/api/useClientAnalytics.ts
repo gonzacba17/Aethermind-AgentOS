@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { API_URL } from '@/lib/config';
+import { getAuthToken } from '@/lib/auth-utils';
 
 export const clientAnalyticsKeys = {
   all: ['clientAnalytics'] as const,
@@ -32,7 +33,7 @@ export interface PeriodComparison {
 }
 
 async function fetchWithClientToken<T>(path: string): Promise<T> {
-  const token = localStorage.getItem('clientToken') || '';
+  const token = getAuthToken() || '';
   const res = await fetch(`${API_URL}${path}`, {
     headers: {
       'X-Client-Token': token,
@@ -83,7 +84,7 @@ export function usePeriodComparison(period: string = 'month') {
 }
 
 export function exportAnalyticsCSV(period: string = '30d'): void {
-  const token = localStorage.getItem('clientToken') || '';
+  const token = getAuthToken() || '';
   const url = `${API_URL}/api/client/analytics/export?period=${period}`;
 
   fetch(url, {

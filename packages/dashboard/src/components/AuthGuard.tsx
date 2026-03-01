@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getAuthToken, clearAuthToken } from '@/lib/auth-utils';
 import { useAuthStore } from '@/store/useAuthStore';
-import { API_URL } from '@/lib/config';
 
 /**
  * Authentication Guard — B2B Beta
@@ -11,57 +9,21 @@ import { API_URL } from '@/lib/config';
  * Token capture happens in app/page.tsx (root page).
  * By the time AuthGuard mounts the token is already in localStorage.
  *
- * This guard:
- *  1. Reads localStorage for client_token
- *  2. If found → validates via GET /api/client/me
- *  3. If valid → populates auth store, renders children
- *  4. If missing or invalid → shows "Contact Aethermind" screen
+ * Calls initialize() once — it reads the token from localStorage,
+ * validates via GET /api/client/me, and populates the auth store.
  */
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<'loading' | 'authenticated' | 'denied'>('loading');
   const initialize = useAuthStore((s) => s.initialize);
 
   useEffect(() => {
-    async function check() {
-      // Diagnostic: dump localStorage state at mount time
-      console.log('[AuthGuard] Mounting — reading localStorage...');
-      const allKeys = Object.keys(localStorage);
-      console.log('[AuthGuard] localStorage keys:', allKeys);
-      console.log('[AuthGuard] Raw client_token value:', localStorage.getItem('client_token'));
+    let cancelled = false;
 
-      const token = getAuthToken();
-      console.log('[AuthGuard] getAuthToken() returned:', token ? `${token.slice(0, 8)}…` : 'null');
+    initialize().then((ok) => {
+      if (!cancelled) setStatus(ok ? 'authenticated' : 'denied');
+    });
 
-      if (!token) {
-        console.warn('[AuthGuard] No token found — setting status to denied');
-        setStatus('denied');
-        return;
-      }
-
-      try {
-        console.log('[AuthGuard] Calling /api/client/me with API_URL:', API_URL);
-        const res = await fetch(`${API_URL}/api/client/me`, {
-          headers: { 'X-Client-Token': token },
-        });
-
-        console.log('[AuthGuard] /api/client/me response status:', res.status);
-
-        if (!res.ok) {
-          clearAuthToken();
-          setStatus('denied');
-          return;
-        }
-
-        await initialize();
-        setStatus('authenticated');
-      } catch (err) {
-        console.error('[AuthGuard] /api/client/me fetch error:', err);
-        clearAuthToken();
-        setStatus('denied');
-      }
-    }
-
-    check();
+    return () => { cancelled = true; };
   }, [initialize]);
 
   if (status === 'loading') {

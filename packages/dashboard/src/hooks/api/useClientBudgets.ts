@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { API_URL } from '@/lib/config';
+import { getAuthToken } from '@/lib/auth-utils';
 
 export const clientBudgetKeys = {
   all: ['clientBudgets'] as const,
@@ -32,7 +33,7 @@ export interface CreateClientBudgetData {
 }
 
 async function fetchWithClientToken<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('clientToken') || '';
+  const token = getAuthToken() || '';
   const res = await fetch(`${API_URL}${path}`, {
     headers: {
       'X-Client-Token': token,
