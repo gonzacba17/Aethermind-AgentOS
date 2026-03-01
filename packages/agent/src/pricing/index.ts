@@ -43,6 +43,15 @@ export const ANTHROPIC_MODEL_COSTS: Record<string, ModelCost> = {
   'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
 };
 
+export const GEMINI_MODEL_COSTS: Record<string, ModelCost> = {
+  // Gemini models (USD per 1K tokens, converted from per-million pricing)
+  'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
+  'gemini-2.0-flash-lite': { input: 0.000075, output: 0.0003 },
+  'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
+  'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
+  'gemini-1.5-flash-8b': { input: 0.0000375, output: 0.00015 },
+};
+
 export const OLLAMA_MODEL_COSTS: Record<string, ModelCost> = {
   'llama2': { input: 0, output: 0 },
   'llama3': { input: 0, output: 0 },
@@ -54,6 +63,7 @@ export const OLLAMA_MODEL_COSTS: Record<string, ModelCost> = {
 export const MODEL_PRICING = {
   openai: OPENAI_MODEL_COSTS,
   anthropic: ANTHROPIC_MODEL_COSTS,
+  gemini: GEMINI_MODEL_COSTS,
   ollama: OLLAMA_MODEL_COSTS,
 };
 
@@ -64,6 +74,8 @@ export function calculateCost(model: string, tokens: TokenUsage): number {
     costs = OPENAI_MODEL_COSTS[model] || OPENAI_MODEL_COSTS['gpt-4'] || { input: 0, output: 0 };
   } else if (model.startsWith('claude-')) {
     costs = ANTHROPIC_MODEL_COSTS[model] || ANTHROPIC_MODEL_COSTS['claude-3-5-sonnet-20241022'] || { input: 0, output: 0 };
+  } else if (model.startsWith('gemini-')) {
+    costs = GEMINI_MODEL_COSTS[model] || GEMINI_MODEL_COSTS['gemini-1.5-flash'] || { input: 0, output: 0 };
   } else {
     costs = { input: 0, output: 0 };
   }
@@ -79,6 +91,8 @@ export function getModelPricing(model: string): ModelCost | null {
     return OPENAI_MODEL_COSTS[model] || OPENAI_MODEL_COSTS['gpt-4'] || null;
   } else if (model.startsWith('claude-')) {
     return ANTHROPIC_MODEL_COSTS[model] || ANTHROPIC_MODEL_COSTS['claude-3-5-sonnet-20241022'] || null;
+  } else if (model.startsWith('gemini-')) {
+    return GEMINI_MODEL_COSTS[model] || GEMINI_MODEL_COSTS['gemini-1.5-flash'] || null;
   } else if (OLLAMA_MODEL_COSTS[model]) {
     return OLLAMA_MODEL_COSTS[model] || null;
   }

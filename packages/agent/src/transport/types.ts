@@ -16,7 +16,7 @@ export type TokenUsage = z.infer<typeof TokenUsageSchema>;
  */
 export const TelemetryEventSchema = z.object({
   timestamp: z.string().datetime(),
-  provider: z.enum(['openai', 'anthropic', 'ollama']),
+  provider: z.enum(['openai', 'anthropic', 'gemini', 'ollama']),
   model: z.string(),
   tokens: TokenUsageSchema,
   cost: z.number().nonnegative(),

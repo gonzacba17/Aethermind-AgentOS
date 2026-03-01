@@ -31,6 +31,7 @@ export { retryWithBackoff, type RetryConfig } from './utils/retry.js';
 // Interceptors (for advanced usage)
 export { OpenAIInterceptor } from './interceptors/OpenAIInterceptor.js';
 export { AnthropicInterceptor } from './interceptors/AnthropicInterceptor.js';
+export { GeminiInterceptor } from './interceptors/GeminiInterceptor.js';
 export { FetchInterceptor } from './interceptors/FetchInterceptor.js';
 
 // Version

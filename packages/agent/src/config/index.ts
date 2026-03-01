@@ -40,7 +40,7 @@ export function initAethermind(config: Partial<AethermindConfig> & { apiKey: str
   }
   
   // Import interceptors and transport dynamically to avoid circular deps
-  import('../interceptors/index.js').then(({ OpenAIInterceptor, AnthropicInterceptor, FetchInterceptor }) => {
+  import('../interceptors/index.js').then(({ OpenAIInterceptor, AnthropicInterceptor, GeminiInterceptor, FetchInterceptor }) => {
     import('../transport/BatchTransport.js').then(({ getTransport }) => {
       const transport = getTransport();
 
@@ -51,11 +51,13 @@ export function initAethermind(config: Partial<AethermindConfig> & { apiKey: str
       // Create interceptors with callback to transport
       const openaiInterceptor = new OpenAIInterceptor(sendEvent);
       const anthropicInterceptor = new AnthropicInterceptor(sendEvent);
+      const geminiInterceptor = new GeminiInterceptor(sendEvent);
       const fetchInterceptor = new FetchInterceptor(sendEvent);
 
       // Instrument SDKs and global fetch
       openaiInterceptor.instrument();
       anthropicInterceptor.instrument();
+      geminiInterceptor.instrument();
       fetchInterceptor.instrument();
 
       console.log('[Aethermind] SDK initialized successfully');

@@ -11,7 +11,7 @@ import { compressionService, type CompressionResult } from '../compression/Compr
 export interface RequestContext {
   model: string;
   timestamp: string;
-  provider: 'openai' | 'anthropic' | 'ollama';
+  provider: 'openai' | 'anthropic' | 'gemini' | 'ollama';
 }
 
 /**

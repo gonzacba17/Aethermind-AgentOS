@@ -34,15 +34,17 @@ const FETCH_TIMEOUT_MS = 2_000; // 2 seconds
 const PROVIDER_FALLBACK_MAP: Record<string, string | null> = {
   openai: 'anthropic',
   anthropic: 'openai',
+  gemini: 'openai', // fallback Gemini → OpenAI
   ollama: null, // local — no fallback
 };
 
 /**
  * Model-to-provider mapping for determining provider from model name
  */
-function getProviderForModel(model: string): 'openai' | 'anthropic' | 'ollama' {
+function getProviderForModel(model: string): 'openai' | 'anthropic' | 'gemini' | 'ollama' {
   if (model.startsWith('gpt-') || model.startsWith('o1-')) return 'openai';
   if (model.startsWith('claude-')) return 'anthropic';
+  if (model.startsWith('gemini-')) return 'gemini';
   return 'ollama';
 }
 
