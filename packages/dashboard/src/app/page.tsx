@@ -2,7 +2,7 @@
 
 /**
  * Root page — captures ?token= or ?session= from URL, persists to
- * sessionStorage, then redirects to /home where AuthGuard reads it back.
+ * localStorage, then redirects to /home where AuthGuard reads it back.
  *
  * - ?token=  → client access token (B2B), stored directly
  * - ?session= → temp session ID, exchanged via POST /api/auth/session for

@@ -9,10 +9,10 @@ import { API_URL } from '@/lib/config';
  * Authentication Guard — B2B Beta
  *
  * Token capture happens in app/page.tsx (root page).
- * By the time AuthGuard mounts the token is already in sessionStorage.
+ * By the time AuthGuard mounts the token is already in localStorage.
  *
  * This guard:
- *  1. Reads sessionStorage for client_token
+ *  1. Reads localStorage for client_token
  *  2. If found → validates via GET /api/client/me
  *  3. If valid → populates auth store, renders children
  *  4. If missing or invalid → shows "Contact Aethermind" screen
@@ -23,11 +23,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     async function check() {
-      // Diagnostic: dump sessionStorage state at mount time
-      console.log('[AuthGuard] Mounting — reading sessionStorage...');
-      const allKeys = Object.keys(sessionStorage);
-      console.log('[AuthGuard] sessionStorage keys:', allKeys);
-      console.log('[AuthGuard] Raw client_token value:', sessionStorage.getItem('client_token'));
+      // Diagnostic: dump localStorage state at mount time
+      console.log('[AuthGuard] Mounting — reading localStorage...');
+      const allKeys = Object.keys(localStorage);
+      console.log('[AuthGuard] localStorage keys:', allKeys);
+      console.log('[AuthGuard] Raw client_token value:', localStorage.getItem('client_token'));
 
       const token = getAuthToken();
       console.log('[AuthGuard] getAuthToken() returned:', token ? `${token.slice(0, 8)}…` : 'null');
