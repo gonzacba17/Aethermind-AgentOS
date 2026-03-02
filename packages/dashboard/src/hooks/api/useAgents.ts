@@ -1,8 +1,6 @@
 import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { API_URL } from '@/lib/config';
 import {
-  fetchAgents,
   fetchAgent,
   createAgent,
   executeAgent,
@@ -14,7 +12,7 @@ import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
  * Fetch agents via /api/client/agents (uses X-Client-Token).
- * Falls back to legacy /api/agents on error.
+ * Uses /api/client/agents with X-Client-Token.
  */
 async function fetchClientAgents(): Promise<Agent[]> {
   const res = await apiRequest<{ data: Agent[] }>('/api/client/agents');
@@ -206,14 +204,11 @@ export function useUpdateAgent() {
   
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Agent['config']> }) => {
-      // Note: Update endpoint may need to be added to API
-      const response = await fetch(`${API_URL}/api/agents/${id}`, {
+      return apiRequest(`/api/client/agents/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to update agent');
-      return response.json();
     },
     onSuccess: (data, variables) => {
       // Update the specific agent in cache
@@ -233,10 +228,9 @@ export function useDeleteAgent() {
   
   return useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`${API_URL}/api/agents/${id}`, {
+      await apiRequest(`/api/client/agents/${id}`, {
         method: 'DELETE',
       });
-      if (!response.ok) throw new Error('Failed to delete agent');
     },
     onSuccess: (_, id) => {
       // Remove from cache
@@ -275,7 +269,7 @@ export function useToggleAgentStatus() {
 
   return useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'active' | 'paused' }) => {
-      return apiRequest(`/api/agents/${id}/status`, {
+      return apiRequest(`/api/client/agents/${id}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),

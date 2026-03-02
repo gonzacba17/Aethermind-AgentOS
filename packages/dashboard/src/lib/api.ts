@@ -220,19 +220,15 @@ export interface CostInfo {
 }
 
 export async function fetchAgents(): Promise<Agent[]> {
-  const res = await fetch(`${API_BASE}/api/agents`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, '/api/agents');
-  return res.json();
+  const res = await apiRequest<{ data: Agent[] }>('/api/client/agents');
+  return res.data ?? [];
 }
 
 export async function fetchAgent(id: string): Promise<Agent> {
-  const res = await fetch(`${API_BASE}/api/agents/${id}`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, `/api/agents/${id}`);
-  return res.json();
+  const agents = await fetchAgents();
+  const agent = agents.find(a => a.id === id);
+  if (!agent) throw new Error('Agent not found');
+  return agent;
 }
 
 export async function createAgent(data: {
@@ -245,26 +241,22 @@ export async function createAgent(data: {
   temperature?: number;
   maxTokens?: number;
 }): Promise<Agent> {
-  const res = await fetch(`${API_BASE}/api/agents`, {
+  return apiRequest<Agent>('/api/client/agents', {
     method: 'POST',
-    headers: getHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!res.ok) await handleApiError(res, '/api/agents');
-  return res.json();
 }
 
 export async function executeAgent(
   id: string,
   input: unknown
 ): Promise<ExecutionResult> {
-  const res = await fetch(`${API_BASE}/api/agents/${id}/execute`, {
+  return apiRequest<ExecutionResult>(`/api/client/agents/${id}/execute`, {
     method: 'POST',
-    headers: getHeaders({ 'Content-Type': 'application/json' }),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ input }),
   });
-  if (!res.ok) await handleApiError(res, `/api/agents/${id}/execute`);
-  return res.json();
 }
 
 export async function fetchLogs(params?: {
@@ -276,55 +268,30 @@ export async function fetchLogs(params?: {
 }): Promise<{ logs: LogEntry[]; total: number }> {
   const searchParams = new URLSearchParams();
   if (params?.level) searchParams.set('level', params.level);
-  if (params?.agentId) searchParams.set('agentId', params.agentId);
-  if (params?.executionId) searchParams.set('executionId', params.executionId);
   if (params?.limit) searchParams.set('limit', String(params.limit));
   if (params?.offset) searchParams.set('offset', String(params.offset));
-
-  const res = await fetch(`${API_BASE}/api/logs?${searchParams}`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, '/api/logs');
-  return res.json();
+  return apiRequest<{ logs: LogEntry[]; total: number }>(`/api/client/logs?${searchParams}`);
 }
 
 export async function fetchTraces(): Promise<Trace[]> {
-  const res = await fetch(`${API_BASE}/api/traces`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, '/api/traces');
-  return res.json();
+  return apiRequest<Trace[]>('/api/client/traces');
 }
 
 export async function fetchTrace(id: string): Promise<Trace> {
-  const res = await fetch(`${API_BASE}/api/traces/${id}`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, `/api/traces/${id}`);
-  return res.json();
+  return apiRequest<Trace>(`/api/client/traces/${id}`);
 }
 
 export async function fetchCostSummary(): Promise<CostSummary> {
-  const res = await fetch(`${API_BASE}/api/costs/summary`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, '/api/costs/summary');
-  return res.json();
+  return apiRequest<CostSummary>('/api/client/costs/summary');
 }
 
 export async function fetchExecutions(): Promise<ExecutionResult[]> {
-  const res = await fetch(`${API_BASE}/api/executions`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, '/api/executions');
-  return res.json();
+  return apiRequest<ExecutionResult[]>('/api/client/agents');
 }
 
 export async function fetchHealth(): Promise<{ status: string; timestamp: string }> {
-  const res = await fetch(`${API_BASE}/api/health`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, '/api/health');
+  const res = await fetch(`${API_BASE}/health`);
+  if (!res.ok) throw new Error('Health check failed');
   return res.json();
 }
 
@@ -332,13 +299,11 @@ export async function estimateWorkflowCost(
   workflowName: string,
   input: unknown
 ): Promise<CostEstimate> {
-  const res = await fetch(`${API_BASE}/api/workflows/${workflowName}/estimate`, {
+  return apiRequest<CostEstimate>(`/api/client/agents`, {
     method: 'POST',
-    headers: getHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ input }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workflowName, input }),
   });
-  if (!res.ok) await handleApiError(res, `/api/workflows/${workflowName}/estimate`);
-  return res.json();
 }
 
 export async function fetchCostHistory(params?: {
@@ -351,11 +316,5 @@ export async function fetchCostHistory(params?: {
   if (params?.startDate) searchParams.set('startDate', params.startDate);
   if (params?.endDate) searchParams.set('endDate', params.endDate);
   if (params?.agentId) searchParams.set('agentId', params.agentId);
-  if (params?.workflowName) searchParams.set('workflowName', params.workflowName);
-
-  const res = await fetch(`${API_BASE}/api/costs?${searchParams}`, {
-    headers: getHeaders(),
-  });
-  if (!res.ok) await handleApiError(res, '/api/costs');
-  return res.json();
+  return apiRequest<CostInfo[]>(`/api/client/costs?${searchParams}`);
 }

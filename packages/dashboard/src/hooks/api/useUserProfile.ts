@@ -41,8 +41,22 @@ export function useUserProfile() {
   return useQuery({
     queryKey: userProfileKeys.me(),
     queryFn: async () => {
-      const response = await apiRequest<{ user: UserProfile }>('/api/auth/me');
-      return response.user;
+      const response = await apiRequest<{ id: string; companyName: string; sdkApiKey: string }>('/api/client/me');
+      return {
+        id: response.id,
+        email: '',
+        name: response.companyName,
+        plan: 'pro' as UserProfile['plan'],
+        apiKey: response.sdkApiKey,
+        organizationId: null,
+        hasCompletedOnboarding: true,
+        onboardingStep: 'complete',
+        usageCount: 0,
+        usageLimit: 10000,
+        maxAgents: 100,
+        logRetentionDays: 90,
+        subscriptionStatus: 'active',
+      };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
@@ -58,9 +72,8 @@ export function useTestSDKConnection() {
   return useMutation({
     mutationFn: async (apiKey: string): Promise<SDKConnectionStatus> => {
       // Test the connection by hitting the health endpoint with the API key
-      const response = await fetch(`${API_URL}/api/health`, {
+      const response = await fetch(`${API_URL}/health`, {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
           'X-API-Key': apiKey,
         },
       });

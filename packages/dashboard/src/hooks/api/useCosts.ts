@@ -1,14 +1,13 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { fetchCostSummary, fetchCostHistory, CostSummary, CostInfo } from '@/lib/api';
+import { fetchCostSummary, fetchCostHistory, apiRequest, CostSummary, CostInfo } from '@/lib/api';
 import { MOCK_COST_SUMMARY, MOCK_COST_HISTORY, shouldUseMockData } from '@/lib/mock-data';
 import { useMockDataContext } from '@/contexts/MockDataContext';
-import { API_URL } from '@/lib/config';
-import { 
-  startOfDay, 
-  startOfWeek, 
-  startOfMonth, 
-  startOfQuarter, 
+import {
+  startOfDay,
+  startOfWeek,
+  startOfMonth,
+  startOfQuarter,
   startOfYear,
   subDays,
   format as formatDate,
@@ -111,15 +110,10 @@ export function useBudget(
         };
       }
       
-      const response = await fetch(`${API_URL}/api/costs/budget`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-        },
-      });
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          // No budget configured - return default
+      try {
+        return await apiRequest<BudgetInfo>('/api/client/budget-status');
+      } catch (error) {
+        if ((error as any).status === 404) {
           return {
             limit: 0,
             spent: 0,
@@ -128,10 +122,8 @@ export function useBudget(
             period: 'monthly' as const,
           };
         }
-        throw new Error('Failed to fetch budget');
+        throw error;
       }
-      
-      return response.json();
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
     ...options,

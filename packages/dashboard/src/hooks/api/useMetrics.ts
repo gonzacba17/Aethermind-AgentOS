@@ -1,5 +1,5 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { fetchAgents, fetchTraces, fetchCostSummary, fetchLogs } from '@/lib/api';
+import { fetchAgents, fetchTraces, fetchCostSummary, fetchLogs, apiRequest } from '@/lib/api';
 
 /**
  * Query key for dashboard metrics
@@ -152,6 +152,7 @@ export function useMetrics(
 
 /**
  * Hook for trace time series data (for charts)
+ * Uses /api/client/metrics/timeseries which returns daily aggregates.
  */
 export function useTraceTimeSeries(
   period: '24h' | '7d' | '30d' = '24h'
@@ -159,44 +160,17 @@ export function useTraceTimeSeries(
   return useQuery({
     queryKey: ['metrics', 'traces', 'timeseries', period],
     queryFn: async () => {
-      const traces = await fetchTraces();
-      const traceList = Array.isArray(traces) ? traces : [];
-      
-      const now = Date.now();
-      const periods = {
-        '24h': { duration: 24 * 60 * 60 * 1000, buckets: 24, label: 'hour' },
-        '7d': { duration: 7 * 24 * 60 * 60 * 1000, buckets: 7, label: 'day' },
-        '30d': { duration: 30 * 24 * 60 * 60 * 1000, buckets: 30, label: 'day' },
-      };
-      
-      const { duration, buckets } = periods[period];
-      const bucketSize = duration / buckets;
-      const startTime = now - duration;
-      
-      // Initialize buckets
-      const data: { time: string; traces: number; errors: number }[] = [];
-      
-      for (let i = 0; i < buckets; i++) {
-        const bucketStart = startTime + (i * bucketSize);
-        const bucketEnd = bucketStart + bucketSize;
-        
-        const bucketTraces = traceList.filter((t: any) => {
-          const time = new Date(t.createdAt).getTime();
-          return time >= bucketStart && time < bucketEnd;
-        });
-        
-        const errorCount = bucketTraces.filter(
-          (t: any) => t.rootNode?.error
-        ).length;
-        
-        data.push({
-          time: new Date(bucketStart).toISOString(),
-          traces: bucketTraces.length,
-          errors: errorCount,
-        });
-      }
-      
-      return data;
+      const periodMap = { '24h': '1d', '7d': '7d', '30d': '30d' };
+      const mapped = periodMap[period] || '30d';
+      const raw = await apiRequest<{ date: string; events: number; cost: number; tokens: number }[]>(
+        `/api/client/metrics/timeseries?period=${mapped}`
+      );
+
+      return (raw || []).map((d) => ({
+        time: d.date,
+        traces: d.events,
+        errors: 0,
+      }));
     },
     staleTime: 60 * 1000,
     refetchInterval: 2 * 60 * 1000,

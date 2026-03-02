@@ -12,7 +12,7 @@ function getHeaders(): Record<string, string> {
   if (typeof window !== 'undefined') {
     const token = getAuthToken();
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers['X-Client-Token'] = token;
     }
   }
   return headers;
@@ -172,7 +172,7 @@ export function useForecast(horizonDays: number = 7) {
 
       try {
         const response = await fetch(
-          `${API_BASE}/api/forecasting/forecast?horizonDays=${horizonDays}`,
+          `${API_BASE}/api/client/forecast`,
           { headers: getHeaders() }
         );
 

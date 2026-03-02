@@ -12,7 +12,7 @@ function getHeaders(): Record<string, string> {
   if (typeof window !== 'undefined') {
     const token = getAuthToken();
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers['X-Client-Token'] = token;
     }
   }
   return headers;

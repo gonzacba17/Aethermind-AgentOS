@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users } from '../db/schema.js';
+import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
 import { ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
@@ -2055,6 +2055,218 @@ router.get('/logs', async (req, res) => {
   } catch (error) {
     console.error('[Client Logs] Error:', error);
     res.status(500).json({ error: 'Failed to fetch logs' });
+  }
+});
+
+// ============================================
+// TRACES (B2B client-token accessible)
+// ============================================
+
+/**
+ * GET /api/client/traces?limit=50&offset=0
+ * List traces for executions belonging to the client's organization.
+ */
+router.get('/traces', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const rows = await db
+      .select({
+        id: traces.id,
+        executionId: traces.executionId,
+        treeData: traces.treeData,
+        metadata: traces.metadata,
+        createdAt: traces.createdAt,
+      })
+      .from(traces)
+      .innerJoin(executions, eq(traces.executionId, executions.id))
+      .innerJoin(users, eq(executions.userId, users.id))
+      .where(eq(users.organizationId, client.organizationId))
+      .orderBy(desc(traces.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const data = rows.map((r) => ({
+      id: r.id,
+      executionId: r.executionId,
+      rootNode: r.treeData,
+      metadata: r.metadata,
+      createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
+    }));
+
+    res.json(data);
+  } catch (error) {
+    console.error('[Client Traces] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch traces' });
+  }
+});
+
+/**
+ * GET /api/client/traces/:id
+ * Get a single trace by ID (org-scoped).
+ */
+router.get('/traces/:id', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        id: traces.id,
+        executionId: traces.executionId,
+        treeData: traces.treeData,
+        metadata: traces.metadata,
+        createdAt: traces.createdAt,
+      })
+      .from(traces)
+      .innerJoin(executions, eq(traces.executionId, executions.id))
+      .innerJoin(users, eq(executions.userId, users.id))
+      .where(
+        and(
+          eq(traces.id, req.params.id),
+          eq(users.organizationId, client.organizationId),
+        ),
+      )
+      .limit(1);
+
+    const r = rows[0];
+    if (!r) {
+      res.status(404).json({ error: 'Trace not found' });
+      return;
+    }
+
+    res.json({
+      id: r.id,
+      executionId: r.executionId,
+      rootNode: r.treeData,
+      metadata: r.metadata,
+      createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[Client Traces] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch trace' });
+  }
+});
+
+/**
+ * GET /api/client/costs/summary
+ * Aggregated cost summary for the client's organization.
+ */
+router.get('/costs/summary', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        model: costs.model,
+        totalCost: sql<number>`COALESCE(SUM(${costs.cost}::numeric), 0)`,
+        totalTokens: sql<number>`COALESCE(SUM(${costs.totalTokens}), 0)`,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(costs)
+      .innerJoin(executions, eq(costs.executionId, executions.id))
+      .innerJoin(users, eq(executions.userId, users.id))
+      .where(eq(users.organizationId, client.organizationId))
+      .groupBy(costs.model);
+
+    let total = 0;
+    let totalTokens = 0;
+    let executionCount = 0;
+    const byModel: Record<string, { count: number; tokens: number; cost: number }> = {};
+
+    for (const row of rows) {
+      const cost = Number(row.totalCost);
+      const tokens = Number(row.totalTokens);
+      const count = Number(row.count);
+      total += cost;
+      totalTokens += tokens;
+      executionCount += count;
+      byModel[row.model] = { count, tokens, cost };
+    }
+
+    res.json({ total, totalTokens, executionCount, byModel });
+  } catch (error) {
+    console.error('[Client Costs Summary] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch cost summary' });
+  }
+});
+
+/**
+ * GET /api/client/costs?startDate=...&endDate=...&agentId=...
+ * Cost history for the client's organization.
+ */
+router.get('/costs', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const conditions = [eq(users.organizationId, client.organizationId)];
+
+    if (req.query.startDate) {
+      conditions.push(gte(costs.createdAt, new Date(req.query.startDate as string)));
+    }
+    if (req.query.endDate) {
+      conditions.push(lte(costs.createdAt, new Date(req.query.endDate as string)));
+    }
+
+    const rows = await db
+      .select({
+        id: costs.id,
+        executionId: costs.executionId,
+        model: costs.model,
+        promptTokens: costs.promptTokens,
+        completionTokens: costs.completionTokens,
+        totalTokens: costs.totalTokens,
+        cost: costs.cost,
+        createdAt: costs.createdAt,
+      })
+      .from(costs)
+      .innerJoin(executions, eq(costs.executionId, executions.id))
+      .innerJoin(users, eq(executions.userId, users.id))
+      .where(and(...conditions))
+      .orderBy(desc(costs.createdAt))
+      .limit(500);
+
+    const data = rows.map((r) => ({
+      id: r.id,
+      executionId: r.executionId,
+      model: r.model,
+      promptTokens: r.promptTokens,
+      completionTokens: r.completionTokens,
+      totalTokens: r.totalTokens,
+      cost: Number(r.cost),
+      timestamp: r.createdAt?.toISOString() ?? new Date().toISOString(),
+    }));
+
+    res.json(data);
+  } catch (error) {
+    console.error('[Client Costs] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch costs' });
   }
 });
 

@@ -56,7 +56,7 @@ function getHeaders(): HeadersInit {
   const token = getAuthToken();
   return {
     'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    ...(token ? { 'X-Client-Token': token } : {}),
   };
 }
 
@@ -70,7 +70,7 @@ export function useBudget(
   return useQuery({
     queryKey: budgetKeys.current(),
     queryFn: async (): Promise<BudgetStatus> => {
-      const response = await fetch(`${API_BASE}/api/costs/budget`, {
+      const response = await fetch(`${API_BASE}/api/client/budget-status`, {
         headers: getHeaders(),
       });
       
@@ -126,7 +126,7 @@ export function useBudgets(
   return useQuery({
     queryKey: budgetKeys.list(),
     queryFn: async (): Promise<Budget[]> => {
-      const response = await fetch(`${API_BASE}/api/budgets`, {
+      const response = await fetch(`${API_BASE}/api/client/budgets`, {
         headers: getHeaders(),
       });
       
@@ -153,7 +153,7 @@ export function useCreateBudget() {
   
   return useMutation({
     mutationFn: async (data: CreateBudgetData): Promise<Budget> => {
-      const response = await fetch(`${API_BASE}/api/budgets`, {
+      const response = await fetch(`${API_BASE}/api/client/budgets`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(data),
