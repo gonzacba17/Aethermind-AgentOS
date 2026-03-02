@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { API_URL } from '@/lib/config';
+import { apiRequest, API_BASE } from '@/lib/api';
 import { getAuthToken } from '@/lib/auth-utils';
 
 export const clientAnalyticsKeys = {
@@ -32,24 +32,11 @@ export interface PeriodComparison {
   delta: { cost: number; costPercent: number; tokens: number; requests: number };
 }
 
-async function fetchWithClientToken<T>(path: string): Promise<T> {
-  const token = getAuthToken() || '';
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      'X-Client-Token': token,
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  return res.json();
-}
-
 export function useAgentCosts(period: string = '30d') {
   return useQuery({
     queryKey: clientAnalyticsKeys.agents(period),
     queryFn: async () => {
-      const res = await fetchWithClientToken<{ data: AgentCost[]; period: string }>(
+      const res = await apiRequest<{ data: AgentCost[]; period: string }>(
         `/api/client/analytics/agents?period=${period}`,
       );
       return res.data;
@@ -63,7 +50,7 @@ export function useWorkflowCosts(period: string = '30d') {
   return useQuery({
     queryKey: clientAnalyticsKeys.workflows(period),
     queryFn: async () => {
-      const res = await fetchWithClientToken<{ data: WorkflowCost[]; period: string }>(
+      const res = await apiRequest<{ data: WorkflowCost[]; period: string }>(
         `/api/client/analytics/workflows?period=${period}`,
       );
       return res.data;
@@ -77,7 +64,7 @@ export function usePeriodComparison(period: string = 'month') {
   return useQuery({
     queryKey: clientAnalyticsKeys.comparison(period),
     queryFn: () =>
-      fetchWithClientToken<PeriodComparison>(`/api/client/analytics/comparison?period=${period}`),
+      apiRequest<PeriodComparison>(`/api/client/analytics/comparison?period=${period}`),
     staleTime: 60_000,
     refetchInterval: 2 * 60_000,
   });
@@ -85,7 +72,7 @@ export function usePeriodComparison(period: string = 'month') {
 
 export function exportAnalyticsCSV(period: string = '30d'): void {
   const token = getAuthToken() || '';
-  const url = `${API_URL}/api/client/analytics/export?period=${period}`;
+  const url = `${API_BASE}/api/client/analytics/export?period=${period}`;
 
   fetch(url, {
     headers: { 'X-Client-Token': token },

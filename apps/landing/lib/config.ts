@@ -7,7 +7,7 @@ export const config = {
   /**
    * Backend API URL
    */
-  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'https://aethermindapi-production.up.railway.app/api',
+  apiUrl: process.env.NEXT_PUBLIC_API_URL || 'https://aethermind-agentos-production.up.railway.app/api',
   
   /**
    * Dashboard URL for post-authentication redirect

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { API_URL } from '@/lib/config';
-import { getAuthToken } from '@/lib/auth-utils';
+import { apiRequest } from '@/lib/api';
 
 export const clientForecastKeys = {
   all: ['clientForecast'] as const,
@@ -29,23 +28,10 @@ export interface ModelForecast {
   confidence: 'low' | 'medium' | 'high';
 }
 
-async function fetchWithClientToken<T>(path: string): Promise<T> {
-  const token = getAuthToken() || '';
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      'X-Client-Token': token,
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  return res.json();
-}
-
 export function useClientForecast() {
   return useQuery({
     queryKey: clientForecastKeys.monthly(),
-    queryFn: () => fetchWithClientToken<ClientForecast>('/api/client/forecast'),
+    queryFn: () => apiRequest<ClientForecast>('/api/client/forecast'),
     staleTime: 5 * 60_000,
     refetchInterval: 5 * 60_000,
   });
@@ -55,7 +41,7 @@ export function useClientForecastByModel() {
   return useQuery({
     queryKey: clientForecastKeys.byModel(),
     queryFn: async () => {
-      const res = await fetchWithClientToken<{ data: ModelForecast[]; daysRemaining: number }>(
+      const res = await apiRequest<{ data: ModelForecast[]; daysRemaining: number }>(
         '/api/client/forecast/by-model',
       );
       return res.data;

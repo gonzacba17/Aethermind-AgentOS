@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { API_URL } from '@/lib/config';
-import { getAuthToken } from '@/lib/auth-utils';
+import { apiRequest } from '@/lib/api';
 
 export const clientBudgetKeys = {
   all: ['clientBudgets'] as const,
@@ -32,24 +31,10 @@ export interface CreateClientBudgetData {
   alertThresholds?: number[];
 }
 
-async function fetchWithClientToken<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = getAuthToken() || '';
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      'X-Client-Token': token,
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-    ...init,
-  });
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  return res.json();
-}
-
 export function useClientBudgets() {
   return useQuery({
     queryKey: clientBudgetKeys.list(),
-    queryFn: () => fetchWithClientToken<{ budgets: ClientBudget[] }>('/api/client/budgets'),
+    queryFn: () => apiRequest<{ budgets: ClientBudget[] }>('/api/client/budgets'),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -58,7 +43,7 @@ export function useClientBudgets() {
 export function useClientBudgetStatus() {
   return useQuery({
     queryKey: clientBudgetKeys.status(),
-    queryFn: () => fetchWithClientToken<BudgetEvaluation & { noBudget?: boolean }>('/api/client/budget-status'),
+    queryFn: () => apiRequest<BudgetEvaluation & { noBudget?: boolean }>('/api/client/budget-status'),
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
@@ -68,8 +53,9 @@ export function useCreateClientBudget() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateClientBudgetData) =>
-      fetchWithClientToken<{ budget: ClientBudget; updated: boolean }>('/api/client/budgets', {
+      apiRequest<{ budget: ClientBudget; updated: boolean }>('/api/client/budgets', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
@@ -82,7 +68,7 @@ export function useDeleteClientBudget() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      fetchWithClientToken<{ deleted: boolean }>(`/api/client/budgets/${id}`, {
+      apiRequest<{ deleted: boolean }>(`/api/client/budgets/${id}`, {
         method: 'DELETE',
       }),
     onSuccess: () => {

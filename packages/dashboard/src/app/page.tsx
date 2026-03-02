@@ -23,20 +23,13 @@ export default function RootPage() {
     const token = params.get('token');
     const session = params.get('session');
 
-    console.log('[RootPage] URL search params:', window.location.search);
-    console.log('[RootPage] Token from URL:', token ? `${token.slice(0, 8)}…` : 'null');
-    console.log('[RootPage] Session from URL:', session ? `${session.slice(0, 8)}…` : 'null');
-
     if (token) {
-      // Direct client token — persist and redirect
       setAuthToken(token);
-      console.log('[RootPage] Client token persisted, navigating to /home');
       window.location.href = '/home';
       return;
     }
 
     if (session) {
-      // Session ID — exchange for client token via API
       (async () => {
         try {
           const res = await fetch(`${API_URL}/api/auth/session`, {
@@ -49,9 +42,6 @@ export default function RootPage() {
             const data = await res.json();
             if (data.clientAccessToken) {
               setAuthToken(data.clientAccessToken);
-              console.log('[RootPage] Session exchanged for client token, navigating to /home');
-            } else {
-              console.warn('[RootPage] Session response missing clientAccessToken');
             }
           } else {
             console.error('[RootPage] Session exchange failed:', res.status);
@@ -64,8 +54,6 @@ export default function RootPage() {
       return;
     }
 
-    // No token or session — navigate to /home, AuthGuard will handle
-    console.warn('[RootPage] No token or session in URL — navigating to /home');
     window.location.href = '/home';
   }, []);
 

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { API_URL } from '@/lib/config';
-import { getAuthToken } from '@/lib/auth-utils';
+import { apiRequest } from '@/lib/api';
 
 /**
  * Query key factory for client metrics
@@ -39,23 +38,6 @@ export interface ClientTimeseriesPoint {
   events: number;
 }
 
-// ---------- Fetch helpers ----------
-
-async function fetchWithClientToken<T>(path: string): Promise<T> {
-  const token = getAuthToken() || '';
-  const res = await fetch(`${API_URL}${path}`, {
-    headers: {
-      'X-Client-Token': token,
-      'Content-Type': 'application/json',
-    },
-    credentials: 'include',
-  });
-  if (!res.ok) {
-    throw new Error(`API error ${res.status}`);
-  }
-  return res.json();
-}
-
 // ---------- Hooks ----------
 
 /**
@@ -65,9 +47,7 @@ export function useClientMetrics(period: string = '30d') {
   return useQuery({
     queryKey: clientMetricsKeys.totals(period),
     queryFn: () =>
-      fetchWithClientToken<ClientMetrics>(
-        `/api/client/metrics?period=${period}`,
-      ),
+      apiRequest<ClientMetrics>(`/api/client/metrics?period=${period}`),
     staleTime: 60 * 1000,
     refetchInterval: 2 * 60 * 1000,
   });
@@ -80,7 +60,7 @@ export function useClientMetricsByModel(period: string = '30d') {
   return useQuery({
     queryKey: clientMetricsKeys.byModel(period),
     queryFn: async () => {
-      const res = await fetchWithClientToken<{ data: ClientMetricsByModel[]; period: string }>(
+      const res = await apiRequest<{ data: ClientMetricsByModel[]; period: string }>(
         `/api/client/metrics/by-model?period=${period}`,
       );
       return res.data;
@@ -97,7 +77,7 @@ export function useClientTimeseries(period: string = '30d') {
   return useQuery({
     queryKey: clientMetricsKeys.timeseries(period),
     queryFn: async () => {
-      const res = await fetchWithClientToken<{ data: ClientTimeseriesPoint[]; period: string }>(
+      const res = await apiRequest<{ data: ClientTimeseriesPoint[]; period: string }>(
         `/api/client/metrics/timeseries?period=${period}`,
       );
       return res.data;
