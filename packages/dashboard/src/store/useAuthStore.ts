@@ -17,12 +17,14 @@ interface AuthState {
   logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
   client: null,
   isAuthenticated: false,
   isLoading: true,
 
   initialize: async (): Promise<boolean> => {
+    if (get().isAuthenticated && get().client) return true;
+
     set({ isLoading: true });
 
     const token = getAuthToken();

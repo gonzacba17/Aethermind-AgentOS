@@ -2,38 +2,26 @@ import { QueryClient } from '@tanstack/react-query';
 
 /**
  * React Query Client Configuration
- * 
- * Configured for optimal dashboard performance:
- * - 30 second stale time to reduce unnecessary refetches
- * - 3 retries with exponential backoff for resilience
- * - Window focus refetch for fresh data when returning to tab
+ *
+ * Tuned to avoid 429s with 14+ dashboard widgets:
+ * - 1 min staleTime so cached data is reused across mounts
+ * - No refetch on window-focus or mount — prevents burst of 14+ requests
+ * - Single retry with flat 2 s delay to stay under rate limits
  * - Garbage collection after 5 minutes of inactivity
  */
 export function createQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // Data considered fresh for 30 seconds
-        staleTime: 30 * 1000,
-        
-        // Keep unused data in cache for 5 minutes
+        staleTime: 60 * 1000,
         gcTime: 5 * 60 * 1000,
-        
-        // Retry failed requests 3 times with exponential backoff
-        retry: 3,
-        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-        
-        // Refetch when window regains focus
-        refetchOnWindowFocus: true,
-        
-        // Don't refetch on mount if data is fresh
-        refetchOnMount: true,
-        
-        // Refetch on reconnect
+        retry: 1,
+        retryDelay: 2000,
+        refetchOnWindowFocus: false,
+        refetchOnMount: false,
         refetchOnReconnect: true,
       },
       mutations: {
-        // Retry mutations once on failure
         retry: 1,
         retryDelay: 1000,
       },
