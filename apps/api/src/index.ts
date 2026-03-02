@@ -116,11 +116,26 @@ logger.info(`Auth enabled: ${!shouldDisableAuth && (isProduction || hasApiKey)}`
 
 
 
+const ALLOWED_ORIGINS = [
+  'https://aethermind-page.vercel.app',
+  'https://aethermind-agent-os-dashboard.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  ...CORS_ORIGINS,
+];
+
 const corsOptions: cors.CorsOptions = {
-  origin: CORS_ORIGINS,
+  origin: (origin, callback) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Client-Token"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Client-Token", "X-API-Key", "X-SDK-Key"],
 };
 
 const limiter = rateLimit({
@@ -146,8 +161,11 @@ const app = express();
 // Railway sits behind a proxy, so we need to trust the first proxy in the chain
 app.set('trust proxy', 1);
 
-// Request ID middleware - MUST be first middleware for consistent tracing
-// Assigns unique ID to each request for distributed tracing and log correlation
+// CORS must be the very first middleware so OPTIONS preflight is handled
+// before helmet, rate-limiter, or any other middleware can reject the request
+app.use(cors(corsOptions));
+
+// Request ID middleware for distributed tracing and log correlation
 app.use(requestIdMiddleware);
 
 const server = createServer(app);
@@ -397,7 +415,6 @@ async function startServer(): Promise<void> {
     })
   );
 
-  app.use(cors(corsOptions));
   app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
   app.use(limiter);
 
