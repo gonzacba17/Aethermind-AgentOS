@@ -13,6 +13,15 @@ import { MOCK_AGENTS, shouldUseMockData } from '@/lib/mock-data';
 import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
+ * Fetch agents via /api/client/agents (uses X-Client-Token).
+ * Falls back to legacy /api/agents on error.
+ */
+async function fetchClientAgents(): Promise<Agent[]> {
+  const res = await apiRequest<{ data: Agent[] }>('/api/client/agents');
+  return res.data ?? [];
+}
+
+/**
  * Query key factory for agents
  * Centralized to ensure consistency across components
  */
@@ -97,7 +106,7 @@ export function useAgents(
       
       // Try to fetch from API, fallback to mock data on error
       try {
-        const result = await fetchAgents();
+        const result = await fetchClientAgents();
         
         // Handle legacy API response (array) vs new paginated response
         if (Array.isArray(result)) {

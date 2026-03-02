@@ -1,6 +1,21 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { fetchLogs, LogEntry } from '@/lib/api';
+import { fetchLogs, apiRequest, LogEntry } from '@/lib/api';
 import { MOCK_LOGS, shouldUseMockData } from '@/lib/mock-data';
+
+/**
+ * Fetch logs via /api/client/logs (uses X-Client-Token).
+ */
+async function fetchClientLogs(params: {
+  level?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ logs: LogEntry[]; total: number }> {
+  const sp = new URLSearchParams();
+  if (params.level) sp.set('level', params.level);
+  if (params.limit) sp.set('limit', String(params.limit));
+  if (params.offset) sp.set('offset', String(params.offset));
+  return apiRequest<{ logs: LogEntry[]; total: number }>(`/api/client/logs?${sp}`);
+}
 
 /**
  * Query key factory for logs
@@ -91,10 +106,8 @@ export function useLogs(
       
       // Try to fetch from API, fallback to mock data on error
       try {
-        const response = await fetchLogs({
+        const response = await fetchClientLogs({
           level: filters.level?.[0],
-          agentId: filters.agentId,
-          executionId: filters.executionId,
           limit: filters.limit || 100,
           offset: filters.offset || 0,
         });
@@ -118,7 +131,7 @@ export function useLogStats() {
   return useQuery({
     queryKey: [...logKeys.all, 'stats'],
     queryFn: async () => {
-      const response = await fetchLogs({ limit: 1000 });
+      const response = await fetchClientLogs({ limit: 1000 });
       const logs = response.logs || [];
       
       const stats = {

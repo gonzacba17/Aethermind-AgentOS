@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights } from '../db/schema.js';
+import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
 import { ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
@@ -1937,6 +1937,124 @@ router.get('/benchmarks', async (req, res) => {
   } catch (error) {
     console.error('[Client Benchmarks] Error:', error);
     res.status(500).json({ error: 'Failed to fetch benchmarks' });
+  }
+});
+
+// ============================================
+// AGENTS & LOGS (B2B client-token accessible)
+// ============================================
+
+/**
+ * GET /api/client/agents
+ * List agents belonging to any user in the client's organization.
+ */
+router.get('/agents', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const rows = await db
+      .select({
+        id: agents.id,
+        name: agents.name,
+        model: agents.model,
+        config: agents.config,
+        createdAt: agents.createdAt,
+      })
+      .from(agents)
+      .innerJoin(users, eq(agents.userId, users.id))
+      .where(
+        and(
+          eq(users.organizationId, client.organizationId),
+          isNull(agents.deletedAt),
+        ),
+      )
+      .orderBy(desc(agents.createdAt));
+
+    const data = rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      model: r.model,
+      status: 'idle' as const,
+      config: r.config,
+    }));
+
+    res.json({
+      data,
+      total: data.length,
+      offset: 0,
+      limit: data.length,
+      hasMore: false,
+    });
+  } catch (error) {
+    console.error('[Client Agents] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch agents' });
+  }
+});
+
+/**
+ * GET /api/client/logs?level=error&limit=100&offset=0
+ * List logs for agents belonging to the client's organization.
+ */
+router.get('/logs', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const level = req.query.level as string | undefined;
+
+    const conditions = [
+      eq(users.organizationId, client.organizationId),
+    ];
+
+    if (level) {
+      conditions.push(eq(logs.level, level));
+    }
+
+    const rows = await db
+      .select({
+        id: logs.id,
+        level: logs.level,
+        message: logs.message,
+        metadata: logs.metadata,
+        timestamp: logs.timestamp,
+        agentId: logs.agentId,
+        executionId: logs.executionId,
+      })
+      .from(logs)
+      .innerJoin(agents, eq(logs.agentId, agents.id))
+      .innerJoin(users, eq(agents.userId, users.id))
+      .where(and(...conditions))
+      .orderBy(desc(logs.timestamp))
+      .limit(limit)
+      .offset(offset);
+
+    const data = rows.map((r) => ({
+      id: r.id,
+      level: r.level,
+      message: r.message,
+      metadata: r.metadata,
+      timestamp: r.timestamp?.toISOString() ?? new Date().toISOString(),
+      agentId: r.agentId,
+      executionId: r.executionId,
+    }));
+
+    res.json({ logs: data, total: data.length });
+  } catch (error) {
+    console.error('[Client Logs] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch logs' });
   }
 });
 

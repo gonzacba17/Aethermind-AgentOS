@@ -5,10 +5,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNotificationStore, createNotificationFromEvent } from '@/store';
 import { getAuthToken } from '@/lib/auth-utils';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 
-  (typeof window !== 'undefined' 
-    ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:3001/ws`
-    : 'ws://localhost:3001/ws');
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://aethermind-agentos-production.up.railway.app';
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL ||
+  API_BASE.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws';
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -58,8 +57,8 @@ interface UseWebSocketReturn {
 export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketReturn {
   const {
     autoReconnect = true,
-    maxReconnectAttempts = 5,
-    reconnectDelay = 1000,
+    maxReconnectAttempts = 3,
+    reconnectDelay = 2000,
     debug = false,
   } = options;
 
@@ -189,8 +188,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
         }
       };
 
-      ws.onerror = (error) => {
-        console.error('[WebSocket] Error:', error);
+      ws.onerror = () => {
+        // Silenced — onclose handles reconnection
         setStatus('error');
       };
 
