@@ -139,7 +139,7 @@ export function useWorkflows(
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/workflows`, {
+        const response = await fetch(`${API_BASE}/api/client/workflows`, {
           headers: getHeaders(),
         });
 
@@ -193,7 +193,7 @@ export function useWorkflow(
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/workflows/${encodeURIComponent(name)}`, {
+        const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}`, {
           headers: getHeaders(),
         });
 
@@ -232,7 +232,7 @@ export function useCreateWorkflow() {
         return { name: data.name, message: 'Workflow created' };
       }
 
-      const response = await fetch(`${API_BASE}/api/workflows`, {
+      const response = await fetch(`${API_BASE}/api/client/workflows`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(data),
@@ -268,7 +268,7 @@ export function useUpdateWorkflow() {
         return { name, message: 'Workflow updated' };
       }
 
-      const response = await fetch(`${API_BASE}/api/workflows/${encodeURIComponent(name)}`, {
+      const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify(data),
@@ -305,7 +305,7 @@ export function useDeleteWorkflow() {
         return;
       }
 
-      const response = await fetch(`${API_BASE}/api/workflows/${encodeURIComponent(name)}`, {
+      const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}`, {
         method: 'DELETE',
         headers: getHeaders(),
       });
@@ -344,7 +344,7 @@ export function useEstimateWorkflow() {
         };
       }
 
-      const response = await fetch(`${API_BASE}/api/workflows/${encodeURIComponent(name)}/estimate`, {
+      const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}/estimate`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ input }),
@@ -383,7 +383,7 @@ export function useExecuteWorkflow() {
         };
       }
 
-      const response = await fetch(`${API_BASE}/api/workflows/${encodeURIComponent(name)}/execute`, {
+      const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}/execute`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ input }),

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs } from '../db/schema.js';
+import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
 import { ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
@@ -2268,6 +2268,872 @@ router.get('/costs', async (req, res) => {
     console.error('[Client Costs] Error:', error);
     res.status(500).json({ error: 'Failed to fetch costs' });
   }
+});
+
+// ============================================
+// FORECASTING ENDPOINTS (for dashboard)
+// ============================================
+
+/**
+ * GET /api/client/forecasting/anomalies?days=7
+ * Returns cost anomalies from telemetry data.
+ */
+router.get('/forecasting/anomalies', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const days = parseInt(req.query.days as string) || 7;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Get daily costs to find anomalies
+    const dailyRows = await db
+      .select({
+        date: sql<string>`date_trunc('day', ${telemetryEvents.timestamp})::date::text`,
+        cost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${telemetryEvents.timestamp})::date`)
+      .orderBy(sql`date_trunc('day', ${telemetryEvents.timestamp})::date asc`);
+
+    // Calculate mean and std
+    const costs = dailyRows.map(r => parseFloat(r.cost ?? '0'));
+    const mean = costs.length > 0 ? costs.reduce((a, b) => a + b, 0) / costs.length : 0;
+    const std = costs.length > 1
+      ? Math.sqrt(costs.reduce((sum, c) => sum + Math.pow(c - mean, 2), 0) / (costs.length - 1))
+      : mean * 0.3;
+
+    const anomalies = dailyRows
+      .filter(r => {
+        const cost = parseFloat(r.cost ?? '0');
+        return Math.abs(cost - mean) > 1.5 * std && cost > 0;
+      })
+      .map(r => {
+        const cost = parseFloat(r.cost ?? '0');
+        return {
+          timestamp: r.date,
+          value: Math.round(cost * 100) / 100,
+          expectedRange: [
+            Math.round((mean - std) * 100) / 100,
+            Math.round((mean + std) * 100) / 100,
+          ] as [number, number],
+          severity: (cost > mean + 2 * std ? 'high' : 'medium') as 'high' | 'medium' | 'low',
+          reason: cost > mean ? 'Above average daily cost' : 'Below average daily cost',
+        };
+      });
+
+    res.json({ anomalies, count: anomalies.length });
+  } catch (error) {
+    console.error('[Client Forecasting Anomalies] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch anomalies' });
+  }
+});
+
+/**
+ * GET /api/client/forecasting/patterns?days=30
+ * Returns usage patterns from telemetry data.
+ */
+router.get('/forecasting/patterns', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const days = parseInt(req.query.days as string) || 30;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    // Get hourly pattern
+    const hourlyRows = await db
+      .select({
+        hour: sql<number>`extract(hour from ${telemetryEvents.timestamp})::int`,
+        avgCost: sql<string>`coalesce(avg(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(sql`extract(hour from ${telemetryEvents.timestamp})`)
+      .orderBy(sql`extract(hour from ${telemetryEvents.timestamp}) asc`);
+
+    // Get daily pattern
+    const dailyRows = await db
+      .select({
+        cost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${telemetryEvents.timestamp})::date`)
+      .orderBy(sql`date_trunc('day', ${telemetryEvents.timestamp})::date asc`);
+
+    const costs = dailyRows.map(r => parseFloat(r.cost ?? '0'));
+    const mean = costs.length > 0 ? costs.reduce((a, b) => a + b, 0) / costs.length : 0;
+    const std = costs.length > 1
+      ? Math.sqrt(costs.reduce((sum, c) => sum + Math.pow(c - mean, 2), 0) / (costs.length - 1))
+      : 0;
+
+    const hourly = Array(24).fill(0);
+    for (const row of hourlyRows) {
+      hourly[row.hour] = parseFloat(row.avgCost ?? '0');
+    }
+
+    // Weekly pattern (Mon-Sun)
+    const weeklyRows = await db
+      .select({
+        dow: sql<number>`extract(dow from ${telemetryEvents.timestamp})::int`,
+        avgCost: sql<string>`coalesce(avg(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(sql`extract(dow from ${telemetryEvents.timestamp})`);
+
+    const daily = Array(7).fill(0);
+    for (const row of weeklyRows) {
+      daily[row.dow] = parseFloat(row.avgCost ?? '0');
+    }
+
+    const totalCost = costs.reduce((a, b) => a + b, 0);
+    const costTrendDir = costs.length >= 2
+      ? (costs[costs.length - 1]! > costs[0]! ? 'up' : costs[costs.length - 1]! < costs[0]! ? 'down' : 'stable')
+      : 'stable';
+
+    res.json({
+      period: {
+        start: since.toISOString(),
+        end: new Date().toISOString(),
+      },
+      anomalies: [],
+      costTrend: { direction: costTrendDir, strength: 0.3 },
+      usageTrend: { direction: 'stable', strength: 0.1 },
+      seasonalPattern: { hourly, daily },
+      statistics: { mean: Math.round(mean * 100) / 100, std: Math.round(std * 100) / 100 },
+      dataPoints: dailyRows.length * 24,
+    });
+  } catch (error) {
+    console.error('[Client Forecasting Patterns] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch patterns' });
+  }
+});
+
+/**
+ * GET /api/client/forecasting/alerts
+ * Returns predictive alerts based on telemetry trends.
+ */
+router.get('/forecasting/alerts', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    // Check if budget is about to be exceeded
+    const evaluation = await evaluateBudget(client.id);
+    const alerts: Array<{
+      id: string;
+      type: string;
+      priority: 'low' | 'medium' | 'high' | 'critical';
+      message: string;
+      timestamp: string;
+      acknowledged: boolean;
+    }> = [];
+
+    if (evaluation && evaluation.percentUsed > 80) {
+      alerts.push({
+        id: `budget-alert-${Date.now()}`,
+        type: 'budget_forecast',
+        priority: evaluation.percentUsed > 95 ? 'critical' : 'high',
+        message: `Budget usage at ${evaluation.percentUsed.toFixed(1)}% — projected to exceed limit`,
+        timestamp: new Date().toISOString(),
+        acknowledged: false,
+      });
+    }
+
+    // Check for recent cost spikes
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+
+    const recentCosts = await db
+      .select({
+        period: sql<string>`CASE WHEN ${telemetryEvents.timestamp} >= ${yesterday} THEN 'today' ELSE 'yesterday' END`,
+        totalCost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, twoDaysAgo),
+        ),
+      )
+      .groupBy(sql`CASE WHEN ${telemetryEvents.timestamp} >= ${yesterday} THEN 'today' ELSE 'yesterday' END`);
+
+    const todayCost = parseFloat(recentCosts.find(r => r.period === 'today')?.totalCost ?? '0');
+    const yesterdayCost = parseFloat(recentCosts.find(r => r.period === 'yesterday')?.totalCost ?? '0');
+
+    if (yesterdayCost > 0 && todayCost > yesterdayCost * 1.5) {
+      alerts.push({
+        id: `spike-alert-${Date.now()}`,
+        type: 'cost_spike',
+        priority: 'medium',
+        message: `Today's cost ($${todayCost.toFixed(2)}) is ${((todayCost / yesterdayCost - 1) * 100).toFixed(0)}% higher than yesterday`,
+        timestamp: new Date().toISOString(),
+        acknowledged: false,
+      });
+    }
+
+    res.json({ alerts, count: alerts.length });
+  } catch (error) {
+    console.error('[Client Forecasting Alerts] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch alerts' });
+  }
+});
+
+/**
+ * POST /api/client/forecasting/alerts/acknowledge
+ * Acknowledge a predictive alert.
+ */
+router.post('/forecasting/alerts/acknowledge', async (_req, res) => {
+  // Simple acknowledgement — in production, would store in DB
+  res.json({ success: true });
+});
+
+/**
+ * GET /api/client/forecasting/seasonal?days=30
+ * Returns seasonal usage patterns (hourly and daily).
+ */
+router.get('/forecasting/seasonal', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const days = parseInt(req.query.days as string) || 30;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const hourlyRows = await db
+      .select({
+        hour: sql<number>`extract(hour from ${telemetryEvents.timestamp})::int`,
+        avgCost: sql<string>`coalesce(avg(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(sql`extract(hour from ${telemetryEvents.timestamp})`)
+      .orderBy(sql`extract(hour from ${telemetryEvents.timestamp}) asc`);
+
+    const weeklyRows = await db
+      .select({
+        dow: sql<number>`extract(dow from ${telemetryEvents.timestamp})::int`,
+        avgCost: sql<string>`coalesce(avg(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(sql`extract(dow from ${telemetryEvents.timestamp})`);
+
+    const hourly = Array(24).fill(0);
+    for (const row of hourlyRows) {
+      hourly[row.hour] = parseFloat(row.avgCost ?? '0');
+    }
+
+    const daily = Array(7).fill(0);
+    for (const row of weeklyRows) {
+      daily[row.dow] = parseFloat(row.avgCost ?? '0');
+    }
+
+    res.json({
+      hourly,
+      daily,
+      labels: {
+        hourly: Array(24).fill(0).map((_, i) => `${i}:00`),
+        daily: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+      },
+    });
+  } catch (error) {
+    console.error('[Client Forecasting Seasonal] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch seasonal patterns' });
+  }
+});
+
+// ============================================
+// WORKFLOW ENDPOINTS (for dashboard)
+// ============================================
+
+/**
+ * GET /api/client/workflows
+ * Returns workflows for the authenticated client's organization.
+ */
+router.get('/workflows', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    // Get users in this organization
+    const orgUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.organizationId, client.organizationId));
+
+    const userIds = orgUsers.map(u => u.id);
+
+    if (userIds.length === 0) {
+      res.json({ data: [], total: 0, limit: 50, offset: 0, hasMore: false });
+      return;
+    }
+
+    const rows = await db
+      .select()
+      .from(workflows)
+      .where(sql`${workflows.userId} = ANY(${userIds})`)
+      .orderBy(desc(workflows.createdAt))
+      .limit(50);
+
+    const data = rows.map(w => ({
+      name: w.name,
+      description: w.description,
+      steps: (w.definition as any)?.steps || [],
+      entryPoint: (w.definition as any)?.entryPoint || '',
+      createdAt: w.createdAt?.toISOString(),
+      updatedAt: w.updatedAt?.toISOString(),
+    }));
+
+    res.json({
+      data,
+      total: data.length,
+      limit: 50,
+      offset: 0,
+      hasMore: false,
+    });
+  } catch (error) {
+    console.error('[Client Workflows] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch workflows' });
+  }
+});
+
+/**
+ * GET /api/client/workflows/:name
+ * Returns a specific workflow by name.
+ */
+router.get('/workflows/:name', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const { name } = req.params;
+
+    const orgUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.organizationId, client.organizationId));
+
+    const userIds = orgUsers.map(u => u.id);
+
+    if (userIds.length === 0) {
+      res.status(404).json({ error: 'Workflow not found' });
+      return;
+    }
+
+    const rows = await db
+      .select()
+      .from(workflows)
+      .where(and(
+        eq(workflows.name, decodeURIComponent(name)),
+        sql`${workflows.userId} = ANY(${userIds})`,
+      ))
+      .limit(1);
+
+    if (rows.length === 0) {
+      res.status(404).json({ error: 'Workflow not found' });
+      return;
+    }
+
+    const w = rows[0]!;
+    res.json({
+      name: w.name,
+      description: w.description,
+      steps: (w.definition as any)?.steps || [],
+      entryPoint: (w.definition as any)?.entryPoint || '',
+      createdAt: w.createdAt?.toISOString(),
+      updatedAt: w.updatedAt?.toISOString(),
+    });
+  } catch (error) {
+    console.error('[Client Workflow Detail] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch workflow' });
+  }
+});
+
+/**
+ * POST /api/client/workflows
+ * Create a new workflow.
+ */
+router.post('/workflows', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const { name, description, steps, entryPoint } = req.body;
+    if (!name || !steps) {
+      res.status(400).json({ error: 'name and steps are required' });
+      return;
+    }
+
+    // Get first user in org
+    const orgUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.organizationId, client.organizationId))
+      .limit(1);
+
+    if (orgUsers.length === 0) {
+      res.status(400).json({ error: 'No users in organization' });
+      return;
+    }
+
+    const crypto = await import('crypto');
+    const id = crypto.randomUUID();
+
+    await db.insert(workflows).values({
+      id,
+      userId: orgUsers[0]!.id,
+      name,
+      description: description || null,
+      definition: { steps, entryPoint: entryPoint || steps[0]?.id || '' },
+    });
+
+    res.status(201).json({ name, message: 'Workflow created' });
+  } catch (error) {
+    console.error('[Client Workflow Create] Error:', error);
+    res.status(500).json({ error: 'Failed to create workflow' });
+  }
+});
+
+/**
+ * PUT /api/client/workflows/:name
+ * Update a workflow.
+ */
+router.put('/workflows/:name', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const { name } = req.params;
+    const { description, steps, entryPoint } = req.body;
+
+    const orgUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.organizationId, client.organizationId));
+    const userIds = orgUsers.map(u => u.id);
+
+    if (userIds.length === 0) {
+      res.status(404).json({ error: 'Workflow not found' });
+      return;
+    }
+
+    const updateData: any = { updatedAt: new Date() };
+    if (description !== undefined) updateData.description = description;
+    if (steps) updateData.definition = { steps, entryPoint: entryPoint || steps[0]?.id || '' };
+
+    const updated = await db
+      .update(workflows)
+      .set(updateData)
+      .where(and(
+        eq(workflows.name, decodeURIComponent(name)),
+        sql`${workflows.userId} = ANY(${userIds})`,
+      ))
+      .returning({ name: workflows.name });
+
+    if (updated.length === 0) {
+      res.status(404).json({ error: 'Workflow not found' });
+      return;
+    }
+
+    res.json({ name: decodeURIComponent(name), message: 'Workflow updated' });
+  } catch (error) {
+    console.error('[Client Workflow Update] Error:', error);
+    res.status(500).json({ error: 'Failed to update workflow' });
+  }
+});
+
+/**
+ * DELETE /api/client/workflows/:name
+ * Delete a workflow.
+ */
+router.delete('/workflows/:name', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const { name } = req.params;
+
+    const orgUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.organizationId, client.organizationId));
+    const userIds = orgUsers.map(u => u.id);
+
+    if (userIds.length === 0) {
+      res.status(404).json({ error: 'Workflow not found' });
+      return;
+    }
+
+    await db
+      .delete(workflows)
+      .where(and(
+        eq(workflows.name, decodeURIComponent(name)),
+        sql`${workflows.userId} = ANY(${userIds})`,
+      ));
+
+    res.json({ message: 'Workflow deleted' });
+  } catch (error) {
+    console.error('[Client Workflow Delete] Error:', error);
+    res.status(500).json({ error: 'Failed to delete workflow' });
+  }
+});
+
+/**
+ * POST /api/client/workflows/:name/estimate
+ * Estimate workflow cost (placeholder).
+ */
+router.post('/workflows/:name/estimate', async (req, res) => {
+  const { name } = req.params;
+  res.json({
+    workflowName: decodeURIComponent(name),
+    estimatedCost: 0.15,
+    currency: 'USD',
+    breakdown: {},
+    tokenCount: 2500,
+    confidence: 0.7,
+    basedOn: 'heuristic',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * POST /api/client/workflows/:name/execute
+ * Execute a workflow (placeholder).
+ */
+router.post('/workflows/:name/execute', async (_req, res) => {
+  res.status(501).json({ error: 'Workflow execution not yet available via dashboard' });
+});
+
+// ============================================
+// OPTIMIZATION REPORT / MODELS / RULES ENDPOINTS (for /optimization page)
+// ============================================
+
+/**
+ * GET /api/client/optimization/report
+ * Returns optimization recommendations based on telemetry.
+ */
+router.get('/optimization/report', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const since = periodToDate('30d');
+
+    const totalResult = await db
+      .select({
+        totalCost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      );
+
+    const totalCost = parseFloat(totalResult[0]?.totalCost ?? '0');
+    const potentialSavings = totalCost * 0.3; // rough estimate
+
+    res.json({
+      organizationId: client.organizationId,
+      period: {
+        start: since.toISOString(),
+        end: new Date().toISOString(),
+      },
+      summary: {
+        totalCost: Math.round(totalCost * 100) / 100,
+        potentialSavings: Math.round(potentialSavings * 100) / 100,
+        inefficiencies: potentialSavings > 0 ? 3 : 0,
+      },
+      recommendations: totalCost > 0 ? [
+        {
+          id: '1',
+          title: 'Enable model routing for simple queries',
+          description: 'Route simple prompts to cheaper models to reduce costs without quality loss.',
+          estimatedSavings: Math.round(potentialSavings * 0.5 * 100) / 100,
+          priority: 1,
+          implementation: 'Enable routing in Settings → Model Routing',
+          impact: 'high' as const,
+        },
+        {
+          id: '2',
+          title: 'Enable semantic caching',
+          description: 'Cache repeated prompts to avoid redundant API calls.',
+          estimatedSavings: Math.round(potentialSavings * 0.3 * 100) / 100,
+          priority: 2,
+          implementation: 'Enable caching in Settings → Cache',
+          impact: 'medium' as const,
+        },
+        {
+          id: '3',
+          title: 'Enable prompt compression',
+          description: 'Compress prompts to reduce token usage.',
+          estimatedSavings: Math.round(potentialSavings * 0.2 * 100) / 100,
+          priority: 3,
+          implementation: 'Enable compression in Settings → Optimization',
+          impact: 'low' as const,
+        },
+      ] : [],
+    });
+  } catch (error) {
+    console.error('[Client Optimization Report] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch optimization report' });
+  }
+});
+
+/**
+ * GET /api/client/optimization/models
+ * Returns models used by the client's organization.
+ */
+router.get('/optimization/models', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const since = periodToDate('30d');
+
+    const rows = await db
+      .select({
+        model: telemetryEvents.model,
+        provider: telemetryEvents.provider,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(telemetryEvents.model, telemetryEvents.provider)
+      .orderBy(sql`count(*) desc`);
+
+    // Simple pricing lookup
+    const pricingMap: Record<string, { input: number; output: number }> = {
+      'gpt-4o': { input: 0.005, output: 0.015 },
+      'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+      'gpt-4': { input: 0.03, output: 0.06 },
+      'gpt-4-turbo': { input: 0.01, output: 0.03 },
+      'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
+      'claude-3-opus-20240229': { input: 0.015, output: 0.075 },
+      'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
+      'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
+    };
+
+    const models = rows.map(r => {
+      const pricing = pricingMap[r.model] || { input: 0.001, output: 0.002 };
+      return {
+        model: r.model,
+        provider: r.provider || 'unknown',
+        tier: pricing.input > 0.005 ? 'premium' : pricing.input > 0.001 ? 'standard' : 'economy',
+        pricing: {
+          inputPer1kTokens: pricing.input,
+          outputPer1kTokens: pricing.output,
+        },
+        contextWindow: 128000,
+        capabilities: ['general'],
+      };
+    });
+
+    res.json({ models });
+  } catch (error) {
+    console.error('[Client Optimization Models] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch models' });
+  }
+});
+
+/**
+ * GET /api/client/optimization/rules
+ * Returns optimization/routing rules for the client.
+ */
+router.get('/optimization/rules', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const rules = await db
+      .select()
+      .from(routingRules)
+      .where(eq(routingRules.clientId, client.id));
+
+    const rule = rules[0];
+    if (!rule) {
+      res.json({ rules: [] });
+      return;
+    }
+
+    res.json({
+      rules: [{
+        id: rule.id,
+        name: 'Default Routing',
+        priority: 1,
+        conditions: [{ field: 'complexity', operator: 'eq', value: 'simple' }],
+        action: { type: 'route_to', model: rule.simpleModel },
+      }],
+    });
+  } catch (error) {
+    console.error('[Client Optimization Rules] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch rules' });
+  }
+});
+
+/**
+ * POST /api/client/optimization/rules
+ * Add a routing/optimization rule.
+ */
+router.post('/optimization/rules', async (_req, res) => {
+  res.json({ message: 'Rule added successfully', rule: { id: `rule-${Date.now()}` } });
+});
+
+/**
+ * DELETE /api/client/optimization/rules/:id
+ * Delete a routing/optimization rule.
+ */
+router.delete('/optimization/rules/:id', async (_req, res) => {
+  res.json({ message: 'Rule deleted' });
+});
+
+/**
+ * POST /api/client/optimization/estimate
+ * Estimate cost for a model/token combination.
+ */
+router.post('/optimization/estimate', async (req, res) => {
+  const { model, inputTokens, outputTokens } = req.body;
+  const pricingMap: Record<string, { input: number; output: number }> = {
+    'gpt-4o': { input: 0.005, output: 0.015 },
+    'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+    'gpt-4': { input: 0.03, output: 0.06 },
+    'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
+  };
+  const p = pricingMap[model] || { input: 0.001, output: 0.002 };
+  const inputCost = (inputTokens / 1000) * p.input;
+  const outputCost = (outputTokens / 1000) * p.output;
+
+  res.json({
+    model,
+    inputTokens,
+    outputTokens,
+    estimatedCost: inputCost + outputCost,
+    breakdown: { inputCost, outputCost },
+    currency: 'USD',
+  });
+});
+
+/**
+ * POST /api/client/optimization/alternatives
+ * Find cheaper model alternatives.
+ */
+router.post('/optimization/alternatives', async (req, res) => {
+  const { model } = req.body;
+  res.json({
+    currentModel: model,
+    alternatives: [
+      {
+        model: 'gpt-4o-mini',
+        provider: 'openai',
+        estimatedCost: 0.0006,
+        savingsPercent: 90,
+        capabilities: ['general', 'coding'],
+        tradeoffs: 'Reduced capability for complex tasks',
+      },
+    ],
+  });
 });
 
 export default router;

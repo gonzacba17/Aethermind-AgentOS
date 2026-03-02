@@ -213,7 +213,7 @@ export function useOptimizationReport() {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/optimization/report`, {
+        const response = await fetch(`${API_BASE}/api/client/optimization/report`, {
           headers: getHeaders(),
         });
 
@@ -253,7 +253,7 @@ export function useAvailableModels() {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/optimization/models`, {
+        const response = await fetch(`${API_BASE}/api/client/optimization/models`, {
           headers: getHeaders(),
         });
 
@@ -291,7 +291,7 @@ export function useRoutingRules() {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/optimization/rules`, {
+        const response = await fetch(`${API_BASE}/api/client/optimization/rules`, {
           headers: getHeaders(),
         });
 
@@ -336,7 +336,7 @@ export function useEstimateCost() {
         };
       }
 
-      const response = await fetch(`${API_BASE}/api/optimization/estimate`, {
+      const response = await fetch(`${API_BASE}/api/client/optimization/estimate`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ model, inputTokens, outputTokens }),
@@ -391,7 +391,7 @@ export function useFindAlternatives() {
         return { currentModel: model, alternatives };
       }
 
-      const response = await fetch(`${API_BASE}/api/optimization/alternatives`, {
+      const response = await fetch(`${API_BASE}/api/client/optimization/alternatives`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ model, maxAlternatives, minSavingsPercent }),
@@ -419,7 +419,7 @@ export function useAddRoutingRule() {
         };
       }
 
-      const response = await fetch(`${API_BASE}/api/optimization/rules`, {
+      const response = await fetch(`${API_BASE}/api/client/optimization/rules`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(rule),
@@ -447,7 +447,7 @@ export function useDeleteRoutingRule() {
         return;
       }
 
-      const response = await fetch(`${API_BASE}/api/optimization/rules/${ruleId}`, {
+      const response = await fetch(`${API_BASE}/api/client/optimization/rules/${ruleId}`, {
         method: 'DELETE',
         headers: getHeaders(),
       });

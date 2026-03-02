@@ -13,6 +13,26 @@ import {
   format as formatDate,
 } from 'date-fns';
 
+// Metrics response from /api/client/metrics (telemetry-based)
+interface ClientMetricsResponse {
+  totalCost: number;
+  totalTokens: number;
+  totalEvents: number;
+  avgLatency: number;
+  errorCount: number;
+  successRate: number;
+  period: string;
+}
+
+// Metrics by model from /api/client/metrics/by-model
+interface ClientMetricsByModelEntry {
+  model: string;
+  cost: number;
+  tokens: number;
+  count: number;
+  avgLatency: number;
+}
+
 /**
  * Query key factory for costs
  */
@@ -72,7 +92,30 @@ export function useCostSummary(
       }
 
       try {
-        return await fetchCostSummary();
+        // Use telemetry-based metrics endpoint (same as dashboard main)
+        const metrics = await apiRequest<ClientMetricsResponse>('/api/client/metrics?period=30d');
+        
+        // Also get by-model breakdown
+        let byModel: Record<string, { count: number; tokens: number; cost: number }> = {};
+        try {
+          const byModelRes = await apiRequest<{ data: ClientMetricsByModelEntry[] }>('/api/client/metrics/by-model?period=30d');
+          for (const entry of (byModelRes.data ?? [])) {
+            byModel[entry.model] = {
+              count: entry.count,
+              tokens: entry.tokens,
+              cost: entry.cost,
+            };
+          }
+        } catch {
+          // by-model is optional, continue without it
+        }
+
+        return {
+          total: metrics.totalCost ?? 0,
+          totalTokens: metrics.totalTokens ?? 0,
+          executionCount: metrics.totalEvents ?? 0,
+          byModel,
+        } as CostSummary;
       } catch (error) {
         console.warn('[useCostSummary] API request failed, using mock data:', error);
         if (!reportedRef.current) {

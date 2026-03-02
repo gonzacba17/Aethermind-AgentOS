@@ -216,7 +216,7 @@ export function usePatterns(days: number = 30) {
 
       try {
         const response = await fetch(
-          `${API_BASE}/api/forecasting/patterns?days=${days}`,
+          `${API_BASE}/api/client/forecasting/patterns?days=${days}`,
           { headers: getHeaders() }
         );
 
@@ -260,7 +260,7 @@ export function useAnomalies(days: number = 7) {
 
       try {
         const response = await fetch(
-          `${API_BASE}/api/forecasting/anomalies?days=${days}`,
+          `${API_BASE}/api/client/forecasting/anomalies?days=${days}`,
           { headers: getHeaders() }
         );
 
@@ -291,7 +291,7 @@ export function useForecastingAlerts() {
 
       try {
         const response = await fetch(
-          `${API_BASE}/api/forecasting/alerts`,
+          `${API_BASE}/api/client/forecasting/alerts`,
           { headers: getHeaders() }
         );
 
@@ -333,7 +333,7 @@ export function useSeasonalPatterns(days: number = 30) {
 
       try {
         const response = await fetch(
-          `${API_BASE}/api/forecasting/seasonal?days=${days}`,
+          `${API_BASE}/api/client/forecasting/seasonal?days=${days}`,
           { headers: getHeaders() }
         );
 
@@ -371,7 +371,7 @@ export function useAcknowledgeAlert() {
         return { success: true };
       }
 
-      const response = await fetch(`${API_BASE}/api/forecasting/alerts/acknowledge`, {
+      const response = await fetch(`${API_BASE}/api/client/forecasting/alerts/acknowledge`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ alertId, action }),
