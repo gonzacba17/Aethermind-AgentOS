@@ -54,7 +54,7 @@ export interface ABInsightEntry {
 export function useRoutingRules() {
   return useQuery<RoutingRules>({
     queryKey: ['routing-rules'],
-    queryFn: () => apiRequest<RoutingRules>('/client/routing/rules'),
+    queryFn: () => apiRequest<RoutingRules>('/api/client/routing/rules'),
     staleTime: 30_000,
   });
 }
@@ -63,7 +63,7 @@ export function useUpdateRoutingRules() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (rules: Partial<RoutingRules> & { enabled: boolean }) =>
-      apiRequest<{ rule: RoutingRules; created: boolean }>('/client/routing/rules', {
+      apiRequest<{ rule: RoutingRules; created: boolean }>('/api/client/routing/rules', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(rules),
@@ -77,7 +77,7 @@ export function useUpdateRoutingRules() {
 export function useProviderHealth() {
   return useQuery<{ providers: ProviderHealthEntry[] }>({
     queryKey: ['provider-health'],
-    queryFn: () => apiRequest<{ providers: ProviderHealthEntry[] }>('/client/routing/provider-health'),
+    queryFn: () => apiRequest<{ providers: ProviderHealthEntry[] }>('/api/client/routing/provider-health'),
     refetchInterval: 60_000, // Refresh every minute
     staleTime: 30_000,
   });
@@ -86,7 +86,7 @@ export function useProviderHealth() {
 export function useOptimizationData(period: string = '30d') {
   return useQuery<OptimizationData>({
     queryKey: ['optimization-data', period],
-    queryFn: () => apiRequest<OptimizationData>(`/client/routing/optimization?period=${period}`),
+    queryFn: () => apiRequest<OptimizationData>(`/api/client/routing/optimization?period=${period}`),
     staleTime: 60_000,
   });
 }
@@ -94,7 +94,7 @@ export function useOptimizationData(period: string = '30d') {
 export function useABInsights(period: string = '30d') {
   return useQuery<{ data: ABInsightEntry[]; period: string }>({
     queryKey: ['ab-insights', period],
-    queryFn: () => apiRequest<{ data: ABInsightEntry[]; period: string }>(`/client/routing/ab-insights?period=${period}`),
+    queryFn: () => apiRequest<{ data: ABInsightEntry[]; period: string }>(`/api/client/routing/ab-insights?period=${period}`),
     staleTime: 60_000,
   });
 }

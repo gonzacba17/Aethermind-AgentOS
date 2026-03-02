@@ -46,7 +46,7 @@ export const clientCacheKeys = {
 export function useCacheStats(period: string = '30d') {
   return useQuery<CacheStats>({
     queryKey: clientCacheKeys.stats(period),
-    queryFn: () => apiRequest<CacheStats>(`/client/cache/stats?period=${period}`),
+    queryFn: () => apiRequest<CacheStats>(`/api/client/cache/stats?period=${period}`),
     staleTime: 30_000,
   });
 }
@@ -54,7 +54,7 @@ export function useCacheStats(period: string = '30d') {
 export function useCacheSettings() {
   return useQuery<CacheSettings>({
     queryKey: clientCacheKeys.settings,
-    queryFn: () => apiRequest<CacheSettings>('/client/cache/settings'),
+    queryFn: () => apiRequest<CacheSettings>('/api/client/cache/settings'),
     staleTime: 30_000,
   });
 }
@@ -63,7 +63,7 @@ export function useUpdateCacheSettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (settings: Partial<CacheSettings>) =>
-      apiRequest<CacheSettings>('/client/cache/settings', {
+      apiRequest<CacheSettings>('/api/client/cache/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
@@ -78,7 +78,7 @@ export function usePurgeCache() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () =>
-      apiRequest<{ purged: number }>('/client/cache/entries', {
+      apiRequest<{ purged: number }>('/api/client/cache/entries', {
         method: 'DELETE',
       }),
     onSuccess: () => {

@@ -46,7 +46,7 @@ export const clientBenchmarkKeys = {
 export function useClientBenchmarks() {
   return useQuery<BenchmarkComparison>({
     queryKey: clientBenchmarkKeys.comparison(),
-    queryFn: () => apiRequest<BenchmarkComparison>('/client/benchmarks'),
+    queryFn: () => apiRequest<BenchmarkComparison>('/api/client/benchmarks'),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }

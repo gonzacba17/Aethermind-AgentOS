@@ -35,7 +35,7 @@ export const clientInsightKeys = {
 export function useClientInsights() {
   return useQuery<{ insights: ClientInsight[] }>({
     queryKey: clientInsightKeys.patterns(),
-    queryFn: () => apiRequest<{ insights: ClientInsight[] }>('/client/insights/patterns'),
+    queryFn: () => apiRequest<{ insights: ClientInsight[] }>('/api/client/insights/patterns'),
     staleTime: 30_000,
   });
 }
@@ -43,7 +43,7 @@ export function useClientInsights() {
 export function useClientInsightsHistory() {
   return useQuery<{ insights: ClientInsight[] }>({
     queryKey: clientInsightKeys.history(),
-    queryFn: () => apiRequest<{ insights: ClientInsight[] }>('/client/insights/history'),
+    queryFn: () => apiRequest<{ insights: ClientInsight[] }>('/api/client/insights/history'),
     staleTime: 30_000,
   });
 }
@@ -52,7 +52,7 @@ export function useApplyInsight() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (insightId: string) =>
-      apiRequest<{ success: boolean; appliedAt: string }>(`/client/insights/${insightId}/apply`, {
+      apiRequest<{ success: boolean; appliedAt: string }>(`/api/client/insights/${insightId}/apply`, {
         method: 'POST',
       }),
     onSuccess: () => {
@@ -65,7 +65,7 @@ export function useDismissInsight() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (insightId: string) =>
-      apiRequest<{ success: boolean; dismissedAt: string }>(`/client/insights/${insightId}/dismiss`, {
+      apiRequest<{ success: boolean; dismissedAt: string }>(`/api/client/insights/${insightId}/dismiss`, {
         method: 'POST',
       }),
     onSuccess: () => {
