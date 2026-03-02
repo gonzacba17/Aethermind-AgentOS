@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts"
-import { useTraceTimeSeries } from "@/hooks"
+import { useClientTimeseries } from "@/hooks"
 import { ChartSkeleton } from "@/components/ui/skeleton"
 import { AlertCircle, RefreshCw } from "lucide-react"
 
@@ -65,7 +65,12 @@ function CustomTooltip({ active, payload, label }: any) {
  * Connected to real data via useTraceTimeSeries hook.
  */
 export function TracesChart() {
-  const { data, isLoading, error, refetch } = useTraceTimeSeries('24h');
+  const { data: rawData, isLoading, error, refetch } = useClientTimeseries('30d');
+  const data = rawData?.map(point => ({
+    time: point.date,
+    traces: point.events,
+    errors: 0,
+  }));
 
   if (isLoading) {
     return <ChartSkeleton />;
@@ -108,7 +113,7 @@ export function TracesChart() {
           <div>
             <CardTitle className="text-lg font-semibold text-foreground">Traces Over Time</CardTitle>
             <p className="text-sm text-muted-foreground">
-              {totalTraces.toLocaleString()} traces in the last 24 hours
+              {totalTraces.toLocaleString()} events in the last 30 days
               {totalErrors > 0 && (
                 <span className="text-destructive ml-2">
                   ({totalErrors} errors)

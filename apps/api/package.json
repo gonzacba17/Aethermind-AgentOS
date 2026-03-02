@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "@aethermind/core": "workspace:*",
-    "@aethermind/sdk": "workspace:*",
+
     "@sendgrid/mail": "^8.1.0",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",

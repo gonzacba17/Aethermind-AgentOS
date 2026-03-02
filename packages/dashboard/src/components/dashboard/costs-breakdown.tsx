@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Cell } from "recharts"
-import { useCostsByModel, useCostSummary, useClientMetricsByModel } from "@/hooks"
+import { useClientMetricsByModel } from "@/hooks"
 import { ChartSkeleton } from "@/components/ui/skeleton"
 import { AlertCircle, RefreshCw, ExternalLink } from "lucide-react"
 
@@ -68,10 +68,7 @@ function CustomTooltip({ active, payload }: any) {
  */
 export function CostsBreakdown() {
   const router = useRouter();
-  const { data: costsByModel, isLoading: legacyLoading, error, refetch } = useCostsByModel();
-  const { data: summary } = useCostSummary();
-  const { data: clientByModel, isLoading: clientLoading } = useClientMetricsByModel('30d');
-  const isLoading = legacyLoading && clientLoading;
+  const { data: clientByModel, isLoading, error, refetch } = useClientMetricsByModel('30d');
 
   const handleViewAll = () => {
     router.push('/costs');
@@ -101,15 +98,12 @@ export function CostsBreakdown() {
     );
   }
 
-  // Prefer telemetry-based client metrics when available
-  const sourceData = clientByModel && clientByModel.length > 0
-    ? clientByModel.map(item => ({
-        model: item.model,
-        cost: item.cost,
-        tokens: item.tokens,
-        usage: 0, // Computed below
-      }))
-    : (costsByModel || []);
+  const sourceData = (clientByModel || []).map(item => ({
+    model: item.model,
+    cost: item.cost,
+    tokens: item.tokens,
+    usage: 0,
+  }));
 
   // Transform data for chart with colors
   const chartData = sourceData.map(item => ({
@@ -117,7 +111,7 @@ export function CostsBreakdown() {
     color: getColorForModel(item.model),
   })).sort((a, b) => b.cost - a.cost);
 
-  const totalCost = summary?.total || chartData.reduce((sum, item) => sum + item.cost, 0);
+  const totalCost = chartData.reduce((sum, item) => sum + item.cost, 0);
 
   // Compute usage percentage
   for (const item of chartData) {

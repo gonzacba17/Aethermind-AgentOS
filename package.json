@@ -9,8 +9,7 @@
   },
   "workspaces": [
     "packages/*",
-    "apps/*",
-    "examples/*"
+    "apps/*"
   ],
   "scripts": {
     "dev": "turbo run dev",
@@ -22,11 +21,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",
-    "test:all": "pnpm test && pnpm test:integration && pnpm test:e2e",
-    "test:integration": "turbo run test:integration",
-    "test:e2e": "tsx scripts/test/e2e-pipeline.ts",
-    "demo": "tsx examples/demo.ts",
-    "validate": "tsx examples/validate-system.ts",
+    "test:all": "pnpm test",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "clean": "turbo run clean && rimraf node_modules",
