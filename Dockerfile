@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Aethermind AgentOS
 # Stages: base → deps → builder → api | dashboard
 
-FROM node:20-alpine AS base
+FROM node:25-alpine AS base
 RUN npm install -g pnpm@9
 
 # ── Install dependencies ─────────────────────────────────────────────
