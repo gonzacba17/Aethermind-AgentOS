@@ -260,7 +260,7 @@ export function useAlerts(filters?: { enabled?: boolean }) {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/budgets/actions/rules`, {
+        const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
           headers: getHeaders(),
         });
 
@@ -303,7 +303,7 @@ export function useAlert(id: string) {
       }
 
       try {
-        const response = await fetch(`${API_BASE}/api/budgets/actions/rules`, {
+        const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
           headers: getHeaders(),
         });
 
@@ -378,7 +378,7 @@ export function useCreateAlert() {
         return newAlert;
       }
 
-      const response = await fetch(`${API_BASE}/api/budgets/actions/rules`, {
+      const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify(transformToActionRule(data)),
@@ -414,7 +414,7 @@ export function useUpdateAlert() {
         return MOCK_ALERTS[index];
       }
 
-      const response = await fetch(`${API_BASE}/api/budgets/actions/rules/${id}`, {
+      const response = await fetch(`${API_BASE}/api/client/alerts/rules/${id}`, {
         method: 'PATCH',
         headers: getHeaders(),
         body: JSON.stringify({
@@ -467,7 +467,7 @@ export function useDeleteAlert() {
         return;
       }
 
-      const response = await fetch(`${API_BASE}/api/budgets/actions/rules/${id}`, {
+      const response = await fetch(`${API_BASE}/api/client/alerts/rules/${id}`, {
         method: 'DELETE',
         headers: getHeaders(),
       });
@@ -499,7 +499,7 @@ export function useToggleAlert() {
         return MOCK_ALERTS[index];
       }
 
-      const response = await fetch(`${API_BASE}/api/budgets/actions/rules/${id}`, {
+      const response = await fetch(`${API_BASE}/api/client/alerts/rules/${id}`, {
         method: 'PATCH',
         headers: getHeaders(),
         body: JSON.stringify({ enabled }),

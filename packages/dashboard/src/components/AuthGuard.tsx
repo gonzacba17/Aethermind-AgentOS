@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { LOGIN_URL } from '@/lib/config';
 
 /**
  * Authentication Guard — B2B Beta
@@ -26,6 +27,16 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [initialize]);
 
+  // Auto-redirect to login when denied
+  useEffect(() => {
+    if (status === 'denied') {
+      const timer = setTimeout(() => {
+        window.location.href = `${LOGIN_URL}?redirect=dashboard`;
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [status]);
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -48,14 +59,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             Aethermind AgentOS
           </h1>
           <p className="text-muted-foreground mb-6">
-            This dashboard is available to authorized beta clients only.
-            If you believe you should have access, please contact the Aethermind team.
+            Session expired or not authenticated. Redirecting to login...
           </p>
           <a
-            href="mailto:support@aethermind.io"
+            href={`${LOGIN_URL}?redirect=dashboard`}
             className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
-            Contact Aethermind for Access
+            Go to Login
           </a>
         </div>
       </div>

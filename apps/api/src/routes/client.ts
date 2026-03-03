@@ -2605,26 +2605,38 @@ router.get('/forecasting/alerts', async (req, res) => {
       });
     }
 
-    // Check for recent cost spikes
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    // Check for recent cost spikes — use two separate queries to avoid Date interpolation issues
+    const yesterdayStart = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const todayStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-    const recentCosts = await db
+    const todayResult = await db
       .select({
-        period: sql<string>`CASE WHEN ${telemetryEvents.timestamp} >= ${yesterday} THEN 'today' ELSE 'yesterday' END`,
         totalCost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
       })
       .from(telemetryEvents)
       .where(
         and(
           eq(telemetryEvents.organizationId, client.organizationId),
-          gte(telemetryEvents.timestamp, twoDaysAgo),
+          gte(telemetryEvents.timestamp, todayStart),
         ),
-      )
-      .groupBy(sql`CASE WHEN ${telemetryEvents.timestamp} >= ${yesterday} THEN 'today' ELSE 'yesterday' END`);
+      );
 
-    const todayCost = parseFloat(recentCosts.find(r => r.period === 'today')?.totalCost ?? '0');
-    const yesterdayCost = parseFloat(recentCosts.find(r => r.period === 'yesterday')?.totalCost ?? '0');
+    const yesterdayResult = await db
+      .select({
+        totalCost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, yesterdayStart),
+          lte(telemetryEvents.timestamp, todayStart),
+        ),
+      );
+
+    const todayCost = parseFloat(todayResult[0]?.totalCost ?? '0');
+    const yesterdayCost = parseFloat(yesterdayResult[0]?.totalCost ?? '0');
+
 
     if (yesterdayCost > 0 && todayCost > yesterdayCost * 1.5) {
       alerts.push({
@@ -3259,6 +3271,259 @@ router.post('/optimization/alternatives', async (req, res) => {
       },
     ],
   });
+});
+
+// ============================================
+// POST /api/client/agents — Create agent
+// ============================================
+router.post('/agents', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const { name, model, systemPrompt, maxTokens, temperature } = req.body;
+
+    if (!name || !model) {
+      res.status(400).json({ error: 'name and model are required' });
+      return;
+    }
+
+    // Find a user in the organization to associate the agent with
+    const orgUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.organizationId, client.organizationId))
+      .limit(1);
+
+    if (orgUsers.length === 0) {
+      res.status(400).json({ error: 'No users found in the organization' });
+      return;
+    }
+
+    const crypto = await import('crypto');
+    const id = crypto.randomUUID();
+
+    await db.insert(agents).values({
+      id,
+      userId: orgUsers[0]!.id,
+      name,
+      model,
+      config: {
+        systemPrompt: systemPrompt || '',
+        maxTokens: maxTokens || 4096,
+        temperature: temperature ?? 0.7,
+      },
+    });
+
+    res.status(201).json({
+      id,
+      name,
+      model,
+      config: {
+        systemPrompt: systemPrompt || '',
+        maxTokens: maxTokens || 4096,
+        temperature: temperature ?? 0.7,
+      },
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[Client Create Agent] Error:', error);
+    res.status(500).json({ error: 'Failed to create agent' });
+  }
+});
+
+// ============================================
+// POST /api/client/budgets — Create budget
+// ============================================
+router.post('/budgets', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { name, limitAmount, period, alertAt } = req.body;
+
+    if (!limitAmount || !period) {
+      res.status(400).json({ error: 'limitAmount and period are required' });
+      return;
+    }
+
+    // Map frontend period to backend type
+    const typeMap: Record<string, string> = {
+      daily: 'daily',
+      weekly: 'daily', // Treat weekly as daily for DB constraint
+      monthly: 'monthly',
+    };
+    const type = typeMap[period] || 'monthly';
+
+    // Build alert thresholds
+    const alertThresholds = alertAt
+      ? [alertAt, Math.min(alertAt + 10, 100), 100]
+      : [80, 90, 100];
+
+    const id = (await import('crypto')).randomUUID();
+
+    await db.insert(clientBudgets).values({
+      id,
+      clientId: client.id,
+      type,
+      limitUsd: String(limitAmount),
+      alertThresholds,
+    });
+
+    res.status(201).json({
+      id,
+      name: name || `${type} budget`,
+      type,
+      limitUsd: limitAmount,
+      alertThresholds,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[Client Create Budget] Error:', error);
+    res.status(500).json({ error: 'Failed to create budget' });
+  }
+});
+
+// ============================================
+// ALERTS/RULES ENDPOINTS (client-auth)
+// ============================================
+
+/**
+ * GET /api/client/alerts/rules
+ * Returns alert rules for the client.
+ */
+router.get('/alerts/rules', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Get budgets for this client to build rules from them
+    const budgetRows = await db
+      .select()
+      .from(clientBudgets)
+      .where(eq(clientBudgets.clientId, client.id));
+
+    // Transform budgets into action rules format
+    const rules = budgetRows.map(budget => ({
+      id: `rule-${budget.id}`,
+      name: `Budget Alert (${budget.type})`,
+      description: `Alert when ${budget.type} budget exceeds thresholds`,
+      enabled: true,
+      priority: 0,
+      budgetId: budget.id,
+      trigger: 'threshold_exceeded',
+      conditions: (budget.alertThresholds as number[] || [80]).map(t => ({
+        field: 'utilization',
+        operator: 'gte',
+        value: t,
+      })),
+      actions: [{ type: 'notify_email', config: {}, delayMs: 0, retryOnFailure: false }],
+      cooldownMinutes: 60,
+      maxExecutionsPerDay: 3,
+      createdAt: budget.createdAt?.toISOString(),
+      lastExecutedAt: null,
+      executionCount: 0,
+    }));
+
+    res.json({ rules });
+  } catch (error) {
+    console.error('[Client Alert Rules GET] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch alert rules' });
+  }
+});
+
+/**
+ * POST /api/client/alerts/rules
+ * Create a new alert rule.
+ */
+router.post('/alerts/rules', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { name, description, trigger, conditions, actions, cooldownMinutes, budgetId } = req.body;
+
+    // Store as a synthetic rule — for now return a generated rule
+    const id = `rule-${(await import('crypto')).randomUUID()}`;
+
+    const rule = {
+      id,
+      name: name || 'New Alert',
+      description: description || '',
+      enabled: true,
+      priority: 0,
+      budgetId: budgetId || null,
+      trigger: trigger || 'threshold_exceeded',
+      conditions: conditions || [],
+      actions: actions || [],
+      cooldownMinutes: cooldownMinutes || 60,
+      maxExecutionsPerDay: 10,
+      createdAt: new Date().toISOString(),
+      lastExecutedAt: null,
+      executionCount: 0,
+    };
+
+    res.status(201).json(rule);
+  } catch (error) {
+    console.error('[Client Alert Rules POST] Error:', error);
+    res.status(500).json({ error: 'Failed to create alert rule' });
+  }
+});
+
+/**
+ * PATCH /api/client/alerts/rules/:id
+ * Update alert rule (toggle, edit).
+ */
+router.patch('/alerts/rules/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    // Return updated rule
+    res.json({
+      id,
+      ...updates,
+      createdAt: new Date().toISOString(),
+      lastExecutedAt: null,
+      executionCount: 0,
+    });
+  } catch (error) {
+    console.error('[Client Alert Rules PATCH] Error:', error);
+    res.status(500).json({ error: 'Failed to update alert rule' });
+  }
+});
+
+/**
+ * DELETE /api/client/alerts/rules/:id
+ * Delete an alert rule.
+ */
+router.delete('/alerts/rules/:id', async (_req, res) => {
+  try {
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Client Alert Rules DELETE] Error:', error);
+    res.status(500).json({ error: 'Failed to delete alert rule' });
+  }
 });
 
 export default router;

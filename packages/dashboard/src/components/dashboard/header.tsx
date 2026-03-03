@@ -1,11 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Home, Settings, Bell } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { API_URL } from "@/lib/config"
+import { API_URL, LANDING_PAGE_URL } from "@/lib/config"
 
 export function DashboardHeader() {
   const [apiConnected, setApiConnected] = useState<boolean | null>(null)
@@ -43,10 +42,10 @@ export function DashboardHeader() {
           asChild
           className="gap-2 bg-transparent border-border text-foreground hover:bg-secondary"
         >
-          <Link href="/">
+          <a href={LANDING_PAGE_URL}>
             <Home className="h-4 w-4" />
             Back to Home
-          </Link>
+          </a>
         </Button>
 
         {/* API Status Badge */}

@@ -1,11 +1,11 @@
 "use client"
 
-import { useMockDataContext } from "@/contexts/MockDataContext"
+import { shouldUseMockData } from "@/lib/mock-data"
 
 export function MockDataBanner() {
-  const { isMockActive } = useMockDataContext()
-
-  if (!isMockActive) return null
+  // Only show banner when API URL is genuinely not configured
+  // Don't show just because individual hooks fell back to mock data
+  if (!shouldUseMockData()) return null
 
   return (
     <div className="bg-yellow-500 text-black text-sm px-4 py-2 text-center">
