@@ -45,7 +45,7 @@ export function useUserApiKeys() {
   return useQuery({
     queryKey: userApiKeyKeys.list(),
     queryFn: async () => {
-      const response = await apiRequest<{ keys: UserApiKey[] }>('/api/user/api-keys');
+      const response = await apiRequest<{ keys: UserApiKey[] }>('/api/client/api-keys');
       return response.keys;
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -60,7 +60,7 @@ export function useAddApiKey() {
 
   return useMutation({
     mutationFn: async (data: AddApiKeyData) => {
-      const response = await apiRequest<{ key: UserApiKey }>('/api/user/api-keys', {
+      const response = await apiRequest<{ key: UserApiKey }>('/api/client/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -81,7 +81,7 @@ export function useDeleteApiKey() {
 
   return useMutation({
     mutationFn: async (keyId: string) => {
-      await apiRequest(`/api/user/api-keys/${keyId}`, {
+      await apiRequest(`/api/client/api-keys/${keyId}`, {
         method: 'DELETE',
       });
     },
@@ -100,7 +100,7 @@ export function useValidateApiKey() {
   return useMutation({
     mutationFn: async (keyId: string) => {
       const response = await apiRequest<{ valid: boolean; error?: string }>(
-        `/api/user/api-keys/${keyId}/validate`,
+        `/api/client/api-keys/${keyId}/validate`,
         { method: 'POST' }
       );
       return response;
@@ -119,7 +119,7 @@ export function useProviderUsage(provider: string) {
     queryKey: userApiKeyKeys.usage(provider),
     queryFn: async () => {
       const response = await apiRequest<{ provider: string; message: string; usage: any }>(
-        `/api/user/api-keys/${provider}/usage`
+        `/api/client/api-keys/${provider}/usage`
       );
       return response;
     },

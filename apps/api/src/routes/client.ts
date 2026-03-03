@@ -222,14 +222,19 @@ router.post('/budgets', async (req, res) => {
       return;
     }
 
-    const { type, limitUsd, alertThresholds } = req.body;
+    // Accept both dashboard format (limitAmount, period, alertAt)
+    // and API format (type, limitUsd, alertThresholds)
+    const type = req.body.type || (req.body.period === 'daily' ? 'daily' : 'monthly');
+    const limitUsd = req.body.limitUsd || req.body.limitAmount;
+    const alertThresholds = req.body.alertThresholds
+      || (req.body.alertAt ? [req.body.alertAt, Math.min(req.body.alertAt + 10, 100), 100] : undefined);
 
     if (!type || !['monthly', 'daily'].includes(type)) {
-      res.status(400).json({ error: 'type must be "monthly" or "daily"' });
+      res.status(400).json({ error: 'type/period must be "monthly" or "daily"' });
       return;
     }
-    if (!limitUsd || isNaN(parseFloat(limitUsd)) || parseFloat(limitUsd) <= 0) {
-      res.status(400).json({ error: 'limitUsd must be a positive number' });
+    if (!limitUsd || isNaN(parseFloat(String(limitUsd))) || parseFloat(String(limitUsd)) <= 0) {
+      res.status(400).json({ error: 'limitUsd/limitAmount must be a positive number' });
       return;
     }
 
@@ -238,6 +243,7 @@ router.post('/budgets', async (req, res) => {
       res.status(400).json({ error: 'alertThresholds must be an array of numbers between 1 and 100' });
       return;
     }
+
 
     // Check if budget of this type already exists — update it
     const existing = await db
@@ -1427,6 +1433,132 @@ router.get('/cache/stats', async (req, res) => {
 // ============================================
 // OPTIMIZATION ENDPOINTS (Phase 4)
 // ============================================
+
+/**
+ * GET /api/client/optimization/report
+ * Returns cost optimization report with real telemetry data.
+ */
+router.get('/optimization/report', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // Get total cost from telemetry
+    const totalResult = await db
+      .select({
+        totalCost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+        totalRequests: sql<number>`count(*)::int`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      );
+
+    const totalCost = parseFloat(totalResult[0]?.totalCost ?? '0');
+    const totalRequests = totalResult[0]?.totalRequests ?? 0;
+
+    // Get model breakdown for recommendations
+    const modelBreakdown = await db
+      .select({
+        model: telemetryEvents.model,
+        cost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(telemetryEvents.model)
+      .orderBy(sql`sum(${telemetryEvents.cost}::numeric) desc`);
+
+    // Generate recommendations based on actual usage
+    const recommendations = [];
+    const potentialSavings = totalCost * 0.25; // Estimate 25% savings potential
+
+    for (const m of modelBreakdown) {
+      const modelCost = parseFloat(m.cost ?? '0');
+      const modelName = m.model || 'unknown';
+
+      // Recommend cheaper alternatives for expensive models
+      if (modelName.includes('gpt-4') && !modelName.includes('mini')) {
+        recommendations.push({
+          id: `rec-${modelName}`,
+          type: 'model_switch',
+          priority: 'high' as const,
+          title: `Switch ${modelName} to gpt-4o-mini for simple tasks`,
+          description: `You spent $${modelCost.toFixed(2)} on ${modelName} (${m.count} requests). Consider routing simple queries to gpt-4o-mini.`,
+          estimatedSavings: Math.round(modelCost * 0.6 * 100) / 100,
+          effort: 'low' as const,
+        });
+      }
+      if (modelName.includes('claude-3-opus')) {
+        recommendations.push({
+          id: `rec-${modelName}`,
+          type: 'model_switch',
+          priority: 'medium' as const,
+          title: `Use claude-3-haiku for lighter ${modelName} workloads`,
+          description: `${m.count} requests to ${modelName} at $${modelCost.toFixed(2)}. Route non-complex tasks to claude-3-haiku.`,
+          estimatedSavings: Math.round(modelCost * 0.5 * 100) / 100,
+          effort: 'low' as const,
+        });
+      }
+    }
+
+    // Add generic recommendations
+    if (totalCost > 0) {
+      recommendations.push({
+        id: 'rec-prompt-compression',
+        type: 'prompt_optimization',
+        priority: 'medium' as const,
+        title: 'Enable prompt compression',
+        description: 'Automatically compress prompts to reduce token usage by 15-30% without quality loss.',
+        estimatedSavings: Math.round(totalCost * 0.15 * 100) / 100,
+        effort: 'low' as const,
+      });
+      recommendations.push({
+        id: 'rec-caching',
+        type: 'caching',
+        priority: 'low' as const,
+        title: 'Enable semantic caching',
+        description: 'Cache similar prompts to avoid duplicate API calls and reduce costs.',
+        estimatedSavings: Math.round(totalCost * 0.1 * 100) / 100,
+        effort: 'medium' as const,
+      });
+    }
+
+    res.json({
+      organizationId: client.organizationId,
+      period: {
+        start: since.toISOString(),
+        end: new Date().toISOString(),
+      },
+      summary: {
+        totalCost: Math.round(totalCost * 100) / 100,
+        potentialSavings: Math.round(potentialSavings * 100) / 100,
+        inefficiencies: recommendations.length,
+        totalRequests,
+      },
+      recommendations,
+    });
+  } catch (error) {
+    console.error('[Client Optimization Report] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch optimization report' });
+  }
+});
+
 
 /**
  * POST /api/client/optimization/analyze
@@ -3226,6 +3358,47 @@ router.delete('/optimization/rules/:id', async (_req, res) => {
   res.json({ message: 'Rule deleted' });
 });
 
+// ============================================
+// API KEYS ENDPOINT (for Settings page)
+// ============================================
+
+/**
+ * GET /api/client/api-keys
+ * Returns the client's API key info for the Settings/API Keys page.
+ */
+router.get('/api-keys', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Return the client's SDK API key as a UserApiKey-compatible object
+    const sdkKey = client.sdkApiKey || '';
+    const maskedKey = sdkKey.length > 8
+      ? sdkKey.slice(0, 4) + '•'.repeat(sdkKey.length - 8) + sdkKey.slice(-4)
+      : '•'.repeat(24);
+
+    const keys = [{
+      id: `key-${client.id}`,
+      provider: 'aethermind' as const,
+      name: 'Aethermind SDK Key',
+      maskedKey,
+      isValid: true,
+      lastValidated: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    }];
+
+    res.json({ keys });
+  } catch (error) {
+    console.error('[Client API Keys] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch API keys' });
+  }
+});
+
 /**
  * POST /api/client/optimization/estimate
  * Estimate cost for a model/token combination.
@@ -3337,62 +3510,6 @@ router.post('/agents', async (req, res) => {
   }
 });
 
-// ============================================
-// POST /api/client/budgets — Create budget
-// ============================================
-router.post('/budgets', async (req, res) => {
-  try {
-    const clientReq = req as ClientAuthenticatedRequest;
-    const client = clientReq.client;
-
-    if (!client?.id) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    const { name, limitAmount, period, alertAt } = req.body;
-
-    if (!limitAmount || !period) {
-      res.status(400).json({ error: 'limitAmount and period are required' });
-      return;
-    }
-
-    // Map frontend period to backend type
-    const typeMap: Record<string, string> = {
-      daily: 'daily',
-      weekly: 'daily', // Treat weekly as daily for DB constraint
-      monthly: 'monthly',
-    };
-    const type = typeMap[period] || 'monthly';
-
-    // Build alert thresholds
-    const alertThresholds = alertAt
-      ? [alertAt, Math.min(alertAt + 10, 100), 100]
-      : [80, 90, 100];
-
-    const id = (await import('crypto')).randomUUID();
-
-    await db.insert(clientBudgets).values({
-      id,
-      clientId: client.id,
-      type,
-      limitUsd: String(limitAmount),
-      alertThresholds,
-    });
-
-    res.status(201).json({
-      id,
-      name: name || `${type} budget`,
-      type,
-      limitUsd: limitAmount,
-      alertThresholds,
-      createdAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error('[Client Create Budget] Error:', error);
-    res.status(500).json({ error: 'Failed to create budget' });
-  }
-});
 
 // ============================================
 // ALERTS/RULES ENDPOINTS (client-auth)
