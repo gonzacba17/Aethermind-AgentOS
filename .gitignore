@@ -30,8 +30,8 @@ coverage
 # Build artifacts that shouldn't be committed
 .pnpm-store
 
-# Logs directory
-logs/
+# Logs directory (only root-level, not Next.js route dirs)
+/logs/
 *.log
 
 # Backups (local development only)

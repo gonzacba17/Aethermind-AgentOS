@@ -2271,8 +2271,133 @@ router.get('/costs', async (req, res) => {
 });
 
 // ============================================
-// FORECASTING ENDPOINTS (for dashboard)
+// COSTS CHART ENDPOINTS (telemetry-based, for /costs page charts)
 // ============================================
+
+/**
+ * GET /api/client/costs/daily?period=30d
+ * Returns daily cost breakdown from telemetry_events.
+ */
+router.get('/costs/daily', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const period = (req.query.period as string) || '30d';
+    const since = periodToDate(period);
+
+    const rows = await db
+      .select({
+        date: sql<string>`date_trunc('day', ${telemetryEvents.timestamp})::date::text`,
+        cost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+        requests: sql<number>`count(*)::int`,
+        tokens: sql<number>`coalesce(sum(${telemetryEvents.totalTokens}), 0)::int`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${telemetryEvents.timestamp})::date`)
+      .orderBy(sql`date_trunc('day', ${telemetryEvents.timestamp})::date asc`);
+
+    const data = rows.map((r, i) => {
+      const cost = parseFloat(r.cost ?? '0');
+      const prevCost = i > 0 ? parseFloat(rows[i - 1]!.cost ?? '0') : cost;
+      const change = prevCost > 0 ? ((cost - prevCost) / prevCost) * 100 : 0;
+
+      return {
+        date: r.date,
+        cost: Math.round(cost * 1000000) / 1000000,
+        requests: r.requests,
+        tokens: r.tokens,
+        executions: r.requests,
+        change: Math.round(change * 10) / 10,
+      };
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error('[Client Costs Daily] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch daily costs' });
+  }
+});
+
+/**
+ * GET /api/client/costs/by-model?period=30d
+ * Returns cost breakdown by model from telemetry_events.
+ */
+router.get('/costs/by-model', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const period = (req.query.period as string) || '30d';
+    const since = periodToDate(period);
+
+    // Total cost for percentage calculation
+    const totalResult = await db
+      .select({
+        total: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      );
+    const totalCost = parseFloat(totalResult[0]?.total ?? '0');
+
+    const rows = await db
+      .select({
+        model: telemetryEvents.model,
+        provider: telemetryEvents.provider,
+        cost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+        requests: sql<number>`count(*)::int`,
+        tokens: sql<number>`coalesce(sum(${telemetryEvents.totalTokens}), 0)::int`,
+      })
+      .from(telemetryEvents)
+      .where(
+        and(
+          eq(telemetryEvents.organizationId, client.organizationId),
+          gte(telemetryEvents.timestamp, since),
+        ),
+      )
+      .groupBy(telemetryEvents.model, telemetryEvents.provider)
+      .orderBy(sql`sum(${telemetryEvents.cost}::numeric) desc`);
+
+    const data = rows.map(r => {
+      const cost = parseFloat(r.cost ?? '0');
+      return {
+        model: r.model,
+        provider: r.provider || 'unknown',
+        cost: Math.round(cost * 1000000) / 1000000,
+        requests: r.requests,
+        tokens: r.tokens,
+        usage: totalCost > 0 ? Math.round((cost / totalCost) * 100) : 0,
+      };
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error('[Client Costs By Model] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch costs by model' });
+  }
+});
+
 
 /**
  * GET /api/client/forecasting/anomalies?days=7

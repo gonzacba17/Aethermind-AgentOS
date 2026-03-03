@@ -211,55 +211,43 @@ export function useDailyCosts(
   period: string = 'week',
   options?: Omit<UseQueryOptions<DailyCost[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { reportMockFallback } = useMockDataContext();
+  const reportedRef = useRef(false);
+
   return useQuery({
     queryKey: costKeys.daily(period),
     queryFn: async () => {
-      const dateRange = getDateRangeForPeriod(period as CostFilters['period']);
-      const costs = await fetchCostHistory({
-        startDate: dateRange.from,
-        endDate: dateRange.to,
-      });
-      
-      // Group by day
-      const dailyMap = new Map<string, { cost: number; tokens: number; executions: number }>();
-      
-      for (const cost of costs) {
-        const date = formatDate(new Date(cost.timestamp), 'yyyy-MM-dd');
-        const existing = dailyMap.get(date) || { cost: 0, tokens: 0, executions: 0 };
-        dailyMap.set(date, {
-          cost: existing.cost + cost.cost,
-          tokens: existing.tokens + cost.totalTokens,
-          executions: existing.executions + 1,
-        });
+      if (shouldUseMockData()) {
+        if (!reportedRef.current) {
+          reportMockFallback('useDailyCosts', 'NEXT_PUBLIC_API_URL not configured');
+          reportedRef.current = true;
+        }
+        return [];
       }
-      
-      // Convert to array and calculate changes
-      const dailyCosts: DailyCost[] = [];
-      const sortedDates = Array.from(dailyMap.keys()).sort().reverse();
-      
-      for (let i = 0; i < sortedDates.length; i++) {
-        const date = sortedDates[i];
-        const data = dailyMap.get(date)!;
-        const prevData = i < sortedDates.length - 1 
-          ? dailyMap.get(sortedDates[i + 1]) 
-          : null;
-        
-        const change = prevData && prevData.cost > 0
-          ? ((data.cost - prevData.cost) / prevData.cost) * 100
-          : 0;
-        
-        dailyCosts.push({
-          date,
-          cost: data.cost,
-          tokens: data.tokens,
-          executions: data.executions,
-          change: Math.round(change * 10) / 10,
-        });
+
+      try {
+        // Map period names to API format
+        const periodMap: Record<string, string> = {
+          today: '1d',
+          yesterday: '2d',
+          week: '7d',
+          month: '30d',
+          quarter: '90d',
+          year: '365d',
+        };
+        const apiPeriod = periodMap[period] || '30d';
+        const data = await apiRequest<DailyCost[]>(`/api/client/costs/daily?period=${apiPeriod}`);
+        return data ?? [];
+      } catch (error) {
+        console.warn('[useDailyCosts] API request failed:', error);
+        if (!reportedRef.current) {
+          reportMockFallback('useDailyCosts', `API request failed: ${(error as Error).message}`);
+          reportedRef.current = true;
+        }
+        return [];
       }
-      
-      return dailyCosts.slice(0, 7); // Last 7 days
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
     ...options,
   });
 }
@@ -271,29 +259,70 @@ export function useCostsByModel(
   period: string = 'month',
   options?: Omit<UseQueryOptions<CostByModel[]>, 'queryKey' | 'queryFn'>
 ) {
+  const { reportMockFallback } = useMockDataContext();
+  const reportedRef = useRef(false);
+
   return useQuery({
     queryKey: costKeys.byModel(period),
     queryFn: async () => {
-      const summary = await fetchCostSummary();
-      
+      if (shouldUseMockData()) {
+        if (!reportedRef.current) {
+          reportMockFallback('useCostsByModel', 'NEXT_PUBLIC_API_URL not configured');
+          reportedRef.current = true;
+        }
+        return [];
+      }
+
       const modelColors: Record<string, string> = {
         'gpt-4': 'bg-violet-500',
         'gpt-4-turbo': 'bg-violet-400',
-        'gpt-3.5-turbo': 'bg-emerald-500',
+        'gpt-4o': 'bg-violet-600',
+        'gpt-4o-mini': 'bg-emerald-500',
+        'gpt-3.5-turbo': 'bg-emerald-400',
         'claude-3': 'bg-blue-500',
         'claude-3-opus': 'bg-blue-600',
         'claude-3-sonnet': 'bg-blue-400',
+        'claude-3-haiku': 'bg-blue-300',
       };
-      
-      const total = summary.total || 0;
-      
-      return Object.entries(summary.byModel || {}).map(([model, data]) => ({
-        model,
-        usage: total > 0 ? Math.round((data.cost / total) * 100) : 0,
-        cost: data.cost,
-        tokens: data.tokens,
-        color: modelColors[model.toLowerCase()] || 'bg-amber-500',
-      }));
+
+      try {
+        const periodMap: Record<string, string> = {
+          today: '1d',
+          yesterday: '2d',
+          week: '7d',
+          month: '30d',
+          quarter: '90d',
+          year: '365d',
+        };
+        const apiPeriod = periodMap[period] || '30d';
+        interface ByModelEntry {
+          model: string;
+          provider: string;
+          cost: number;
+          requests: number;
+          tokens: number;
+          usage: number;
+        }
+        const data = await apiRequest<ByModelEntry[]>(`/api/client/costs/by-model?period=${apiPeriod}`);
+        
+        return (data ?? []).map(entry => {
+          const colorKey = Object.keys(modelColors).find(k => entry.model.toLowerCase().includes(k));
+          return {
+            model: entry.model,
+            usage: entry.usage,
+            cost: entry.cost,
+            tokens: entry.tokens,
+            color: colorKey ? modelColors[colorKey]! : 'bg-amber-500',
+          };
+        });
+      } catch (error) {
+        console.warn('[useCostsByModel] API request failed:', error);
+        if (!reportedRef.current) {
+          reportMockFallback('useCostsByModel', `API request failed: ${(error as Error).message}`);
+          reportedRef.current = true;
+        }
+        return [];
+      }
     },
     staleTime: 5 * 60 * 1000,
     ...options,
