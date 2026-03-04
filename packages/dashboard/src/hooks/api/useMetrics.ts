@@ -50,16 +50,15 @@ export function useMetrics(
     queryKey: metricsKeys.current(),
     queryFn: async () => {
       // Fetch data from multiple sources in parallel
+      // Each endpoint can fail independently without breaking the others
       const [agents, traces, costSummary, logs] = await Promise.all([
-        fetchAgents().catch(() => []),
-        fetchTraces().catch(() => []),
-        fetchCostSummary().catch(() => ({ 
-          total: 0, 
-          totalTokens: 0, 
-          executionCount: 0, 
-          byModel: {} 
-        })),
-        fetchLogs({ limit: 500 }).catch(() => ({ logs: [], total: 0 })),
+        fetchAgents().catch((err) => { console.warn('[useMetrics] Failed to fetch agents:', err); return []; }),
+        fetchTraces().catch((err) => { console.warn('[useMetrics] Failed to fetch traces:', err); return []; }),
+        fetchCostSummary().catch((err) => { 
+          console.warn('[useMetrics] Failed to fetch cost summary:', err);
+          return { total: 0, totalTokens: 0, executionCount: 0, byModel: {} };
+        }),
+        fetchLogs({ limit: 500 }).catch((err) => { console.warn('[useMetrics] Failed to fetch logs:', err); return { logs: [], total: 0 }; }),
       ]);
       
       // Calculate agent metrics

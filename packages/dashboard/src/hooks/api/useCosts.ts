@@ -1,8 +1,5 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { useRef } from 'react';
 import { fetchCostSummary, fetchCostHistory, apiRequest, CostSummary, CostInfo } from '@/lib/api';
-import { MOCK_COST_SUMMARY, MOCK_COST_HISTORY, shouldUseMockData } from '@/lib/mock-data';
-import { useMockDataContext } from '@/contexts/MockDataContext';
 import {
   startOfDay,
   startOfWeek,
@@ -72,61 +69,40 @@ export interface CostByModel {
 
 /**
  * Hook to fetch cost summary
- * Falls back to mock data if API is not configured
  */
 export function useCostSummary(
   options?: Omit<UseQueryOptions<CostSummary>, 'queryKey' | 'queryFn'>
 ) {
-  const { reportMockFallback } = useMockDataContext();
-  const reportedRef = useRef(false);
-
   return useQuery({
     queryKey: costKeys.summary(),
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        if (!reportedRef.current) {
-          reportMockFallback('useCostSummary', 'NEXT_PUBLIC_API_URL not configured');
-          reportedRef.current = true;
-        }
-        return MOCK_COST_SUMMARY;
-      }
-
+      // Use telemetry-based metrics endpoint (same as dashboard main)
+      const metrics = await apiRequest<ClientMetricsResponse>('/api/client/metrics?period=30d');
+      
+      // Also get by-model breakdown
+      let byModel: Record<string, { count: number; tokens: number; cost: number }> = {};
       try {
-        // Use telemetry-based metrics endpoint (same as dashboard main)
-        const metrics = await apiRequest<ClientMetricsResponse>('/api/client/metrics?period=30d');
-        
-        // Also get by-model breakdown
-        let byModel: Record<string, { count: number; tokens: number; cost: number }> = {};
-        try {
-          const byModelRes = await apiRequest<{ data: ClientMetricsByModelEntry[] }>('/api/client/metrics/by-model?period=30d');
-          for (const entry of (byModelRes.data ?? [])) {
-            byModel[entry.model] = {
-              count: entry.count,
-              tokens: entry.tokens,
-              cost: entry.cost,
-            };
-          }
-        } catch {
-          // by-model is optional, continue without it
+        const byModelRes = await apiRequest<{ data: ClientMetricsByModelEntry[] }>('/api/client/metrics/by-model?period=30d');
+        for (const entry of (byModelRes.data ?? [])) {
+          byModel[entry.model] = {
+            count: entry.count,
+            tokens: entry.tokens,
+            cost: entry.cost,
+          };
         }
-
-        return {
-          total: metrics.totalCost ?? 0,
-          totalTokens: metrics.totalTokens ?? 0,
-          executionCount: metrics.totalEvents ?? 0,
-          byModel,
-        } as CostSummary;
-      } catch (error) {
-        console.warn('[useCostSummary] API request failed, using mock data:', error);
-        if (!reportedRef.current) {
-          reportMockFallback('useCostSummary', `API request failed: ${(error as Error).message}`);
-          reportedRef.current = true;
-        }
-        return MOCK_COST_SUMMARY;
+      } catch {
+        // by-model is optional, continue without it
       }
+
+      return {
+        total: metrics.totalCost ?? 0,
+        totalTokens: metrics.totalTokens ?? 0,
+        executionCount: metrics.totalEvents ?? 0,
+        byModel,
+      } as CostSummary;
     },
     staleTime: 60 * 1000,
-    refetchInterval: shouldUseMockData() ? false : 2 * 60 * 1000,
+    refetchInterval: 2 * 60 * 1000,
     retry: 1,
     ...options,
   });
@@ -134,7 +110,6 @@ export function useCostSummary(
 
 /**
  * Hook to fetch budget status
- * Falls back to mock data if API is not configured
  */
 export function useBudget(
   options?: Omit<UseQueryOptions<BudgetInfo>, 'queryKey' | 'queryFn'>
@@ -142,17 +117,6 @@ export function useBudget(
   return useQuery({
     queryKey: costKeys.budget(),
     queryFn: async () => {
-      // Use mock data if API is not configured
-      if (shouldUseMockData()) {
-        return {
-          limit: 500,
-          spent: 127.45,
-          remaining: 372.55,
-          percentUsed: 25.49,
-          period: 'monthly' as const,
-        };
-      }
-      
       try {
         return await apiRequest<BudgetInfo>('/api/client/budget-status');
       } catch (error) {
@@ -211,41 +175,21 @@ export function useDailyCosts(
   period: string = 'week',
   options?: Omit<UseQueryOptions<DailyCost[]>, 'queryKey' | 'queryFn'>
 ) {
-  const { reportMockFallback } = useMockDataContext();
-  const reportedRef = useRef(false);
-
   return useQuery({
     queryKey: costKeys.daily(period),
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        if (!reportedRef.current) {
-          reportMockFallback('useDailyCosts', 'NEXT_PUBLIC_API_URL not configured');
-          reportedRef.current = true;
-        }
-        return [];
-      }
-
-      try {
-        // Map period names to API format
-        const periodMap: Record<string, string> = {
-          today: '1d',
-          yesterday: '2d',
-          week: '7d',
-          month: '30d',
-          quarter: '90d',
-          year: '365d',
-        };
-        const apiPeriod = periodMap[period] || '30d';
-        const data = await apiRequest<DailyCost[]>(`/api/client/costs/daily?period=${apiPeriod}`);
-        return data ?? [];
-      } catch (error) {
-        console.warn('[useDailyCosts] API request failed:', error);
-        if (!reportedRef.current) {
-          reportMockFallback('useDailyCosts', `API request failed: ${(error as Error).message}`);
-          reportedRef.current = true;
-        }
-        return [];
-      }
+      // Map period names to API format
+      const periodMap: Record<string, string> = {
+        today: '1d',
+        yesterday: '2d',
+        week: '7d',
+        month: '30d',
+        quarter: '90d',
+        year: '365d',
+      };
+      const apiPeriod = periodMap[period] || '30d';
+      const data = await apiRequest<DailyCost[]>(`/api/client/costs/daily?period=${apiPeriod}`);
+      return data ?? [];
     },
     staleTime: 5 * 60 * 1000,
     ...options,
@@ -259,20 +203,9 @@ export function useCostsByModel(
   period: string = 'month',
   options?: Omit<UseQueryOptions<CostByModel[]>, 'queryKey' | 'queryFn'>
 ) {
-  const { reportMockFallback } = useMockDataContext();
-  const reportedRef = useRef(false);
-
   return useQuery({
     queryKey: costKeys.byModel(period),
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        if (!reportedRef.current) {
-          reportMockFallback('useCostsByModel', 'NEXT_PUBLIC_API_URL not configured');
-          reportedRef.current = true;
-        }
-        return [];
-      }
-
       const modelColors: Record<string, string> = {
         'gpt-4': 'bg-violet-500',
         'gpt-4-turbo': 'bg-violet-400',
@@ -285,44 +218,35 @@ export function useCostsByModel(
         'claude-3-haiku': 'bg-blue-300',
       };
 
-      try {
-        const periodMap: Record<string, string> = {
-          today: '1d',
-          yesterday: '2d',
-          week: '7d',
-          month: '30d',
-          quarter: '90d',
-          year: '365d',
-        };
-        const apiPeriod = periodMap[period] || '30d';
-        interface ByModelEntry {
-          model: string;
-          provider: string;
-          cost: number;
-          requests: number;
-          tokens: number;
-          usage: number;
-        }
-        const data = await apiRequest<ByModelEntry[]>(`/api/client/costs/by-model?period=${apiPeriod}`);
-        
-        return (data ?? []).map(entry => {
-          const colorKey = Object.keys(modelColors).find(k => entry.model.toLowerCase().includes(k));
-          return {
-            model: entry.model,
-            usage: entry.usage,
-            cost: entry.cost,
-            tokens: entry.tokens,
-            color: colorKey ? modelColors[colorKey]! : 'bg-amber-500',
-          };
-        });
-      } catch (error) {
-        console.warn('[useCostsByModel] API request failed:', error);
-        if (!reportedRef.current) {
-          reportMockFallback('useCostsByModel', `API request failed: ${(error as Error).message}`);
-          reportedRef.current = true;
-        }
-        return [];
+      const periodMap: Record<string, string> = {
+        today: '1d',
+        yesterday: '2d',
+        week: '7d',
+        month: '30d',
+        quarter: '90d',
+        year: '365d',
+      };
+      const apiPeriod = periodMap[period] || '30d';
+      interface ByModelEntry {
+        model: string;
+        provider: string;
+        cost: number;
+        requests: number;
+        tokens: number;
+        usage: number;
       }
+      const data = await apiRequest<ByModelEntry[]>(`/api/client/costs/by-model?period=${apiPeriod}`);
+      
+      return (data ?? []).map(entry => {
+        const colorKey = Object.keys(modelColors).find(k => entry.model.toLowerCase().includes(k));
+        return {
+          model: entry.model,
+          usage: entry.usage,
+          cost: entry.cost,
+          tokens: entry.tokens,
+          color: colorKey ? modelColors[colorKey]! : 'bg-amber-500',
+        };
+      });
     },
     staleTime: 5 * 60 * 1000,
     ...options,

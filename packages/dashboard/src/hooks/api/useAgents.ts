@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
-import { useRef } from 'react';
 import {
   fetchAgent,
   createAgent,
@@ -7,8 +6,6 @@ import {
   apiRequest,
   Agent
 } from '@/lib/api';
-import { MOCK_AGENTS, shouldUseMockData } from '@/lib/mock-data';
-import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
  * Fetch agents via /api/client/agents (uses X-Client-Token).
@@ -50,7 +47,6 @@ interface AgentsResponse {
 
 /**
  * Hook to fetch list of agents
- * Falls back to mock data if API is not configured
  * 
  * @param filters - Optional filters for the agent list
  * @param options - Additional React Query options
@@ -59,15 +55,14 @@ export function useAgents(
   filters: AgentFilters = {},
   options?: Omit<UseQueryOptions<AgentsResponse>, 'queryKey' | 'queryFn'>
 ) {
-  const { reportMockFallback } = useMockDataContext();
-  const reportedRef = useRef(false);
-
   return useQuery({
     queryKey: agentKeys.list(filters),
     queryFn: async () => {
-      // Helper function to return filtered mock data
-      const getMockData = () => {
-        let filteredAgents = [...MOCK_AGENTS];
+      const result = await fetchClientAgents();
+      
+      // Handle legacy API response (array) vs new paginated response
+      if (Array.isArray(result)) {
+        let filteredAgents = result;
         
         if (filters.search) {
           const searchLower = filters.search.toLowerCase();
@@ -84,75 +79,26 @@ export function useAgents(
           );
         }
         
+        if (filters.model && filters.model.length > 0) {
+          filteredAgents = filteredAgents.filter(
+            agent => filters.model!.includes(agent.model)
+          );
+        }
+        
         return {
           data: filteredAgents,
-          total: MOCK_AGENTS.length,
+          total: result.length,
           offset: filters.offset || 0,
           limit: filters.limit || 20,
           hasMore: false,
         };
-      };
-
-      // Use mock data if API is not configured (demo mode)
-      if (shouldUseMockData()) {
-        if (!reportedRef.current) {
-          reportMockFallback('useAgents', 'NEXT_PUBLIC_API_URL not configured');
-          reportedRef.current = true;
-        }
-        return getMockData();
       }
       
-      // Try to fetch from API, fallback to mock data on error
-      try {
-        const result = await fetchClientAgents();
-        
-        // Handle legacy API response (array) vs new paginated response
-        if (Array.isArray(result)) {
-          let filteredAgents = result;
-          
-          if (filters.search) {
-            const searchLower = filters.search.toLowerCase();
-            filteredAgents = filteredAgents.filter(
-              agent => 
-                agent.name.toLowerCase().includes(searchLower) ||
-                agent.model.toLowerCase().includes(searchLower)
-            );
-          }
-          
-          if (filters.status && filters.status.length > 0) {
-            filteredAgents = filteredAgents.filter(
-              agent => filters.status!.includes(agent.status)
-            );
-          }
-          
-          if (filters.model && filters.model.length > 0) {
-            filteredAgents = filteredAgents.filter(
-              agent => filters.model!.includes(agent.model)
-            );
-          }
-          
-          return {
-            data: filteredAgents,
-            total: result.length,
-            offset: filters.offset || 0,
-            limit: filters.limit || 20,
-            hasMore: false,
-          };
-        }
-        
-        return result as AgentsResponse;
-      } catch (error) {
-        console.warn('[useAgents] API request failed, using mock data:', error);
-        if (!reportedRef.current) {
-          reportMockFallback('useAgents', `API request failed: ${(error as Error).message}`);
-          reportedRef.current = true;
-        }
-        return getMockData();
-      }
+      return result as AgentsResponse;
     },
     staleTime: 30 * 1000,
-    refetchInterval: shouldUseMockData() ? false : 60 * 1000,
-    retry: 1, // Only retry once, then fallback to mock
+    refetchInterval: 60 * 1000,
+    retry: 1,
     ...options,
   });
 }

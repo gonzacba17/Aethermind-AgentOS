@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { shouldUseMockData } from '@/lib/mock-data';
 import { getAuthToken } from '@/lib/auth-utils';
 import { API_URL } from '@/lib/config';
 
@@ -106,58 +105,6 @@ export const alertKeys = {
   triggers: (id: string) => [...alertKeys.detail(id), 'triggers'] as const,
 };
 
-// Mock alerts for demo mode
-const MOCK_ALERTS: Alert[] = [
-  {
-    id: 'alert-1',
-    name: 'Budget Warning',
-    type: 'budget',
-    condition: {
-      metric: 'monthly_cost',
-      operator: 'gt',
-      threshold: 80,
-    },
-    actions: [{ type: 'notification', config: {} }],
-    enabled: true,
-    createdAt: new Date().toISOString(),
-    triggerCount: 2,
-    lastTriggered: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: 'alert-2',
-    name: 'High Error Rate',
-    type: 'error',
-    condition: {
-      metric: 'error_rate',
-      operator: 'gt',
-      threshold: 5,
-      timeWindow: '1h',
-    },
-    actions: [
-      { type: 'notification', config: {} },
-      { type: 'email', config: { to: 'admin@example.com' } },
-    ],
-    enabled: true,
-    createdAt: new Date().toISOString(),
-    triggerCount: 0,
-  },
-  {
-    id: 'alert-3',
-    name: 'Slow Response Time',
-    type: 'performance',
-    condition: {
-      metric: 'avg_response_time',
-      operator: 'gt',
-      threshold: 5000,
-      timeWindow: '5m',
-    },
-    actions: [{ type: 'notification', config: {} }],
-    enabled: false,
-    createdAt: new Date().toISOString(),
-    triggerCount: 5,
-  },
-];
-
 /**
  * Transform backend ActionRule to frontend Alert
  */
@@ -249,41 +196,22 @@ export function useAlerts(filters?: { enabled?: boolean }) {
   return useQuery({
     queryKey: alertKeys.list(filters),
     queryFn: async (): Promise<Alert[]> => {
-      // Use mock data if API is not configured
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        let alerts = [...MOCK_ALERTS];
-        if (filters?.enabled !== undefined) {
-          alerts = alerts.filter(a => a.enabled === filters.enabled);
-        }
-        return alerts;
+      const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch alerts');
       }
 
-      try {
-        const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
-          headers: getHeaders(),
-        });
+      const data = await response.json();
+      let alerts = (data.rules || data || []).map(transformToAlert);
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch alerts');
-        }
-
-        const data = await response.json();
-        let alerts = (data.rules || data || []).map(transformToAlert);
-
-        if (filters?.enabled !== undefined) {
-          alerts = alerts.filter((a: Alert) => a.enabled === filters.enabled);
-        }
-
-        return alerts;
-      } catch (error) {
-        console.warn('[useAlerts] API request failed, using mock data:', error);
-        let alerts = [...MOCK_ALERTS];
-        if (filters?.enabled !== undefined) {
-          alerts = alerts.filter(a => a.enabled === filters.enabled);
-        }
-        return alerts;
+      if (filters?.enabled !== undefined) {
+        alerts = alerts.filter((a: Alert) => a.enabled === filters.enabled);
       }
+
+      return alerts;
     },
     staleTime: 30 * 1000,
     retry: 1,
@@ -297,28 +225,18 @@ export function useAlert(id: string) {
   return useQuery({
     queryKey: alertKeys.detail(id),
     queryFn: async (): Promise<Alert | undefined> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 300));
-        return MOCK_ALERTS.find(a => a.id === id);
+      const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch alert');
       }
 
-      try {
-        const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
-          headers: getHeaders(),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch alert');
-        }
-
-        const data = await response.json();
-        const rules = data.rules || data || [];
-        const rule = rules.find((r: BackendActionRule) => r.id === id);
-        return rule ? transformToAlert(rule) : undefined;
-      } catch (error) {
-        console.warn('[useAlert] API request failed, using mock data:', error);
-        return MOCK_ALERTS.find(a => a.id === id);
-      }
+      const data = await response.json();
+      const rules = data.rules || data || [];
+      const rule = rules.find((r: BackendActionRule) => r.id === id);
+      return rule ? transformToAlert(rule) : undefined;
     },
     enabled: !!id,
   });
@@ -332,26 +250,16 @@ export function useAlertTriggers(alertId: string) {
     queryKey: alertKeys.triggers(alertId),
     queryFn: async (): Promise<AlertTrigger[]> => {
       // This would need a separate endpoint for trigger history
-      // For now, return mock data
-      await new Promise(r => setTimeout(r, 300));
-      return [
-        {
-          id: 'trigger-1',
-          alertId,
-          triggeredAt: new Date(Date.now() - 3600000).toISOString(),
-          value: 85,
-          resolved: true,
-          resolvedAt: new Date(Date.now() - 1800000).toISOString(),
-        },
-        {
-          id: 'trigger-2',
-          alertId,
-          triggeredAt: new Date(Date.now() - 86400000).toISOString(),
-          value: 92,
-          resolved: true,
-          resolvedAt: new Date(Date.now() - 82800000).toISOString(),
-        },
-      ];
+      // For now, return empty array until backend is implemented
+      const response = await fetch(`${API_BASE}/api/client/alerts/rules/${alertId}/triggers`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch alert triggers');
+      }
+
+      return response.json();
     },
     enabled: !!alertId,
   });
@@ -365,19 +273,6 @@ export function useCreateAlert() {
 
   return useMutation({
     mutationFn: async (data: CreateAlertData): Promise<Alert> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        const newAlert: Alert = {
-          id: `alert-${Date.now()}`,
-          ...data,
-          enabled: true,
-          createdAt: new Date().toISOString(),
-          triggerCount: 0,
-        };
-        MOCK_ALERTS.push(newAlert);
-        return newAlert;
-      }
-
       const response = await fetch(`${API_BASE}/api/client/alerts/rules`, {
         method: 'POST',
         headers: getHeaders(),
@@ -406,14 +301,6 @@ export function useUpdateAlert() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Alert> & { id: string }): Promise<Alert> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        const index = MOCK_ALERTS.findIndex(a => a.id === id);
-        if (index === -1) throw new Error('Alert not found');
-        MOCK_ALERTS[index] = { ...MOCK_ALERTS[index], ...data };
-        return MOCK_ALERTS[index];
-      }
-
       const response = await fetch(`${API_BASE}/api/client/alerts/rules/${id}`, {
         method: 'PATCH',
         headers: getHeaders(),
@@ -458,15 +345,6 @@ export function useDeleteAlert() {
 
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        const index = MOCK_ALERTS.findIndex(a => a.id === id);
-        if (index !== -1) {
-          MOCK_ALERTS.splice(index, 1);
-        }
-        return;
-      }
-
       const response = await fetch(`${API_BASE}/api/client/alerts/rules/${id}`, {
         method: 'DELETE',
         headers: getHeaders(),
@@ -491,14 +369,6 @@ export function useToggleAlert() {
 
   return useMutation({
     mutationFn: async ({ id, enabled }: { id: string; enabled: boolean }): Promise<Alert> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 300));
-        const index = MOCK_ALERTS.findIndex(a => a.id === id);
-        if (index === -1) throw new Error('Alert not found');
-        MOCK_ALERTS[index].enabled = enabled;
-        return MOCK_ALERTS[index];
-      }
-
       const response = await fetch(`${API_BASE}/api/client/alerts/rules/${id}`, {
         method: 'PATCH',
         headers: getHeaders(),

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth-utils';
-import { shouldUseMockData } from '@/lib/mock-data';
 import { API_URL } from '@/lib/config';
 
 const API_BASE = API_URL;
@@ -86,78 +85,6 @@ export const forecastingKeys = {
   seasonal: (days: number) => [...forecastingKeys.all, 'seasonal', days] as const,
 };
 
-// Mock data generators
-function generateMockForecast(horizonDays: number): Forecast {
-  const periods: ForecastPeriod[] = [];
-  let baseCost = 5 + Math.random() * 10;
-
-  for (let i = 0; i < horizonDays; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() + i + 1);
-    const variation = (Math.random() - 0.5) * 2;
-    const cost = baseCost + variation;
-    baseCost = cost;
-
-    periods.push({
-      date: date.toISOString(),
-      predicted_cost: cost,
-      confidence_interval: [cost * 0.8, cost * 1.2],
-      trend: variation > 0.5 ? 'up' : variation < -0.5 ? 'down' : 'stable',
-    });
-  }
-
-  const totalProjectedCost = periods.reduce((sum, p) => sum + p.predicted_cost, 0);
-
-  return {
-    periods,
-    summary: {
-      totalProjectedCost,
-      averageDailyCost: totalProjectedCost / horizonDays,
-      costTrend: 'stable',
-    },
-  };
-}
-
-function generateMockAnomalies(): Anomaly[] {
-  return [
-    {
-      timestamp: new Date(Date.now() - 86400000 * 2).toISOString(),
-      value: 25.5,
-      expectedRange: [8, 15],
-      severity: 'high',
-      reason: 'Unusual spike in API calls',
-    },
-    {
-      timestamp: new Date(Date.now() - 86400000 * 5).toISOString(),
-      value: 18.2,
-      expectedRange: [10, 16],
-      severity: 'medium',
-      reason: 'Above average token usage',
-    },
-  ];
-}
-
-function generateMockAlerts(): PredictiveAlert[] {
-  return [
-    {
-      id: 'alert-1',
-      type: 'budget_forecast',
-      priority: 'high',
-      message: 'Projected to exceed monthly budget by 15% at current rate',
-      timestamp: new Date().toISOString(),
-      acknowledged: false,
-    },
-    {
-      id: 'alert-2',
-      type: 'anomaly',
-      priority: 'medium',
-      message: 'Unusual usage pattern detected in the last 24 hours',
-      timestamp: new Date(Date.now() - 3600000).toISOString(),
-      acknowledged: true,
-    },
-  ];
-}
-
 /**
  * Hook to fetch cost forecast
  */
@@ -165,63 +92,51 @@ export function useForecast(horizonDays: number = 7) {
   return useQuery({
     queryKey: forecastingKeys.forecast(horizonDays),
     queryFn: async (): Promise<Forecast> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 800));
-        return generateMockForecast(horizonDays);
+      const response = await fetch(
+        `${API_BASE}/api/client/forecast`,
+        { headers: getHeaders() }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch forecast');
+      const data = await response.json();
+
+      // If the API returns the Forecast interface directly, use it
+      if (data.periods && Array.isArray(data.periods)) {
+        return data as Forecast;
       }
 
-      try {
-        const response = await fetch(
-          `${API_BASE}/api/client/forecast`,
-          { headers: getHeaders() }
-        );
+      // Transform the flat API response into the Forecast interface
+      // API returns: { projectedMonthlyUsd, avgDailyUsd, spentSoFar, daysRemaining, confidence, ... }
+      const avgDaily = data.avgDailyUsd ?? 0;
+      const periods: ForecastPeriod[] = [];
 
-        if (!response.ok) throw new Error('Failed to fetch forecast');
-        const data = await response.json();
+      for (let i = 0; i < horizonDays; i++) {
+        const date = new Date();
+        date.setDate(date.getDate() + i + 1);
+        const variation = (Math.random() - 0.5) * avgDaily * 0.3;
+        const dailyCost = Math.max(0, avgDaily + variation);
 
-        // If the API returns the Forecast interface directly, use it
-        if (data.periods && Array.isArray(data.periods)) {
-          return data as Forecast;
-        }
-
-        // Transform the flat API response into the Forecast interface
-        // API returns: { projectedMonthlyUsd, avgDailyUsd, spentSoFar, daysRemaining, confidence, ... }
-        const avgDaily = data.avgDailyUsd ?? 0;
-        const periods: ForecastPeriod[] = [];
-        let runningCost = avgDaily;
-
-        for (let i = 0; i < horizonDays; i++) {
-          const date = new Date();
-          date.setDate(date.getDate() + i + 1);
-          const variation = (Math.random() - 0.5) * avgDaily * 0.3;
-          const dailyCost = Math.max(0, avgDaily + variation);
-          runningCost = dailyCost;
-
-          periods.push({
-            date: date.toISOString(),
-            predicted_cost: Math.round(dailyCost * 100) / 100,
-            confidence_interval: [
-              Math.round(dailyCost * 0.7 * 100) / 100,
-              Math.round(dailyCost * 1.3 * 100) / 100,
-            ],
-            trend: variation > 0 ? 'up' : variation < 0 ? 'down' : 'stable',
-          });
-        }
-
-        const totalProjectedCost = periods.reduce((sum, p) => sum + p.predicted_cost, 0);
-
-        return {
-          periods,
-          summary: {
-            totalProjectedCost: Math.round(totalProjectedCost * 100) / 100,
-            averageDailyCost: Math.round(avgDaily * 100) / 100,
-            costTrend: data.confidence === 'high' ? 'stable' : 'uncertain',
-          },
-        };
-      } catch (error) {
-        console.warn('[useForecast] API failed, using mock data:', error);
-        return generateMockForecast(horizonDays);
+        periods.push({
+          date: date.toISOString(),
+          predicted_cost: Math.round(dailyCost * 100) / 100,
+          confidence_interval: [
+            Math.round(dailyCost * 0.7 * 100) / 100,
+            Math.round(dailyCost * 1.3 * 100) / 100,
+          ],
+          trend: variation > 0 ? 'up' : variation < 0 ? 'down' : 'stable',
+        });
       }
+
+      const totalProjectedCost = periods.reduce((sum, p) => sum + p.predicted_cost, 0);
+
+      return {
+        periods,
+        summary: {
+          totalProjectedCost: Math.round(totalProjectedCost * 100) / 100,
+          averageDailyCost: Math.round(avgDaily * 100) / 100,
+          costTrend: data.confidence === 'high' ? 'stable' : 'uncertain',
+        },
+      };
     },
     staleTime: 10 * 60 * 1000,
   });
@@ -234,51 +149,13 @@ export function usePatterns(days: number = 30) {
   return useQuery({
     queryKey: forecastingKeys.patterns(days),
     queryFn: async (): Promise<Pattern> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 600));
-        return {
-          period: {
-            start: new Date(Date.now() - days * 86400000).toISOString(),
-            end: new Date().toISOString(),
-          },
-          anomalies: generateMockAnomalies(),
-          costTrend: { direction: 'up', strength: 0.3 },
-          usageTrend: { direction: 'stable', strength: 0.1 },
-          seasonalPattern: {
-            hourly: Array(24).fill(0).map(() => Math.random() * 10),
-            daily: [0.8, 1.2, 1.1, 1.0, 0.9, 0.6, 0.5],
-          },
-          statistics: { mean: 12.5, std: 3.2 },
-          dataPoints: days * 24,
-        };
-      }
+      const response = await fetch(
+        `${API_BASE}/api/client/forecasting/patterns?days=${days}`,
+        { headers: getHeaders() }
+      );
 
-      try {
-        const response = await fetch(
-          `${API_BASE}/api/client/forecasting/patterns?days=${days}`,
-          { headers: getHeaders() }
-        );
-
-        if (!response.ok) throw new Error('Failed to fetch patterns');
-        return response.json();
-      } catch (error) {
-        console.warn('[usePatterns] API failed, using mock data:', error);
-        return {
-          period: {
-            start: new Date(Date.now() - days * 86400000).toISOString(),
-            end: new Date().toISOString(),
-          },
-          anomalies: generateMockAnomalies(),
-          costTrend: { direction: 'up', strength: 0.3 },
-          usageTrend: { direction: 'stable', strength: 0.1 },
-          seasonalPattern: {
-            hourly: Array(24).fill(0).map(() => Math.random() * 10),
-            daily: [0.8, 1.2, 1.1, 1.0, 0.9, 0.6, 0.5],
-          },
-          statistics: { mean: 12.5, std: 3.2 },
-          dataPoints: days * 24,
-        };
-      }
+      if (!response.ok) throw new Error('Failed to fetch patterns');
+      return response.json();
     },
     staleTime: 15 * 60 * 1000,
   });
@@ -291,25 +168,13 @@ export function useAnomalies(days: number = 7) {
   return useQuery({
     queryKey: forecastingKeys.anomalies(days),
     queryFn: async (): Promise<{ anomalies: Anomaly[]; count: number }> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        const anomalies = generateMockAnomalies();
-        return { anomalies, count: anomalies.length };
-      }
+      const response = await fetch(
+        `${API_BASE}/api/client/forecasting/anomalies?days=${days}`,
+        { headers: getHeaders() }
+      );
 
-      try {
-        const response = await fetch(
-          `${API_BASE}/api/client/forecasting/anomalies?days=${days}`,
-          { headers: getHeaders() }
-        );
-
-        if (!response.ok) throw new Error('Failed to fetch anomalies');
-        return response.json();
-      } catch (error) {
-        console.warn('[useAnomalies] API failed, using mock data:', error);
-        const anomalies = generateMockAnomalies();
-        return { anomalies, count: anomalies.length };
-      }
+      if (!response.ok) throw new Error('Failed to fetch anomalies');
+      return response.json();
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -322,25 +187,13 @@ export function useForecastingAlerts() {
   return useQuery({
     queryKey: forecastingKeys.alerts(),
     queryFn: async (): Promise<{ alerts: PredictiveAlert[]; count: number }> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 400));
-        const alerts = generateMockAlerts();
-        return { alerts, count: alerts.length };
-      }
+      const response = await fetch(
+        `${API_BASE}/api/client/forecasting/alerts`,
+        { headers: getHeaders() }
+      );
 
-      try {
-        const response = await fetch(
-          `${API_BASE}/api/client/forecasting/alerts`,
-          { headers: getHeaders() }
-        );
-
-        if (!response.ok) throw new Error('Failed to fetch alerts');
-        return response.json();
-      } catch (error) {
-        console.warn('[useForecastingAlerts] API failed, using mock data:', error);
-        const alerts = generateMockAlerts();
-        return { alerts, count: alerts.length };
-      }
+      if (!response.ok) throw new Error('Failed to fetch alerts');
+      return response.json();
     },
     staleTime: 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
@@ -354,44 +207,13 @@ export function useSeasonalPatterns(days: number = 30) {
   return useQuery({
     queryKey: forecastingKeys.seasonal(days),
     queryFn: async (): Promise<SeasonalPattern> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        return {
-          hourly: Array(24).fill(0).map((_, i) => {
-            // Simulate higher usage during work hours
-            if (i >= 9 && i <= 17) return 5 + Math.random() * 10;
-            return 1 + Math.random() * 3;
-          }),
-          daily: [3.5, 8.2, 9.1, 8.8, 8.5, 5.2, 4.1], // Sun-Sat
-          labels: {
-            hourly: Array(24).fill(0).map((_, i) => `${i}:00`),
-            daily: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-          },
-        };
-      }
+      const response = await fetch(
+        `${API_BASE}/api/client/forecasting/seasonal?days=${days}`,
+        { headers: getHeaders() }
+      );
 
-      try {
-        const response = await fetch(
-          `${API_BASE}/api/client/forecasting/seasonal?days=${days}`,
-          { headers: getHeaders() }
-        );
-
-        if (!response.ok) throw new Error('Failed to fetch seasonal patterns');
-        return response.json();
-      } catch (error) {
-        console.warn('[useSeasonalPatterns] API failed, using mock data:', error);
-        return {
-          hourly: Array(24).fill(0).map((_, i) => {
-            if (i >= 9 && i <= 17) return 5 + Math.random() * 10;
-            return 1 + Math.random() * 3;
-          }),
-          daily: [3.5, 8.2, 9.1, 8.8, 8.5, 5.2, 4.1],
-          labels: {
-            hourly: Array(24).fill(0).map((_, i) => `${i}:00`),
-            daily: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-          },
-        };
-      }
+      if (!response.ok) throw new Error('Failed to fetch seasonal patterns');
+      return response.json();
     },
     staleTime: 30 * 60 * 1000,
   });
@@ -405,11 +227,6 @@ export function useAcknowledgeAlert() {
 
   return useMutation({
     mutationFn: async ({ alertId, action }: { alertId: string; action?: string }): Promise<{ success: boolean }> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 300));
-        return { success: true };
-      }
-
       const response = await fetch(`${API_BASE}/api/client/forecasting/alerts/acknowledge`, {
         method: 'POST',
         headers: getHeaders(),
@@ -432,30 +249,6 @@ export function useBudgetProjection(budgetId: string, days: number = 30) {
   return useQuery({
     queryKey: [...forecastingKeys.all, 'budget-projection', budgetId, days] as const,
     queryFn: async () => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 700));
-        const currentSpend = 45;
-        const limitAmount = 100;
-        const projectedFinalSpend = currentSpend + (Math.random() * 60 + 20);
-
-        return {
-          budgetId,
-          budgetName: 'Monthly AI Budget',
-          currentSpend,
-          limitAmount,
-          projectedFinalSpend,
-          willExceed: projectedFinalSpend > limitAmount,
-          daysUntilExceeded: projectedFinalSpend > limitAmount ? Math.floor(Math.random() * 10) + 5 : undefined,
-          confidence: 0.82,
-          projection: Array(days).fill(0).map((_, i) => ({
-            date: new Date(Date.now() + i * 86400000).toISOString(),
-            projectedSpend: currentSpend + (projectedFinalSpend - currentSpend) * (i / days),
-            remainingBudget: limitAmount - (currentSpend + (projectedFinalSpend - currentSpend) * (i / days)),
-            utilizationPercent: ((currentSpend + (projectedFinalSpend - currentSpend) * (i / days)) / limitAmount) * 100,
-          })),
-        };
-      }
-
       const response = await fetch(`${API_BASE}/api/forecasting/budget-projection`, {
         method: 'POST',
         headers: getHeaders(),

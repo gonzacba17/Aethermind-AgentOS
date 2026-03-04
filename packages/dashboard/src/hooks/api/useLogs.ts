@@ -1,6 +1,5 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 import { fetchLogs, apiRequest, LogEntry } from '@/lib/api';
-import { MOCK_LOGS, shouldUseMockData } from '@/lib/mock-data';
 
 /**
  * Fetch logs via /api/client/logs (uses X-Client-Token).
@@ -50,7 +49,6 @@ interface LogsResponse {
 
 /**
  * Hook to fetch logs
- * Falls back to mock data if API is not configured
  * 
  * @param filters - Optional filters for the log list
  * @param options - Additional React Query options
@@ -99,26 +97,15 @@ export function useLogs(
         };
       };
 
-      // Use mock data if API is not configured (demo mode)
-      if (shouldUseMockData()) {
-        return processLogs(MOCK_LOGS, MOCK_LOGS.length);
-      }
-      
-      // Try to fetch from API, fallback to mock data on error
-      try {
-        const response = await fetchClientLogs({
-          level: filters.level?.[0],
-          limit: filters.limit || 100,
-          offset: filters.offset || 0,
-        });
-        return processLogs(response.logs || [], response.total);
-      } catch (error) {
-        console.warn('[useLogs] API request failed, using mock data:', error);
-        return processLogs(MOCK_LOGS, MOCK_LOGS.length);
-      }
+      const response = await fetchClientLogs({
+        level: filters.level?.[0],
+        limit: filters.limit || 100,
+        offset: filters.offset || 0,
+      });
+      return processLogs(response.logs || [], response.total);
     },
     staleTime: 10 * 1000,
-    refetchInterval: shouldUseMockData() ? false : 15 * 1000,
+    refetchInterval: 15 * 1000,
     retry: 1,
     ...options,
   });

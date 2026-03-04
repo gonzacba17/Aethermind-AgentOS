@@ -1,8 +1,5 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { useRef } from 'react';
 import { fetchTraces, fetchTrace, Trace } from '@/lib/api';
-import { MOCK_TRACES, shouldUseMockData } from '@/lib/mock-data';
-import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
  * Query key factory for traces
@@ -41,7 +38,6 @@ interface TracesResponse {
 
 /**
  * Hook to fetch list of traces
- * Falls back to mock data if API is not configured
  * 
  * @param filters - Optional filters for the trace list
  * @param options - Additional React Query options
@@ -50,14 +46,11 @@ export function useTraces(
   filters: TraceFilters = {},
   options?: Omit<UseQueryOptions<TracesResponse>, 'queryKey' | 'queryFn'>
 ) {
-  const { reportMockFallback } = useMockDataContext();
-  const reportedRef = useRef(false);
-
   return useQuery({
     queryKey: traceKeys.list(filters),
     queryFn: async () => {
       // Helper to transform traces
-      const transformTraces = (traces: typeof MOCK_TRACES) => {
+      const transformTraces = (traces: Trace[]) => {
         const transformedTraces: TraceListItem[] = traces.map(trace => ({
           id: trace.id,
           name: trace.rootNode?.name || 'Unknown',
@@ -91,30 +84,11 @@ export function useTraces(
         };
       };
 
-      // Use mock data if API is not configured (demo mode)
-      if (shouldUseMockData()) {
-        if (!reportedRef.current) {
-          reportMockFallback('useTraces', 'NEXT_PUBLIC_API_URL not configured');
-          reportedRef.current = true;
-        }
-        return transformTraces(MOCK_TRACES);
-      }
-      
-      // Try to fetch from API, fallback to mock data on error
-      try {
-        const traces = await fetchTraces();
-        return transformTraces(traces);
-      } catch (error) {
-        console.warn('[useTraces] API request failed, using mock data:', error);
-        if (!reportedRef.current) {
-          reportMockFallback('useTraces', `API request failed: ${(error as Error).message}`);
-          reportedRef.current = true;
-        }
-        return transformTraces(MOCK_TRACES);
-      }
+      const traces = await fetchTraces();
+      return transformTraces(traces);
     },
     staleTime: 15 * 1000,
-    refetchInterval: shouldUseMockData() ? false : 30 * 1000,
+    refetchInterval: 30 * 1000,
     retry: 1,
     ...options,
   });

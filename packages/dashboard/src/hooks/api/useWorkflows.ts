@@ -1,8 +1,5 @@
 import { useQuery, useMutation, useQueryClient, UseQueryOptions } from '@tanstack/react-query';
-import { useRef } from 'react';
 import { getAuthToken } from '@/lib/auth-utils';
-import { shouldUseMockData } from '@/lib/mock-data';
-import { useMockDataContext } from '@/contexts/MockDataContext';
 import { API_URL } from '@/lib/config';
 
 const API_BASE = API_URL;
@@ -85,90 +82,31 @@ export const workflowKeys = {
   estimate: (name: string) => [...workflowKeys.detail(name), 'estimate'] as const,
 };
 
-// Mock data
-const MOCK_WORKFLOWS: Workflow[] = [
-  {
-    name: 'customer-support',
-    description: 'Handle customer support tickets automatically',
-    steps: [
-      { id: 'classify', agent: 'classifier-agent', next: 'respond' },
-      { id: 'respond', agent: 'response-agent', next: 'review' },
-      { id: 'review', agent: 'review-agent' },
-    ],
-    entryPoint: 'classify',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    name: 'content-pipeline',
-    description: 'Generate and review content',
-    steps: [
-      { id: 'generate', agent: 'writer-agent', next: ['edit', 'review'], parallel: true },
-      { id: 'edit', agent: 'editor-agent', next: 'publish' },
-      { id: 'review', agent: 'reviewer-agent', next: 'publish' },
-      { id: 'publish', agent: 'publisher-agent' },
-    ],
-    entryPoint: 'generate',
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-];
-
 /**
  * Hook to fetch all workflows
  */
 export function useWorkflows(
   options?: Omit<UseQueryOptions<WorkflowsResponse>, 'queryKey' | 'queryFn'>
 ) {
-  const { reportMockFallback } = useMockDataContext();
-  const reportedRef = useRef(false);
-
   return useQuery({
     queryKey: workflowKeys.list(),
     queryFn: async (): Promise<WorkflowsResponse> => {
-      if (shouldUseMockData()) {
-        if (!reportedRef.current) {
-          reportMockFallback('useWorkflows', 'NEXT_PUBLIC_API_URL not configured');
-          reportedRef.current = true;
-        }
-        return {
-          data: MOCK_WORKFLOWS,
-          total: MOCK_WORKFLOWS.length,
-          limit: 50,
-          offset: 0,
-          hasMore: false,
-        };
+      const response = await fetch(`${API_BASE}/api/client/workflows`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch workflows');
       }
 
-      try {
-        const response = await fetch(`${API_BASE}/api/client/workflows`, {
-          headers: getHeaders(),
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch workflows');
-        }
-
-        const data = await response.json();
-        return {
-          data: data.data || data || [],
-          total: data.total || (data.data || data || []).length,
-          limit: data.limit || 50,
-          offset: data.offset || 0,
-          hasMore: data.hasMore || false,
-        };
-      } catch (error) {
-        console.warn('[useWorkflows] API failed, using mock data:', error);
-        if (!reportedRef.current) {
-          reportMockFallback('useWorkflows', `API request failed: ${(error as Error).message}`);
-          reportedRef.current = true;
-        }
-        return {
-          data: MOCK_WORKFLOWS,
-          total: MOCK_WORKFLOWS.length,
-          limit: 50,
-          offset: 0,
-          hasMore: false,
-        };
-      }
+      const data = await response.json();
+      return {
+        data: data.data || data || [],
+        total: data.total || (data.data || data || []).length,
+        limit: data.limit || 50,
+        offset: data.offset || 0,
+        hasMore: data.hasMore || false,
+      };
     },
     staleTime: 5 * 60 * 1000,
     ...options,
@@ -187,26 +125,16 @@ export function useWorkflow(
     queryFn: async (): Promise<Workflow | null> => {
       if (!name) return null;
 
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 300));
-        return MOCK_WORKFLOWS.find(w => w.name === name) || null;
+      const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}`, {
+        headers: getHeaders(),
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch workflow');
       }
 
-      try {
-        const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}`, {
-          headers: getHeaders(),
-        });
-
-        if (!response.ok) {
-          if (response.status === 404) return null;
-          throw new Error('Failed to fetch workflow');
-        }
-
-        return response.json();
-      } catch (error) {
-        console.warn('[useWorkflow] API failed, using mock data:', error);
-        return MOCK_WORKFLOWS.find(w => w.name === name) || null;
-      }
+      return response.json();
     },
     enabled: !!name,
     staleTime: 5 * 60 * 1000,
@@ -222,16 +150,6 @@ export function useCreateWorkflow() {
 
   return useMutation({
     mutationFn: async (data: CreateWorkflowData): Promise<{ name: string; message: string }> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        const newWorkflow: Workflow = {
-          ...data,
-          createdAt: new Date().toISOString(),
-        };
-        MOCK_WORKFLOWS.push(newWorkflow);
-        return { name: data.name, message: 'Workflow created' };
-      }
-
       const response = await fetch(`${API_BASE}/api/client/workflows`, {
         method: 'POST',
         headers: getHeaders(),
@@ -259,15 +177,6 @@ export function useUpdateWorkflow() {
 
   return useMutation({
     mutationFn: async ({ name, data }: { name: string; data: Partial<CreateWorkflowData> }): Promise<{ name: string; message: string }> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        const index = MOCK_WORKFLOWS.findIndex(w => w.name === name);
-        if (index !== -1) {
-          MOCK_WORKFLOWS[index] = { ...MOCK_WORKFLOWS[index], ...data, updatedAt: new Date().toISOString() };
-        }
-        return { name, message: 'Workflow updated' };
-      }
-
       const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}`, {
         method: 'PUT',
         headers: getHeaders(),
@@ -296,15 +205,6 @@ export function useDeleteWorkflow() {
 
   return useMutation({
     mutationFn: async (name: string): Promise<void> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 500));
-        const index = MOCK_WORKFLOWS.findIndex(w => w.name === name);
-        if (index !== -1) {
-          MOCK_WORKFLOWS.splice(index, 1);
-        }
-        return;
-      }
-
       const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}`, {
         method: 'DELETE',
         headers: getHeaders(),
@@ -326,24 +226,6 @@ export function useDeleteWorkflow() {
 export function useEstimateWorkflow() {
   return useMutation({
     mutationFn: async ({ name, input }: { name: string; input?: any }): Promise<WorkflowEstimate> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 800));
-        return {
-          workflowName: name,
-          estimatedCost: Math.random() * 0.5 + 0.1,
-          currency: 'USD',
-          breakdown: {
-            'step-1': 0.05,
-            'step-2': 0.08,
-            'step-3': 0.03,
-          },
-          tokenCount: Math.floor(Math.random() * 5000) + 1000,
-          confidence: 0.85,
-          basedOn: 'historical average',
-          timestamp: new Date().toISOString(),
-        };
-      }
-
       const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}/estimate`, {
         method: 'POST',
         headers: getHeaders(),
@@ -368,21 +250,6 @@ export function useExecuteWorkflow() {
 
   return useMutation({
     mutationFn: async ({ name, input }: { name: string; input: any }): Promise<WorkflowExecution> => {
-      if (shouldUseMockData()) {
-        await new Promise(r => setTimeout(r, 2000));
-        return {
-          executionId: `exec-${Date.now()}`,
-          workflowName: name,
-          status: 'completed',
-          output: { result: 'Mock execution completed successfully' },
-          duration: Math.floor(Math.random() * 5000) + 1000,
-          stepResults: {
-            'step-1': { status: 'completed', output: 'Step 1 done' },
-            'step-2': { status: 'completed', output: 'Step 2 done' },
-          },
-        };
-      }
-
       const response = await fetch(`${API_BASE}/api/client/workflows/${encodeURIComponent(name)}/execute`, {
         method: 'POST',
         headers: getHeaders(),

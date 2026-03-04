@@ -1,8 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRef } from 'react';
 import { apiRequest } from '@/lib/api';
-import { shouldUseMockData } from '@/lib/mock-data';
-import { useMockDataContext } from '@/contexts/MockDataContext';
 
 /**
  * Organization and Team interfaces
@@ -60,61 +57,14 @@ export const organizationKeys = {
   invitations: (id: string) => [...organizationKeys.detail(id), 'invitations'] as const,
 };
 
-// Fallback mock data — used only when API is not available
-const MOCK_ORG: Organization = {
-  id: 'org-1',
-  name: 'Acme Corporation',
-  slug: 'acme-corp',
-  plan: 'pro',
-  createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-  memberCount: 5,
-  agentCount: 12,
-  monthlyBudget: 500,
-  currentSpend: 245.50,
-};
-
-const MOCK_MEMBERS: OrganizationMember[] = [
-  {
-    id: 'member-1',
-    userId: 'user-1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    role: 'owner',
-    joinedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    lastActive: new Date().toISOString(),
-  },
-];
-
-const MOCK_INVITATIONS: Invitation[] = [];
-
 /**
  * Hook to get current organization
  */
 export function useOrganization() {
-  const { reportMockFallback } = useMockDataContext();
-  const reportedRef = useRef(false);
-
   return useQuery({
     queryKey: organizationKeys.detail('current'),
     queryFn: async (): Promise<Organization> => {
-      if (shouldUseMockData()) {
-        if (!reportedRef.current) {
-          reportMockFallback('useOrganization', 'NEXT_PUBLIC_API_URL not configured');
-          reportedRef.current = true;
-        }
-        return MOCK_ORG;
-      }
-
-      try {
-        return await apiRequest<Organization>('/api/organizations/current');
-      } catch (error) {
-        console.warn('[useOrganization] API request failed, using mock data:', error);
-        if (!reportedRef.current) {
-          reportMockFallback('useOrganization', `API request failed: ${(error as Error).message}`);
-          reportedRef.current = true;
-        }
-        return MOCK_ORG;
-      }
+      return await apiRequest<Organization>('/api/organizations/current');
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -127,14 +77,7 @@ export function useOrganizations() {
   return useQuery({
     queryKey: organizationKeys.lists(),
     queryFn: async (): Promise<Organization[]> => {
-      if (shouldUseMockData()) {
-        return [MOCK_ORG];
-      }
-      try {
-        return await apiRequest<Organization[]>('/api/organizations');
-      } catch {
-        return [MOCK_ORG];
-      }
+      return await apiRequest<Organization[]>('/api/organizations');
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -147,12 +90,7 @@ export function useOrganizationMembers(orgId: string) {
   return useQuery({
     queryKey: organizationKeys.members(orgId),
     queryFn: async (): Promise<OrganizationMember[]> => {
-      if (shouldUseMockData()) return MOCK_MEMBERS;
-      try {
-        return await apiRequest<OrganizationMember[]>(`/api/organizations/${orgId}/members`);
-      } catch {
-        return MOCK_MEMBERS;
-      }
+      return await apiRequest<OrganizationMember[]>(`/api/organizations/${orgId}/members`);
     },
     enabled: !!orgId,
     staleTime: 60 * 1000,
@@ -166,12 +104,7 @@ export function useOrganizationInvitations(orgId: string) {
   return useQuery({
     queryKey: organizationKeys.invitations(orgId),
     queryFn: async (): Promise<Invitation[]> => {
-      if (shouldUseMockData()) return MOCK_INVITATIONS;
-      try {
-        return await apiRequest<Invitation[]>(`/api/organizations/${orgId}/invitations`);
-      } catch {
-        return MOCK_INVITATIONS;
-      }
+      return await apiRequest<Invitation[]>(`/api/organizations/${orgId}/invitations`);
     },
     enabled: !!orgId,
     staleTime: 60 * 1000,
