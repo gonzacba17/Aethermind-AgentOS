@@ -174,8 +174,11 @@ router.get('/me', async (req: Request, res: Response) => {
         try {
           const newUserId = `user_${randomBytes(16).toString('hex')}`;
           const nameFromEmail = emailFromToken.split('@')[0];
+          const now = new Date();
           
-          const [newUser] = await db.insert(users)
+          // Use onConflictDoUpdate to atomically handle concurrent requests
+          // for the same email — prevents duplicate user creation race condition.
+          const [upsertedUser] = await db.insert(users)
             .values({
               id: newUserId,
               email: emailFromToken,
@@ -190,23 +193,31 @@ router.get('/me', async (req: Request, res: Response) => {
               subscriptionStatus: 'free',
               maxAgents: 3,
               logRetentionDays: 30,
-              firstLoginAt: new Date(),
-              lastLoginAt: new Date(),
+              firstLoginAt: now,
+              lastLoginAt: now,
+            })
+            .onConflictDoUpdate({
+              target: users.email,
+              set: {
+                name: decoded.name || nameFromEmail,
+                lastLoginAt: now,
+                updatedAt: now,
+              },
             })
             .returning();
           
-          if (!newUser) {
-            throw new Error('Failed to create user in database');
+          if (!upsertedUser) {
+            throw new Error('Failed to create/upsert user in database');
           }
           
-          logger.info('Created new permanent user from JWT', { userId: newUser.id });
+          logger.info('Created or found permanent user from JWT', { userId: upsertedUser.id });
           
           const newToken = jwt.sign(
             {
-              userId: newUser.id,
-              id: newUser.id,
-              email: newUser.email,
-              plan: newUser.plan,
+              userId: upsertedUser.id,
+              id: upsertedUser.id,
+              email: upsertedUser.email,
+              plan: upsertedUser.plan,
             },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
@@ -215,24 +226,24 @@ router.get('/me', async (req: Request, res: Response) => {
           removeTemporaryUser(userId);
           
           return res.json({
-            id: newUser.id,
-            email: newUser.email,
-            name: newUser.name,
-            plan: newUser.plan,
-            usageCount: newUser.usageCount,
-            usageLimit: newUser.usageLimit,
-            emailVerified: true,
-            hasCompletedOnboarding: false,
+            id: upsertedUser.id,
+            email: upsertedUser.email,
+            name: upsertedUser.name,
+            plan: upsertedUser.plan,
+            usageCount: upsertedUser.usageCount,
+            usageLimit: upsertedUser.usageLimit,
+            emailVerified: upsertedUser.emailVerified ?? true,
+            hasCompletedOnboarding: upsertedUser.hasCompletedOnboarding,
             isTemporaryUser: false,
             wasConverted: true,
             newToken,
             subscription: {
-              status: 'free',
-              plan: 'free',
+              status: upsertedUser.subscriptionStatus || 'free',
+              plan: upsertedUser.plan || 'free',
               isTrialActive: false,
               daysLeftInTrial: 0,
             },
-            createdAt: newUser.createdAt,
+            createdAt: upsertedUser.createdAt,
           });
         } catch (createError: any) {
           logger.error('Failed to create permanent user from JWT', {
@@ -242,59 +253,6 @@ router.get('/me', async (req: Request, res: Response) => {
             constraint: createError.constraint,
             email: emailFromToken,
           });
-
-          if (createError.code === '23505' || createError.message?.includes('unique') || createError.message?.includes('duplicate')) {
-            logger.info('Unique constraint violation - attempting to find existing user', { email: emailFromToken });
-            try {
-              const [existingUser] = await db.select()
-                .from(users)
-                .where(eq(users.email, emailFromToken))
-                .limit(1);
-
-              if (existingUser) {
-                logger.info('Found existing user after unique constraint error', { userId: existingUser.id });
-
-                const newToken = jwt.sign(
-                  {
-                    userId: existingUser.id,
-                    id: existingUser.id,
-                    email: existingUser.email,
-                    plan: existingUser.plan,
-                  },
-                  JWT_SECRET,
-                  { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
-                );
-
-                removeTemporaryUser(userId);
-
-                return res.json({
-                  id: existingUser.id,
-                  email: existingUser.email,
-                  name: existingUser.name,
-                  plan: existingUser.plan,
-                  usageCount: existingUser.usageCount,
-                  usageLimit: existingUser.usageLimit,
-                  emailVerified: existingUser.emailVerified,
-                  hasCompletedOnboarding: existingUser.hasCompletedOnboarding,
-                  isTemporaryUser: false,
-                  wasConverted: true,
-                  newToken,
-                  subscription: {
-                    status: existingUser.subscriptionStatus || 'free',
-                    plan: existingUser.plan || 'free',
-                    isTrialActive: false,
-                    daysLeftInTrial: 0,
-                  },
-                  createdAt: existingUser.createdAt,
-                });
-              }
-            } catch (lookupError) {
-              logger.error('Failed to lookup user after unique constraint error', {
-                error: (lookupError as Error).message,
-                email: emailFromToken
-              });
-            }
-          }
         }
       }
       
