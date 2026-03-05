@@ -15,6 +15,13 @@
       "when": 1740307200000,
       "tag": "0016_add_clients_table",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772673964418,
+      "tag": "0002_conscious_arclight",
+      "breakpoints": true
     }
   ]
 }

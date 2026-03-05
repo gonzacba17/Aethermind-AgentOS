@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations } from '../db/schema.js';
+import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations, alertRules } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
 import { ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
@@ -3530,44 +3530,40 @@ router.post('/agents', async (req, res) => {
 
 /**
  * GET /api/client/alerts/rules
- * Returns alert rules for the client.
+ * Returns alert rules for the client from the alert_rules table.
  */
 router.get('/alerts/rules', async (req, res) => {
   try {
     const clientReq = req as ClientAuthenticatedRequest;
     const client = clientReq.client;
 
-    if (!client?.id) {
-      res.status(401).json({ error: 'Not authenticated' });
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
       return;
     }
 
-    // Get budgets for this client to build rules from them
-    const budgetRows = await db
+    const rows = await db
       .select()
-      .from(clientBudgets)
-      .where(eq(clientBudgets.clientId, client.id));
+      .from(alertRules)
+      .where(eq(alertRules.organizationId, client.organizationId))
+      .orderBy(desc(alertRules.createdAt));
 
-    // Transform budgets into action rules format
-    const rules = budgetRows.map(budget => ({
-      id: `rule-${budget.id}`,
-      name: `Budget Alert (${budget.type})`,
-      description: `Alert when ${budget.type} budget exceeds thresholds`,
-      enabled: true,
-      priority: 0,
-      budgetId: budget.id,
-      trigger: 'threshold_exceeded',
-      conditions: (budget.alertThresholds as number[] || [80]).map(t => ({
-        field: 'utilization',
-        operator: 'gte',
-        value: t,
-      })),
-      actions: [{ type: 'notify_email', config: {}, delayMs: 0, retryOnFailure: false }],
-      cooldownMinutes: 60,
-      maxExecutionsPerDay: 3,
-      createdAt: budget.createdAt?.toISOString(),
-      lastExecutedAt: null,
-      executionCount: 0,
+    // Transform DB rows to BackendActionRule shape expected by dashboard hook
+    const rules = rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      enabled: row.enabled,
+      priority: row.priority,
+      budgetId: row.budgetId || undefined,
+      trigger: row.trigger,
+      conditions: (row.conditions as any[]) || [],
+      actions: (row.actions as any[]) || [],
+      cooldownMinutes: row.cooldownMinutes,
+      maxExecutionsPerDay: row.maxExecutionsPerDay,
+      createdAt: row.createdAt.toISOString(),
+      lastExecutedAt: row.lastExecutedAt?.toISOString() || null,
+      executionCount: row.executionCount,
     }));
 
     res.json({ rules });
@@ -3579,36 +3575,54 @@ router.get('/alerts/rules', async (req, res) => {
 
 /**
  * POST /api/client/alerts/rules
- * Create a new alert rule.
+ * Create a new alert rule — persisted in alert_rules table.
  */
 router.post('/alerts/rules', async (req, res) => {
   try {
     const clientReq = req as ClientAuthenticatedRequest;
     const client = clientReq.client;
 
-    if (!client?.id) {
-      res.status(401).json({ error: 'Not authenticated' });
+    if (!client?.id || !client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
       return;
     }
 
-    const { name, description, trigger, conditions, actions, cooldownMinutes, budgetId } = req.body;
+    const { name, description, trigger, conditions, actions, cooldownMinutes, budgetId, priority, maxExecutionsPerDay, enabled } = req.body;
 
-    // Store as a synthetic rule — for now return a generated rule
-    const id = `rule-${(await import('crypto')).randomUUID()}`;
+    const rows = await db
+      .insert(alertRules)
+      .values({
+        clientId: client.id,
+        organizationId: client.organizationId,
+        name: name || 'New Alert',
+        description: description || null,
+        enabled: enabled !== false,
+        priority: priority ?? 0,
+        budgetId: budgetId || null,
+        trigger: trigger || 'threshold_exceeded',
+        conditions: conditions || [],
+        actions: actions || [],
+        cooldownMinutes: cooldownMinutes ?? 60,
+        maxExecutionsPerDay: maxExecutionsPerDay ?? 10,
+      })
+      .returning();
 
+    const inserted = rows[0]!;
+
+    // Return BackendActionRule shape
     const rule = {
-      id,
-      name: name || 'New Alert',
-      description: description || '',
-      enabled: true,
-      priority: 0,
-      budgetId: budgetId || null,
-      trigger: trigger || 'threshold_exceeded',
-      conditions: conditions || [],
-      actions: actions || [],
-      cooldownMinutes: cooldownMinutes || 60,
-      maxExecutionsPerDay: 10,
-      createdAt: new Date().toISOString(),
+      id: inserted.id,
+      name: inserted.name,
+      description: inserted.description || '',
+      enabled: inserted.enabled,
+      priority: inserted.priority,
+      budgetId: inserted.budgetId || undefined,
+      trigger: inserted.trigger,
+      conditions: (inserted.conditions as any[]) || [],
+      actions: (inserted.actions as any[]) || [],
+      cooldownMinutes: inserted.cooldownMinutes,
+      maxExecutionsPerDay: inserted.maxExecutionsPerDay,
+      createdAt: inserted.createdAt.toISOString(),
       lastExecutedAt: null,
       executionCount: 0,
     };
@@ -3622,20 +3636,66 @@ router.post('/alerts/rules', async (req, res) => {
 
 /**
  * PATCH /api/client/alerts/rules/:id
- * Update alert rule (toggle, edit).
+ * Update alert rule (toggle, edit). Validates ownership by organizationId.
  */
 router.patch('/alerts/rules/:id', async (req, res) => {
   try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
     const { id } = req.params;
-    const updates = req.body;
 
-    // Return updated rule
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    // Verify the rule belongs to this organization
+    const [existing] = await db
+      .select()
+      .from(alertRules)
+      .where(and(eq(alertRules.id, id), eq(alertRules.organizationId, client.organizationId)));
+
+    if (!existing) {
+      res.status(404).json({ error: 'Alert rule not found' });
+      return;
+    }
+
+    const { name, description, enabled, priority, conditions, actions, cooldownMinutes, trigger, budgetId } = req.body;
+
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (enabled !== undefined) updateData.enabled = enabled;
+    if (priority !== undefined) updateData.priority = priority;
+    if (conditions !== undefined) updateData.conditions = conditions;
+    if (actions !== undefined) updateData.actions = actions;
+    if (cooldownMinutes !== undefined) updateData.cooldownMinutes = cooldownMinutes;
+    if (trigger !== undefined) updateData.trigger = trigger;
+    if (budgetId !== undefined) updateData.budgetId = budgetId || null;
+
+    const updatedRows = await db
+      .update(alertRules)
+      .set(updateData)
+      .where(eq(alertRules.id, id))
+      .returning();
+
+    const updated = updatedRows[0]!;
+
     res.json({
-      id,
-      ...updates,
-      createdAt: new Date().toISOString(),
-      lastExecutedAt: null,
-      executionCount: 0,
+      id: updated.id,
+      name: updated.name,
+      description: updated.description || '',
+      enabled: updated.enabled,
+      priority: updated.priority,
+      budgetId: updated.budgetId || undefined,
+      trigger: updated.trigger,
+      conditions: (updated.conditions as any[]) || [],
+      actions: (updated.actions as any[]) || [],
+      cooldownMinutes: updated.cooldownMinutes,
+      maxExecutionsPerDay: updated.maxExecutionsPerDay,
+      createdAt: updated.createdAt.toISOString(),
+      lastExecutedAt: updated.lastExecutedAt?.toISOString() || null,
+      executionCount: updated.executionCount,
     });
   } catch (error) {
     console.error('[Client Alert Rules PATCH] Error:', error);
@@ -3645,10 +3705,30 @@ router.patch('/alerts/rules/:id', async (req, res) => {
 
 /**
  * DELETE /api/client/alerts/rules/:id
- * Delete an alert rule.
+ * Delete an alert rule. Validates ownership by organizationId.
  */
-router.delete('/alerts/rules/:id', async (_req, res) => {
+router.delete('/alerts/rules/:id', async (req, res) => {
   try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+    const { id } = req.params;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    // Verify ownership and delete
+    const deleted = await db
+      .delete(alertRules)
+      .where(and(eq(alertRules.id, id), eq(alertRules.organizationId, client.organizationId)))
+      .returning();
+
+    if (deleted.length === 0) {
+      res.status(404).json({ error: 'Alert rule not found' });
+      return;
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('[Client Alert Rules DELETE] Error:', error);

@@ -212,6 +212,35 @@ export async function verifyDrizzleConnection(): Promise<boolean> {
     return false;
   }
 
+  // Step 4 — auto-create alert_rules if missing
+  try {
+    await db.execute(drizzleSql`
+      CREATE TABLE IF NOT EXISTS "alert_rules" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+        "client_id" uuid NOT NULL REFERENCES "clients"("id") ON DELETE CASCADE,
+        "organization_id" uuid NOT NULL REFERENCES "organizations"("id") ON DELETE CASCADE,
+        "name" text NOT NULL,
+        "description" text,
+        "enabled" boolean DEFAULT true NOT NULL,
+        "priority" integer DEFAULT 0 NOT NULL,
+        "budget_id" uuid,
+        "trigger" varchar(100) NOT NULL,
+        "conditions" jsonb DEFAULT '[]'::jsonb NOT NULL,
+        "actions" jsonb DEFAULT '[]'::jsonb NOT NULL,
+        "cooldown_minutes" integer DEFAULT 60 NOT NULL,
+        "max_executions_per_day" integer DEFAULT 10 NOT NULL,
+        "last_executed_at" timestamp (6) with time zone,
+        "execution_count" integer DEFAULT 0 NOT NULL,
+        "created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+        "updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL
+      )
+    `);
+    console.log('  ✅ alert_rules table ready');
+  } catch (err) {
+    logDbError('alert_rules auto-create FAILED', err);
+    // Non-fatal — table might already exist with different constraints
+  }
+
   return true;
 }
 

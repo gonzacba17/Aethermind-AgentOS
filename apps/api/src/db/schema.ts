@@ -449,6 +449,33 @@ export const alertEvents = pgTable('alert_events', {
 }));
 
 // ============================================
+// ALERT RULES TABLE (User-defined alert rules)
+// ============================================
+export const alertRules = pgTable('alert_rules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clientId: uuid('client_id').notNull().references(() => clients.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  enabled: boolean('enabled').default(true).notNull(),
+  priority: integer('priority').default(0).notNull(),
+  budgetId: uuid('budget_id'),
+  trigger: varchar('trigger', { length: 100 }).notNull(), // 'threshold_exceeded' | 'anomaly_detected' | etc.
+  conditions: jsonb('conditions').default([]).notNull(),   // Array<{field, operator, value}>
+  actions: jsonb('actions').default([]).notNull(),          // Array<{type, config, delayMs?, retryOnFailure?}>
+  cooldownMinutes: integer('cooldown_minutes').default(60).notNull(),
+  maxExecutionsPerDay: integer('max_executions_per_day').default(10).notNull(),
+  lastExecutedAt: timestamp('last_executed_at', { withTimezone: true, precision: 6 }),
+  executionCount: integer('execution_count').default(0).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  clientIdIdx: index('idx_alert_rules_client_id').on(table.clientId),
+  orgIdIdx: index('idx_alert_rules_org_id').on(table.organizationId),
+  enabledIdx: index('idx_alert_rules_enabled').on(table.enabled),
+}));
+
+// ============================================
 // ROUTING RULES TABLE (Phase 2 — Model Routing)
 // ============================================
 export const routingRules = pgTable('routing_rules', {
@@ -668,3 +695,6 @@ export type NewClientInsight = typeof clientInsights.$inferInsert;
 
 export type PlatformBenchmark = typeof platformBenchmarks.$inferSelect;
 export type NewPlatformBenchmark = typeof platformBenchmarks.$inferInsert;
+
+export type AlertRule = typeof alertRules.$inferSelect;
+export type NewAlertRule = typeof alertRules.$inferInsert;
