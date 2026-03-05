@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows } from '../db/schema.js';
+import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
 import { ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
@@ -197,7 +197,7 @@ router.get('/metrics/timeseries', async (req, res) => {
       events: Number(r.events ?? 0),
     }));
 
-    res.json({ data, period });
+    res.json(data);
   } catch (error) {
     console.error('[Client Metrics Timeseries] Error:', error);
     res.status(500).json({ error: 'Failed to fetch timeseries' });
@@ -315,7 +315,7 @@ router.get('/budgets', async (req, res) => {
             status: evaluation.status,
             percentUsed: evaluation.percentUsed,
             remaining: evaluation.remaining,
-            spentUsd: evaluation.spentUsd,
+            spent: evaluation.spentUsd,
           } : null,
         };
       }),
@@ -379,12 +379,25 @@ router.get('/budget-status', async (req, res) => {
     const evaluation = await evaluateBudget(client.id);
 
     if (!evaluation) {
-      // No budget defined — always allow
-      res.json({ status: 'ok', percentUsed: 0, remaining: null, noBudget: true });
+      // No budget defined — return a zero-state BudgetInfo
+      res.status(404).json({ error: 'No budget configured' });
       return;
     }
 
-    res.json(evaluation);
+    // Return shape matching dashboard BudgetInfo interface:
+    // { limit, spent, remaining, percentUsed, period }
+    res.json({
+      limit: evaluation.limitUsd,
+      spent: evaluation.spentUsd,
+      remaining: evaluation.remaining,
+      percentUsed: evaluation.percentUsed,
+      period: evaluation.budgetType === 'daily' ? 'daily' as const
+        : evaluation.budgetType === 'weekly' ? 'weekly' as const
+        : 'monthly' as const,
+      // Keep original fields for backward compat with SDK
+      status: evaluation.status,
+      budgetId: evaluation.budgetId,
+    });
   } catch (error) {
     console.error('[Client Budget Status] Error:', error);
     res.status(500).json({ error: 'Failed to evaluate budget' });
@@ -3641,6 +3654,174 @@ router.delete('/alerts/rules/:id', async (_req, res) => {
     console.error('[Client Alert Rules DELETE] Error:', error);
     res.status(500).json({ error: 'Failed to delete alert rule' });
   }
+});
+
+// ============================================
+// ORGANIZATION ENDPOINTS (client-auth)
+// ============================================
+
+/**
+ * GET /api/client/organizations/current
+ * Returns organization info for the authenticated client.
+ */
+router.get('/organizations/current', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, client.organizationId));
+
+    if (!org) {
+      res.json({
+        id: client.organizationId,
+        name: client.companyName || 'My Organization',
+        slug: client.organizationId,
+        plan: 'free' as const,
+        createdAt: new Date().toISOString(),
+        memberCount: 1,
+        agentCount: 0,
+        currentSpend: 0,
+      });
+      return;
+    }
+
+    // Count members
+    const [memberResult] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(eq(users.organizationId, org.id));
+
+    // Count agents
+    const [agentResult] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(agents)
+      .innerJoin(users, eq(agents.userId, users.id))
+      .where(and(eq(users.organizationId, org.id), isNull(agents.deletedAt)));
+
+    // Current month spend
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const [spendResult] = await db.select({
+      totalCost: sql<string>`coalesce(sum(${telemetryEvents.cost}::numeric), 0)`,
+    }).from(telemetryEvents).where(
+      and(
+        eq(telemetryEvents.organizationId, org.id),
+        gte(telemetryEvents.timestamp, monthStart),
+      ),
+    );
+
+    res.json({
+      id: org.id,
+      name: org.name,
+      slug: org.id,
+      plan: (org.plan?.toLowerCase() || 'free') as 'free' | 'pro' | 'enterprise',
+      createdAt: org.createdAt?.toISOString() ?? new Date().toISOString(),
+      memberCount: memberResult?.count || 1,
+      agentCount: agentResult?.count || 0,
+      currentSpend: parseFloat(spendResult?.totalCost ?? '0'),
+    });
+  } catch (error) {
+    console.error('[Client Organizations Current] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch organization' });
+  }
+});
+
+/**
+ * GET /api/client/organizations
+ * Returns organizations list for the authenticated client.
+ */
+router.get('/organizations', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.json([]);
+      return;
+    }
+
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, client.organizationId));
+    if (!org) {
+      res.json([]);
+      return;
+    }
+
+    res.json([{
+      id: org.id,
+      name: org.name,
+      slug: org.id,
+      plan: (org.plan?.toLowerCase() || 'free') as 'free' | 'pro' | 'enterprise',
+      createdAt: org.createdAt?.toISOString() ?? new Date().toISOString(),
+      memberCount: 1,
+      agentCount: 0,
+      currentSpend: 0,
+    }]);
+  } catch (error) {
+    console.error('[Client Organizations] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch organizations' });
+  }
+});
+
+/**
+ * GET /api/client/organizations/:id/members
+ * Returns members for an organization.
+ */
+router.get('/organizations/:id/members', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+    const orgId = req.params.id;
+
+    if (!client?.organizationId || client.organizationId !== orgId) {
+      res.status(403).json({ error: 'Access denied' });
+      return;
+    }
+
+    const rows = await db.select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      createdAt: users.createdAt,
+    }).from(users).where(eq(users.organizationId, orgId));
+
+    const members = rows.map(u => ({
+      id: u.id,
+      userId: u.id,
+      name: u.name || u.email?.split('@')[0] || 'Unknown',
+      email: u.email || '',
+      role: 'member' as const,
+      joinedAt: u.createdAt?.toISOString() ?? new Date().toISOString(),
+    }));
+
+    res.json(members);
+  } catch (error) {
+    console.error('[Client Organization Members] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+/**
+ * GET /api/client/organizations/:id/invitations
+ * Returns pending invitations for an organization.
+ */
+router.get('/organizations/:id/invitations', async (_req, res) => {
+  // No invitations table yet — return empty array
+  res.json([]);
+});
+
+// ============================================
+// ALERT TRIGGERS ENDPOINT
+// ============================================
+
+/**
+ * GET /api/client/alerts/rules/:id/triggers
+ * Returns trigger history for an alert rule.
+ */
+router.get('/alerts/rules/:id/triggers', async (_req, res) => {
+  // No triggers history table yet — return empty array
+  res.json([]);
 });
 
 export default router;

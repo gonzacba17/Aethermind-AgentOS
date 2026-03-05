@@ -56,7 +56,7 @@ function BudgetRow({ budget, onDelete }: { budget: ClientBudget; onDelete: (id: 
                   />
                 </div>
                 <span className="text-xs text-muted-foreground">
-                  ${evaluation.spentUsd.toFixed(2)} spent ({percentUsed.toFixed(1)}%)
+                  ${evaluation.spent.toFixed(2)} spent ({percentUsed.toFixed(1)}%)
                 </span>
               </div>
             </div>

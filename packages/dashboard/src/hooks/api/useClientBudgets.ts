@@ -11,7 +11,10 @@ export interface BudgetEvaluation {
   status: 'ok' | 'warning' | 'exceeded';
   percentUsed: number;
   remaining: number;
-  spentUsd: number;
+  spent: number;
+  limit: number;
+  period: 'daily' | 'weekly' | 'monthly';
+  budgetId?: string;
 }
 
 export interface ClientBudget {
@@ -43,7 +46,16 @@ export function useClientBudgets() {
 export function useClientBudgetStatus() {
   return useQuery({
     queryKey: clientBudgetKeys.status(),
-    queryFn: () => apiRequest<BudgetEvaluation & { noBudget?: boolean }>('/api/client/budget-status'),
+    queryFn: async () => {
+      try {
+        return await apiRequest<BudgetEvaluation>('/api/client/budget-status');
+      } catch (error) {
+        if ((error as any).status === 404) {
+          return null; // No budget configured
+        }
+        throw error;
+      }
+    },
     staleTime: 30_000,
     refetchInterval: 60_000,
   });

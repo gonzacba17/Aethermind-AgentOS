@@ -64,7 +64,7 @@ export function useOrganization() {
   return useQuery({
     queryKey: organizationKeys.detail('current'),
     queryFn: async (): Promise<Organization> => {
-      return await apiRequest<Organization>('/api/organizations/current');
+      return await apiRequest<Organization>('/api/client/organizations/current');
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -77,7 +77,7 @@ export function useOrganizations() {
   return useQuery({
     queryKey: organizationKeys.lists(),
     queryFn: async (): Promise<Organization[]> => {
-      return await apiRequest<Organization[]>('/api/organizations');
+      return await apiRequest<Organization[]>('/api/client/organizations');
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -90,7 +90,7 @@ export function useOrganizationMembers(orgId: string) {
   return useQuery({
     queryKey: organizationKeys.members(orgId),
     queryFn: async (): Promise<OrganizationMember[]> => {
-      return await apiRequest<OrganizationMember[]>(`/api/organizations/${orgId}/members`);
+      return await apiRequest<OrganizationMember[]>(`/api/client/organizations/${orgId}/members`);
     },
     enabled: !!orgId,
     staleTime: 60 * 1000,
@@ -104,7 +104,7 @@ export function useOrganizationInvitations(orgId: string) {
   return useQuery({
     queryKey: organizationKeys.invitations(orgId),
     queryFn: async (): Promise<Invitation[]> => {
-      return await apiRequest<Invitation[]>(`/api/organizations/${orgId}/invitations`);
+      return await apiRequest<Invitation[]>(`/api/client/organizations/${orgId}/invitations`);
     },
     enabled: !!orgId,
     staleTime: 60 * 1000,
@@ -119,7 +119,7 @@ export function useCreateOrganization() {
 
   return useMutation({
     mutationFn: async (data: CreateOrganizationData): Promise<Organization> => {
-      return apiRequest<Organization>('/api/organizations', {
+      return apiRequest<Organization>('/api/client/organizations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -139,7 +139,7 @@ export function useUpdateOrganization() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Organization> & { id: string }): Promise<Organization> => {
-      return apiRequest<Organization>(`/api/organizations/${id}`, {
+      return apiRequest<Organization>(`/api/client/organizations/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -159,7 +159,7 @@ export function useInviteMember() {
 
   return useMutation({
     mutationFn: async ({ orgId, ...data }: InviteMemberData & { orgId: string }): Promise<Invitation> => {
-      return apiRequest<Invitation>(`/api/organizations/${orgId}/invitations`, {
+      return apiRequest<Invitation>(`/api/client/organizations/${orgId}/invitations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -179,7 +179,7 @@ export function useRemoveMember() {
 
   return useMutation({
     mutationFn: async ({ orgId, memberId }: { orgId: string; memberId: string }): Promise<void> => {
-      await apiRequest(`/api/organizations/${orgId}/members/${memberId}`, { method: 'DELETE' });
+      await apiRequest(`/api/client/organizations/${orgId}/members/${memberId}`, { method: 'DELETE' });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.members(variables.orgId) });
@@ -195,7 +195,7 @@ export function useUpdateMemberRole() {
 
   return useMutation({
     mutationFn: async ({ orgId, memberId, role }: { orgId: string; memberId: string; role: OrganizationMember['role'] }): Promise<void> => {
-      await apiRequest(`/api/organizations/${orgId}/members/${memberId}`, {
+      await apiRequest(`/api/client/organizations/${orgId}/members/${memberId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
@@ -215,7 +215,7 @@ export function useCancelInvitation() {
 
   return useMutation({
     mutationFn: async ({ orgId, invitationId }: { orgId: string; invitationId: string }): Promise<void> => {
-      await apiRequest(`/api/organizations/${orgId}/invitations/${invitationId}`, { method: 'DELETE' });
+      await apiRequest(`/api/client/organizations/${orgId}/invitations/${invitationId}`, { method: 'DELETE' });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: organizationKeys.invitations(variables.orgId) });
