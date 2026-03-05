@@ -1,0 +1,16 @@
+{
+  "name": "ollama-test",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Test Aethermind SDK with local Ollama",
+  "scripts": {
+    "start": "npx tsx index.ts"
+  },
+  "dependencies": {
+    "@aethermind/agent": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

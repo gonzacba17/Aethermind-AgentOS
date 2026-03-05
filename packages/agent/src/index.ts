@@ -33,6 +33,7 @@ export { OpenAIInterceptor } from './interceptors/OpenAIInterceptor.js';
 export { AnthropicInterceptor } from './interceptors/AnthropicInterceptor.js';
 export { GeminiInterceptor } from './interceptors/GeminiInterceptor.js';
 export { FetchInterceptor } from './interceptors/FetchInterceptor.js';
+export { OllamaInterceptor, type OllamaConfig, type OllamaChatRequest, type OllamaChatResponse, type OllamaGenerateRequest, type OllamaGenerateResponse } from './interceptors/OllamaInterceptor.js';
 
 // Version
 export const VERSION = '0.3.0';

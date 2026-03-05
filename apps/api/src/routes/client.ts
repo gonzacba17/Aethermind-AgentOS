@@ -49,6 +49,57 @@ router.get('/me', (req, res) => {
 });
 
 /**
+ * PATCH /api/client/me
+ * Update the authenticated client's profile info.
+ * Accepts: name (companyName), webhookUrl, notes
+ * Returns same shape as GET /api/client/me.
+ */
+router.patch('/me', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const { name, companyName, webhookUrl, notes } = req.body;
+
+    const updateData: Record<string, any> = {};
+    const newName = name || companyName;
+    if (newName !== undefined) updateData.companyName = newName;
+    if (webhookUrl !== undefined) updateData.webhookUrl = webhookUrl;
+    if (notes !== undefined) updateData.notes = notes;
+
+    if (Object.keys(updateData).length === 0) {
+      res.status(400).json({ error: 'No fields to update' });
+      return;
+    }
+
+    const [updated] = await db
+      .update(clients)
+      .set(updateData)
+      .where(eq(clients.id, client.id))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: 'Client not found' });
+      return;
+    }
+
+    res.json({
+      companyName: updated.companyName,
+      sdkApiKey: updated.sdkApiKey,
+      id: updated.id,
+    });
+  } catch (error) {
+    console.error('[Client PATCH /me] Error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+/**
  * GET /api/client/metrics?period=30d
  *
  * Totals: cost, tokens, events, avg latency, error count, success rate
