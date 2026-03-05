@@ -55,6 +55,7 @@ export class BatchTransport {
   private isRunning = false;
   private transportConfig: BatchTransportConfig;
   private eventQueue: EventQueue | null = null;
+  private shutdownHandler: (() => void) | null = null;
 
   constructor(config: Partial<BatchTransportConfig> = {}) {
     this.transportConfig = { ...DEFAULT_TRANSPORT_CONFIG, ...config };
@@ -95,6 +96,14 @@ export class BatchTransport {
     }
 
     this.isRunning = false;
+
+    // Remove shutdown handlers to prevent listener leak
+    if (this.shutdownHandler) {
+      process.removeListener('SIGINT', this.shutdownHandler);
+      process.removeListener('SIGTERM', this.shutdownHandler);
+      process.removeListener('exit', this.shutdownHandler);
+      this.shutdownHandler = null;
+    }
 
     // Clear timer
     if (this.flushTimer) {
@@ -273,15 +282,21 @@ export class BatchTransport {
    * Register shutdown handlers to flush pending events
    */
   private registerShutdownHandlers(): void {
-    const shutdown = () => {
+    // Remove existing handlers first to prevent accumulation
+    if (this.shutdownHandler) {
+      process.removeListener('SIGINT', this.shutdownHandler);
+      process.removeListener('SIGTERM', this.shutdownHandler);
+      process.removeListener('exit', this.shutdownHandler);
+    }
+
+    this.shutdownHandler = () => {
       console.log('[Aethermind] Shutting down, flushing pending events...');
       void this.stop();
     };
 
-    // Handle various shutdown signals
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
-    process.on('exit', shutdown);
+    process.on('SIGINT', this.shutdownHandler);
+    process.on('SIGTERM', this.shutdownHandler);
+    process.on('exit', this.shutdownHandler);
   }
 }
 

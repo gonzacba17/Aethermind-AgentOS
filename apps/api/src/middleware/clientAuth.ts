@@ -33,8 +33,17 @@ export interface ClientAuthenticatedRequest extends Request {
  */
 const clientCache = new LRUCache<string, ClientData>({
   max: 1000,
-  ttl: 5 * 60 * 1000, // 5 minutes
+  ttl: 2 * 60 * 1000, // 2 minutes (reduced from 5 for faster revocation)
 });
+
+/**
+ * Invalidate a cached client token (call on logout/rotation).
+ * Accepts the plaintext token to compute the cache key.
+ */
+export function invalidateClientCache(token: string): void {
+  const cacheKey = hashForCache(token);
+  clientCache.delete(cacheKey);
+}
 
 /**
  * Client authentication middleware for B2B beta.
@@ -75,6 +84,7 @@ export async function clientAuth(
         sdkApiKey: clients.sdkApiKey,
         organizationId: clients.organizationId,
         rateLimitPerMin: clients.rateLimitPerMin,
+        tokenExpiresAt: clients.tokenExpiresAt,
       })
       .from(clients)
       .where(and(eq(clients.accessToken, token), eq(clients.isActive, true)));
@@ -82,6 +92,12 @@ export async function clientAuth(
     const row = rows[0];
     if (!row) {
       res.status(401).json({ error: 'Invalid or expired access token' });
+      return;
+    }
+
+    // Check token expiration (null = legacy token, no expiry)
+    if (row.tokenExpiresAt && new Date(row.tokenExpiresAt) < new Date()) {
+      res.status(401).json({ error: 'Access token has expired. Please log in again.' });
       return;
     }
 

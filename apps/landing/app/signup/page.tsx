@@ -36,7 +36,6 @@ function SignupForm() {
       // Check for returnTo parameter (user came from a protected route)
       const returnTo = searchParams.get('returnTo');
       if (returnTo && returnTo.startsWith('/')) {
-        console.log('[Signup] Redirecting to returnTo:', returnTo);
         window.location.href = returnTo;
       } else {
         // Smart redirect based on membership
@@ -51,7 +50,7 @@ function SignupForm() {
   // Redirect authenticated users to dashboard
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      window.location.href = buildDashboardUrl();
+      buildDashboardUrl().then((url) => { window.location.href = url; });
     }
   }, [isLoading, isAuthenticated]);
 

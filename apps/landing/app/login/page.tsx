@@ -30,12 +30,10 @@ function LoginForm() {
   useEffect(() => {
     if (searchParams.get('logout') === 'true') return;
     if (!isLoading && isAuthenticated) {
-      // Only auto-redirect if we have a client token to pass
       const clientToken = getClientToken();
       if (clientToken) {
-        window.location.href = buildDashboardUrl();
+        buildDashboardUrl().then((url) => { window.location.href = url; });
       }
-      // If no client token, let the user log in again to get one
     }
   }, [isLoading, isAuthenticated, searchParams]);
 
@@ -45,7 +43,6 @@ function LoginForm() {
       removeToken();
       removeClientToken();
       localStorage.removeItem('user');
-      console.log('[Login] Logout cleanup complete — all tokens cleared');
       // Remove ?logout=true from URL to prevent re-clearing on refresh
       const url = new URL(window.location.href);
       url.searchParams.delete('logout');
@@ -82,12 +79,10 @@ function LoginForm() {
       // Check for returnTo parameter
       const returnTo = searchParams.get('returnTo');
       if (returnTo && returnTo.startsWith('/')) {
-        console.log('[Login] Redirecting to returnTo:', returnTo);
         window.location.href = returnTo;
       } else if (response.clientAccessToken) {
-        // Client token received — go directly to dashboard with token
-        console.log('[Login] clientAccessToken received, redirecting to dashboard');
-        window.location.href = buildDashboardUrl();
+        const dashUrl = await buildDashboardUrl();
+        window.location.href = dashUrl;
       } else {
         // Fallback: use redirectAfterAuth for edge cases
         await redirectAfterAuth(response.user)

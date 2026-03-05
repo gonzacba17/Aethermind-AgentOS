@@ -7,16 +7,18 @@ import { buildDashboardUrl } from '@/lib/auth-utils';
 
 export default function PaymentSuccessPage() {
   const [countdown, setCountdown] = useState(5);
-  const dashUrl = typeof window !== 'undefined' ? buildDashboardUrl() : '#';
+  const [dashUrl, setDashUrl] = useState('#');
 
   useEffect(() => {
-    const target = buildDashboardUrl();
-    // Countdown to auto-redirect
+    buildDashboardUrl().then((url) => setDashUrl(url));
+  }, []);
+
+  useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          window.location.href = target;
+          buildDashboardUrl().then((url) => { window.location.href = url; });
           return 0;
         }
         return prev - 1;

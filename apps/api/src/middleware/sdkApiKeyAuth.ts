@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
 import { db } from '../db/index.js';
 import { clients, organizations } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNotNull } from 'drizzle-orm';
 import { LRUCache } from 'lru-cache';
 import { hashForCache } from '../utils/crypto.js';
 import { apiKeyAuthCached, type AuthenticatedRequest } from './apiKeyAuth.js';
@@ -77,6 +78,11 @@ export async function ingestionAuth(
 
 /**
  * Resolve an SDK client key to an organization context.
+ *
+ * Strategy:
+ * 1. Check LRU cache (keyed by SHA-256 of the API key)
+ * 2. If the client has sdkApiKeyHash: prefix lookup → bcrypt compare (secure)
+ * 3. Fallback: plaintext lookup for legacy clients without hash (migration compat)
  */
 async function handleSdkKey(
   apiKey: string,
@@ -95,18 +101,48 @@ async function handleSdkKey(
     return;
   }
 
-  // Direct plaintext lookup (Phase 0 trade-off — hash in Phase 1)
-  const rows = await db
+  // Extract prefix for indexed lookup (first 20 chars)
+  const prefix = apiKey.slice(0, 20);
+
+  // Try secure path first: prefix match → bcrypt compare
+  let row: { clientId: string; organizationId: string | null; rateLimitPerMin: number; sdkApiKeyHash: string | null } | undefined;
+
+  const hashedRows = await db
     .select({
       clientId: clients.id,
       organizationId: clients.organizationId,
       rateLimitPerMin: clients.rateLimitPerMin,
-      isActive: clients.isActive,
+      sdkApiKeyHash: clients.sdkApiKeyHash,
     })
     .from(clients)
-    .where(and(eq(clients.sdkApiKey, apiKey), eq(clients.isActive, true)));
+    .where(and(
+      eq(clients.sdkApiKeyPrefix, prefix),
+      eq(clients.isActive, true),
+      isNotNull(clients.sdkApiKeyHash),
+    ));
 
-  const row = rows[0];
+  for (const candidate of hashedRows) {
+    if (candidate.sdkApiKeyHash && await bcrypt.compare(apiKey, candidate.sdkApiKeyHash)) {
+      row = candidate;
+      break;
+    }
+  }
+
+  // Fallback: plaintext lookup for legacy clients that haven't been migrated
+  if (!row) {
+    const legacyRows = await db
+      .select({
+        clientId: clients.id,
+        organizationId: clients.organizationId,
+        rateLimitPerMin: clients.rateLimitPerMin,
+        sdkApiKeyHash: clients.sdkApiKeyHash,
+      })
+      .from(clients)
+      .where(and(eq(clients.sdkApiKey, apiKey), eq(clients.isActive, true)));
+
+    row = legacyRows[0];
+  }
+
   if (!row) {
     res.status(401).json({
       error: 'Unauthorized',

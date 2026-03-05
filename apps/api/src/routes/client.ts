@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { db } from '../db/index.js';
 import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations, alertRules } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
-import { ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
+import { ClientAuthenticatedRequest, invalidateClientCache } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
 import { classifyPrompt } from '../services/PromptClassifier.js';
 import * as SemanticCacheService from '../services/SemanticCacheService.js';
@@ -3953,6 +3953,82 @@ router.get('/organizations/:id/invitations', async (_req, res) => {
 router.get('/alerts/rules/:id/triggers', async (_req, res) => {
   // No triggers history table yet — return empty array
   res.json([]);
+});
+
+// ============================================
+// TOKEN ROTATION & INVALIDATION
+// ============================================
+
+/**
+ * POST /api/client/token/rotate
+ * Generates a new access token (ct_*) and invalidates the old one.
+ * Returns the new token — the client must store it immediately.
+ */
+router.post('/token/rotate', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    const crypto = await import('crypto');
+    const newToken = `ct_${crypto.randomBytes(32).toString('hex')}`;
+    const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+    // Invalidate old token from cache before updating DB
+    const oldToken = req.headers['x-client-token'] as string;
+    if (oldToken) invalidateClientCache(oldToken);
+
+    await db.update(clients)
+      .set({
+        accessToken: newToken,
+        tokenExpiresAt: newExpiresAt,
+      })
+      .where(eq(clients.id, client.id));
+
+    res.json({
+      accessToken: newToken,
+      expiresAt: newExpiresAt.toISOString(),
+      message: 'Token rotated successfully. Store the new token immediately.',
+    });
+  } catch (error) {
+    console.error('[Token Rotate] Error:', error);
+    res.status(500).json({ error: 'Failed to rotate token' });
+  }
+});
+
+/**
+ * POST /api/client/logout
+ * Invalidates the current access token server-side.
+ * The token becomes unusable immediately.
+ */
+router.post('/logout', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.id) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Invalidate token from cache immediately
+    const token = req.headers['x-client-token'] as string;
+    if (token) invalidateClientCache(token);
+
+    // Set token expiry to now — effectively invalidates it in DB
+    await db.update(clients)
+      .set({ tokenExpiresAt: new Date() })
+      .where(eq(clients.id, client.id));
+
+    res.json({ success: true, message: 'Logged out. Token invalidated.' });
+  } catch (error) {
+    console.error('[Client Logout] Error:', error);
+    res.status(500).json({ error: 'Failed to logout' });
+  }
 });
 
 export default router;

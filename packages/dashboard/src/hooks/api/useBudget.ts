@@ -186,7 +186,7 @@ export function useUpdateBudget() {
       id: string; 
       data: Partial<CreateBudgetData> 
     }): Promise<Budget> => {
-      const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+      const response = await fetch(`${API_BASE}/api/client/budgets/${id}`, {
         method: 'PATCH',
         headers: getHeaders(),
         body: JSON.stringify(data),
@@ -215,7 +215,7 @@ export function useDeleteBudget() {
   
   return useMutation({
     mutationFn: async (id: string): Promise<void> => {
-      const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+      const response = await fetch(`${API_BASE}/api/client/budgets/${id}`, {
         method: 'DELETE',
         headers: getHeaders(),
       });
@@ -242,7 +242,7 @@ export function useBudgetDetail(
     queryFn: async (): Promise<Budget | null> => {
       if (!id) return null;
 
-      const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+      const response = await fetch(`${API_BASE}/api/client/budgets/${id}`, {
         headers: getHeaders(),
       });
 
@@ -268,7 +268,7 @@ export function useBudgetUsage(budgetId: string) {
   return useQuery({
     queryKey: [...budgetKeys.detail(budgetId), 'usage'] as const,
     queryFn: async () => {
-      const response = await fetch(`${API_BASE}/api/budgets/${budgetId}/usage`, {
+      const response = await fetch(`${API_BASE}/api/client/budgets/${budgetId}/usage`, {
         headers: getHeaders(),
       });
 
@@ -292,7 +292,7 @@ export function usePauseBudget() {
 
   return useMutation({
     mutationFn: async ({ id, paused }: { id: string; paused: boolean }): Promise<Budget> => {
-      const response = await fetch(`${API_BASE}/api/budgets/${id}`, {
+      const response = await fetch(`${API_BASE}/api/client/budgets/${id}`, {
         method: 'PATCH',
         headers: getHeaders(),
         body: JSON.stringify({ status: paused ? 'paused' : 'active' }),

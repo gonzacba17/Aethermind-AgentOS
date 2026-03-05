@@ -20,9 +20,35 @@ import { API_URL } from '@/lib/config';
 export default function RootPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
+    const code = params.get('code');
+    const token = params.get('token'); // legacy support
     const session = params.get('session');
 
+    // Preferred: one-time exchange code (ct_* never in URL)
+    if (code) {
+      (async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/auth/exchange`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.clientAccessToken) {
+              setAuthToken(data.clientAccessToken);
+            }
+          }
+        } catch {
+          // Exchange failed — user will land on /home unauthenticated
+        }
+        window.location.href = '/home';
+      })();
+      return;
+    }
+
+    // Legacy: direct token in URL (backwards compat, will be removed)
     if (token) {
       setAuthToken(token);
       window.location.href = '/home';
@@ -43,11 +69,9 @@ export default function RootPage() {
             if (data.clientAccessToken) {
               setAuthToken(data.clientAccessToken);
             }
-          } else {
-            console.error('[RootPage] Session exchange failed:', res.status);
           }
-        } catch (err) {
-          console.error('[RootPage] Session exchange error:', err);
+        } catch {
+          // Session exchange failed
         }
         window.location.href = '/home';
       })();

@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import crypto from 'crypto';
 import { db } from '../../db';
-import { users, agents, budgets } from '../../db/schema';
+import { users, clients, agents, budgets } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import redisService from '../../services/RedisService';
 import logger from '../../utils/logger';
@@ -19,6 +19,16 @@ import {
   JWTPayload,
   getUserIdFromPayload,
 } from '../../utils/auth-helpers';
+import { LRUCache } from 'lru-cache';
+
+/**
+ * In-memory store for exchange codes (fallback when Redis is unavailable).
+ * 30-second TTL, max 5000 entries. One-time use.
+ */
+const exchangeCodeCache = new LRUCache<string, string>({
+  max: 5000,
+  ttl: 30 * 1000, // 30 seconds
+});
 
 const router = Router();
 const JWT_SECRET = getJWTSecret();
@@ -141,6 +151,83 @@ router.post('/session', async (req: Request, res: Response) => {
   } catch (error) {
     logger.error('Session exchange failed', { error: (error as Error).message });
     res.status(500).json({ error: 'Failed to exchange session' });
+  }
+});
+
+/**
+ * POST /auth/create-exchange-code
+ * Creates a one-time exchange code for a client access token.
+ * The ct_* token is stored server-side; only the opaque code travels in the URL.
+ * Code expires in 30 seconds and is single-use.
+ */
+router.post('/create-exchange-code', async (req: Request, res: Response) => {
+  try {
+    const { clientAccessToken } = req.body;
+
+    if (!clientAccessToken || typeof clientAccessToken !== 'string') {
+      return res.status(400).json({ error: 'clientAccessToken is required' });
+    }
+
+    const code = `exc_${randomBytes(32).toString('hex')}`;
+
+    // Try Redis first (shared across instances), fall back to LRU
+    try {
+      await redisService.setex(`exchange_code:${code}`, 30, clientAccessToken);
+    } catch {
+      exchangeCodeCache.set(code, clientAccessToken);
+    }
+
+    logger.debug('Exchange code created');
+    res.json({ code });
+  } catch (error) {
+    logger.error('Failed to create exchange code', { error: (error as Error).message });
+    res.status(500).json({ error: 'Failed to create exchange code' });
+  }
+});
+
+/**
+ * POST /auth/exchange
+ * Exchanges a one-time code for the actual client access token.
+ * The code is deleted immediately after use.
+ */
+router.post('/exchange', async (req: Request, res: Response) => {
+  try {
+    const { code } = req.body;
+
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Exchange code is required' });
+    }
+
+    let clientAccessToken: string | null = null;
+
+    // Try Redis first
+    try {
+      const redisVal = await redisService.get(`exchange_code:${code}`);
+      if (redisVal) {
+        await redisService.del(`exchange_code:${code}`);
+        clientAccessToken = redisVal;
+      }
+    } catch {
+      // Redis unavailable — try LRU
+    }
+
+    // Fallback to LRU cache
+    if (!clientAccessToken) {
+      const cached = exchangeCodeCache.get(code);
+      if (cached) {
+        exchangeCodeCache.delete(code); // one-time use
+        clientAccessToken = cached;
+      }
+    }
+
+    if (!clientAccessToken) {
+      return res.status(401).json({ error: 'Invalid or expired exchange code' });
+    }
+
+    res.json({ clientAccessToken });
+  } catch (error) {
+    logger.error('Exchange code redemption failed', { error: (error as Error).message });
+    res.status(500).json({ error: 'Failed to exchange code' });
   }
 });
 

@@ -245,8 +245,9 @@ function PricingContent() {
       
       // Success! Redirect to dashboard
       setShowConfirmModal(false);
-      setTimeout(() => {
-        window.location.href = buildDashboardUrl();
+      setTimeout(async () => {
+        const dashUrl = await buildDashboardUrl();
+        window.location.href = dashUrl;
       }, 500);
       
     } catch (err) {

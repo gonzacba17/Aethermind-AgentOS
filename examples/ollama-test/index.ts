@@ -12,7 +12,7 @@
  *   - A model pulled: ollama pull llama3
  */
 
-import { initAethermind, OllamaInterceptor, getTransport } from '@aethermind/agent';
+import { initAethermind, OllamaInterceptor, getTransport, type TelemetryEvent } from '@aethermind/agent';
 
 // ── Configuration ─────────────────────────────────
 const API_KEY = process.env.AETHERMIND_API_KEY;
@@ -39,7 +39,7 @@ await new Promise((r) => setTimeout(r, 500));
 // ── Create Ollama interceptor ─────────────────────
 const transport = getTransport();
 const ollama = new OllamaInterceptor(
-  (event) => transport.send(event),
+  (event: TelemetryEvent) => transport.send(event),
   { host: OLLAMA_HOST }
 );
 ollama.instrument();

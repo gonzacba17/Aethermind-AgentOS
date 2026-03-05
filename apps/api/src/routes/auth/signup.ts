@@ -80,6 +80,11 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
     const orgApiKeyPrefix = orgApiKeyPlaintext.slice(0, 16);
     const clientAccessToken = `ct_${randomBytes(32).toString('hex')}`;
     const sdkApiKey = `aether_sdk_${randomBytes(24).toString('hex')}`;
+    const sdkApiKeyHash = await bcrypt.hash(sdkApiKey, 10);
+    const sdkApiKeyPrefix = sdkApiKey.slice(0, 20);
+
+    // Token expires in 30 days (rotatable via dashboard)
+    const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
     // Single transaction: user + org + client — all or nothing
     const result = await db.transaction(async (tx) => {
@@ -120,8 +125,11 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
         companyName: email,
         accessToken: clientAccessToken,
         sdkApiKey,
+        sdkApiKeyHash,
+        sdkApiKeyPrefix,
         organizationId: org.id,
         isActive: true,
+        tokenExpiresAt,
       }).returning();
 
       if (!client) throw new Error('Failed to create client');
