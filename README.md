@@ -145,16 +145,14 @@ aethermind-agentos/
 ### Creating an Agent
 
 ```typescript
-import { createAgent, startOrchestrator } from "@aethermind/sdk";
+import { initAethermind } from "@aethermind/agent";
 
-const researcher = createAgent({
-  name: "researcher",
-  model: "gpt-4",
-  systemPrompt: "You are a research assistant.",
-  logic: async (ctx) => {
-    return { findings: ["Finding 1", "Finding 2"] };
-  },
+initAethermind({
+  apiKey: process.env.AETHERMIND_API_KEY,
 });
+
+// Your existing AI code works as usual - Aethermind
+// automatically tracks costs, tokens, and latency.
 ```
 
 ### Starting the Orchestrator
@@ -209,28 +207,30 @@ ws.on("message", (data) => {
 });
 
 // Subscribe to specific channels
-ws.send(JSON.stringify({
-  type: "subscribe",
-  channels: ["log", "agent:event"],
-}));
+ws.send(
+  JSON.stringify({
+    type: "subscribe",
+    channels: ["log", "agent:event"],
+  }),
+);
 ```
 
 ## Available Commands
 
-| Command            | Description                            |
-| ------------------ | -------------------------------------- |
-| `pnpm dev`         | Start all services in development mode |
-| `pnpm build`       | Build all packages for production      |
-| `pnpm test`        | Run unit tests                         |
-| `pnpm test:all`    | Run all test suites                    |
-| `pnpm test:integration` | Run integration tests             |
-| `pnpm test:e2e`    | Run end-to-end tests                   |
-| `pnpm test:coverage`| Run with coverage report              |
-| `pnpm validate`    | Validate system setup                  |
-| `pnpm demo`        | Run the full demo                      |
-| `pnpm docker:up`   | Start Docker services                  |
-| `pnpm docker:down` | Stop Docker services                   |
-| `pnpm docker:logs` | View Docker logs                       |
+| Command                 | Description                            |
+| ----------------------- | -------------------------------------- |
+| `pnpm dev`              | Start all services in development mode |
+| `pnpm build`            | Build all packages for production      |
+| `pnpm test`             | Run unit tests                         |
+| `pnpm test:all`         | Run all test suites                    |
+| `pnpm test:integration` | Run integration tests                  |
+| `pnpm test:e2e`         | Run end-to-end tests                   |
+| `pnpm test:coverage`    | Run with coverage report               |
+| `pnpm validate`         | Validate system setup                  |
+| `pnpm demo`             | Run the full demo                      |
+| `pnpm docker:up`        | Start Docker services                  |
+| `pnpm docker:down`      | Stop Docker services                   |
+| `pnpm docker:logs`      | View Docker logs                       |
 
 ## Testing
 
@@ -247,16 +247,16 @@ pnpm test:coverage
 
 ### Test Coverage by Component
 
-| Component     | Coverage | Test Files                                        |
-| ------------- | -------- | ------------------------------------------------- |
-| StripeService | ~70%     | StripeService.test.ts                             |
-| Auth Flow     | ~75%     | auth.test.ts, auth-flow.test.ts                   |
-| Routes API    | ~70%     | routes-workflows, routes-costs, routes-traces     |
-| Providers     | ~75%     | AnthropicProvider                                 |
-| Services      | ~60%     | CostEstimationService, stores, cache              |
-| Validation    | ~90%     | schemas                                           |
-| Middleware    | ~80%     | auth, validator, sanitizer                        |
-| SDK           | ~65%     | BatchTransport, EventQueue, interceptors, retry   |
+| Component     | Coverage | Test Files                                      |
+| ------------- | -------- | ----------------------------------------------- |
+| StripeService | ~70%     | StripeService.test.ts                           |
+| Auth Flow     | ~75%     | auth.test.ts, auth-flow.test.ts                 |
+| Routes API    | ~70%     | routes-workflows, routes-costs, routes-traces   |
+| Providers     | ~75%     | AnthropicProvider                               |
+| Services      | ~60%     | CostEstimationService, stores, cache            |
+| Validation    | ~90%     | schemas                                         |
+| Middleware    | ~80%     | auth, validator, sanitizer                      |
+| SDK           | ~65%     | BatchTransport, EventQueue, interceptors, retry |
 
 ## Troubleshooting
 

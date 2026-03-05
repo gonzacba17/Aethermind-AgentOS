@@ -52,7 +52,7 @@ async function main() {
     console.log('  Access Token (for dashboard login & API):');
     console.log(`    ${accessToken}`);
     console.log('');
-    console.log('  SDK API Key (for @aethermind/sdk):');
+    console.log('  SDK API Key (for @aethermind/agent):');
     console.log(`    ${sdkApiKey}`);
     console.log('');
     console.log('  Dashboard URL:');

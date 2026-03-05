@@ -39,7 +39,7 @@ Cerrar el loop de telemetria: SDK envia datos, API los guarda, Dashboard los mue
 - [x] CI pipeline para publicar a npm en cada release tag
 - [x] README con quickstart para clientes
 
-**Exit criteria:** Un cliente puede hacer `npm install @aethermind/sdk`, ejecutar agentes con sus keys, y ver metricas reales en el dashboard.
+**Exit criteria:** Un cliente puede hacer `npm install @aethermind/agent`, ejecutar agentes con sus keys, y ver metricas reales en el dashboard.
 
 ---
 

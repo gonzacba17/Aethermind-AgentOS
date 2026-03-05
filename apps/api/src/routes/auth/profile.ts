@@ -7,8 +7,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { db } from '../../db';
-import { users } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { users, clients } from '../../db/schema';
+import { eq, and } from 'drizzle-orm';
 import { StripeService } from '../../services/StripeService';
 import { convertTemporaryUser, getTemporaryUser, removeTemporaryUser } from '../../services/OAuthService';
 import { emailService } from '../../services/EmailService';
@@ -313,6 +313,7 @@ router.get('/me', async (req: Request, res: Response) => {
       lastLoginAt: users.lastLoginAt,
       maxAgents: users.maxAgents,
       logRetentionDays: users.logRetentionDays,
+      organizationId: users.organizationId,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -361,6 +362,22 @@ router.get('/me', async (req: Request, res: Response) => {
     const isFirstTimeUser = user.createdAt ? 
       (now.getTime() - new Date(user.createdAt).getTime() < 24 * 60 * 60 * 1000) : false;
 
+    // Look up the associated client to get the SDK API key
+    let apiKey: string | undefined;
+    if (user.organizationId) {
+      try {
+        const [linkedClient] = await db.select({ sdkApiKey: clients.sdkApiKey })
+          .from(clients)
+          .where(and(eq(clients.organizationId, user.organizationId), eq(clients.isActive, true)))
+          .limit(1);
+        if (linkedClient) {
+          apiKey = linkedClient.sdkApiKey;
+        }
+      } catch (clientErr) {
+        logger.warn('Failed to fetch linked client for user', { userId, error: (clientErr as Error).message });
+      }
+    }
+
     // Update lastLoginAt asynchronously (non-blocking)
     db.update(users)
       .set({ lastLoginAt: now })
@@ -374,6 +391,7 @@ router.get('/me', async (req: Request, res: Response) => {
       name: user.name,
       email: user.email,
       plan: user.plan,
+      apiKey,
       emailVerified: user.emailVerified,
       usageCount: user.usageCount,
       usageLimit: user.usageLimit,

@@ -6,7 +6,7 @@ const codeLines = [
   { text: "import", color: "text-neutral-400" },
   { text: " { AethermindClient }", color: "text-white" },
   { text: " from", color: "text-neutral-400" },
-  { text: " '@aethermind/sdk'", color: "text-neutral-300" },
+  { text: " '@aethermind/agent'", color: "text-neutral-300" },
 ]
 
 const codeBlock = `

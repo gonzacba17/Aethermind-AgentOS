@@ -102,3 +102,13 @@ After running, check the [Aethermind Dashboard](https://aethermind-agent-os-dash
 | `model "llama3" not found`              | Run `ollama pull llama3`                  |
 | `AETHERMIND_API_KEY is required`        | Set the env var with your client token    |
 | `Ingestion API error: 401`              | Check that your API key is valid          |
+
+## Windows — Fix PowerShell Execution Policy
+
+If you see a `PSSecurityException` error when installing pnpm or running scripts, open PowerShell **as Administrator** and run:
+
+```powershell
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+Then retry `npm install -g pnpm`.

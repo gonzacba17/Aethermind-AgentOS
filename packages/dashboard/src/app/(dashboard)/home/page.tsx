@@ -74,26 +74,29 @@ function SDKKeyCard() {
     }
   }
 
-  const installCode = `npm install @aethermind/sdk`
+  const installCode = `npm install @aethermind/agent`
 
-  const connectCode = `import { createAgent, startOrchestrator } from '@aethermind/sdk';
+  const connectCode = `import { initAethermind } from '@aethermind/agent';
 
-const orchestrator = startOrchestrator({
+initAethermind({
   apiKey: '${showKey ? sdkApiKey : 'YOUR_SDK_API_KEY'}',
-  baseUrl: '${process.env.NEXT_PUBLIC_API_URL || 'https://api.aethermind.io'}',
+  endpoint: '${process.env.NEXT_PUBLIC_API_URL || 'https://aethermind-agentos-production.up.railway.app'}',
 });
 
-const agent = createAgent({
-  name: 'my-assistant',
+// Your existing AI code works as usual — Aethermind
+// automatically tracks costs, tokens, and latency.
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const response = await openai.chat.completions.create({
   model: 'gpt-4',
-  systemPrompt: 'You are a helpful assistant.',
+  messages: [{ role: 'user', content: 'Hello!' }],
 });
 
-const result = await orchestrator.execute('my-assistant', {
-  input: 'Hello, world!'
-});
-
-console.log(result);`
+console.log(response.choices[0].message.content);`
 
   return (
     <Card className="relative overflow-hidden border-2 border-primary bg-gradient-to-br from-primary/10 via-primary/5 to-background shadow-lg shadow-primary/10">
@@ -110,7 +113,7 @@ console.log(result);`
               {client?.companyName ? `Welcome, ${client.companyName}` : 'Your SDK API Key'}
             </CardTitle>
             <CardDescription className="text-base mt-1">
-              Use this key to connect the @aethermind/sdk to your application
+              Use this key to connect the @aethermind/agent SDK to your application
             </CardDescription>
           </div>
         </div>
