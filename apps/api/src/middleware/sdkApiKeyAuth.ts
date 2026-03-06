@@ -1,11 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import bcrypt from 'bcryptjs';
 import { db } from '../db/index.js';
 import { clients, organizations } from '../db/schema.js';
-import { eq, and, isNotNull } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { LRUCache } from 'lru-cache';
-import { hashForCache } from '../utils/crypto.js';
 import { apiKeyAuthCached, type AuthenticatedRequest } from './apiKeyAuth.js';
+import crypto from 'crypto';
 
 /**
  * Cached auth context for ingestion keys
@@ -81,8 +80,7 @@ export async function ingestionAuth(
  *
  * Strategy:
  * 1. Check LRU cache (keyed by SHA-256 of the API key)
- * 2. If the client has sdkApiKeyHash: prefix lookup → bcrypt compare (secure)
- * 3. Fallback: plaintext lookup for legacy clients without hash (migration compat)
+ * 2. Plaintext lookup: WHERE sdk_api_key = apiKey AND is_active = true
  */
 async function handleSdkKey(
   apiKey: string,
@@ -90,7 +88,7 @@ async function handleSdkKey(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const cacheKey = hashForCache(apiKey);
+  const cacheKey = crypto.createHash('sha256').update(apiKey).digest('hex');
 
   // Check cache
   const cached = sdkKeyCache.get(cacheKey);
@@ -101,47 +99,17 @@ async function handleSdkKey(
     return;
   }
 
-  // Extract prefix for indexed lookup (first 20 chars)
-  const prefix = apiKey.slice(0, 20);
-
-  // Try secure path first: prefix match → bcrypt compare
-  let row: { clientId: string; organizationId: string | null; rateLimitPerMin: number; sdkApiKeyHash: string | null } | undefined;
-
-  const hashedRows = await db
+  // Plaintext lookup
+  const rows = await db
     .select({
       clientId: clients.id,
       organizationId: clients.organizationId,
       rateLimitPerMin: clients.rateLimitPerMin,
-      sdkApiKeyHash: clients.sdkApiKeyHash,
     })
     .from(clients)
-    .where(and(
-      eq(clients.sdkApiKeyPrefix, prefix),
-      eq(clients.isActive, true),
-      isNotNull(clients.sdkApiKeyHash),
-    ));
+    .where(and(eq(clients.sdkApiKey, apiKey), eq(clients.isActive, true)));
 
-  for (const candidate of hashedRows) {
-    if (candidate.sdkApiKeyHash && await bcrypt.compare(apiKey, candidate.sdkApiKeyHash)) {
-      row = candidate;
-      break;
-    }
-  }
-
-  // Fallback: plaintext lookup for legacy clients that haven't been migrated
-  if (!row) {
-    const legacyRows = await db
-      .select({
-        clientId: clients.id,
-        organizationId: clients.organizationId,
-        rateLimitPerMin: clients.rateLimitPerMin,
-        sdkApiKeyHash: clients.sdkApiKeyHash,
-      })
-      .from(clients)
-      .where(and(eq(clients.sdkApiKey, apiKey), eq(clients.isActive, true)));
-
-    row = legacyRows[0];
-  }
+  const row = rows[0];
 
   if (!row) {
     res.status(401).json({
