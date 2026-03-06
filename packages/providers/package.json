@@ -1,0 +1,83 @@
+{
+  "name": "@aethermind/providers",
+  "version": "0.1.0",
+  "description": "Plug-and-play AI provider instances with automatic Aethermind telemetry",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/esm/index.d.ts"
+    },
+    "./openai": {
+      "import": "./dist/esm/openai.js",
+      "require": "./dist/cjs/openai.js",
+      "types": "./dist/esm/openai.d.ts"
+    },
+    "./anthropic": {
+      "import": "./dist/esm/anthropic.js",
+      "require": "./dist/cjs/anthropic.js",
+      "types": "./dist/esm/anthropic.d.ts"
+    },
+    "./gemini": {
+      "import": "./dist/esm/gemini.js",
+      "require": "./dist/cjs/gemini.js",
+      "types": "./dist/esm/gemini.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "pnpm clean && pnpm build:esm && pnpm build:cjs && pnpm build:markers",
+    "build:esm": "tsc --project tsconfig.esm.json",
+    "build:cjs": "tsc --project tsconfig.cjs.json",
+    "build:markers": "node --input-type=commonjs -e \"const fs=require('fs');fs.writeFileSync('dist/cjs/package.json','{\\\"type\\\":\\\"commonjs\\\"}');fs.writeFileSync('dist/esm/package.json','{\\\"type\\\":\\\"module\\\"}')\"",
+    "clean": "rimraf dist",
+    "typecheck": "tsc --noEmit --project tsconfig.esm.json",
+    "prepublishOnly": "pnpm build && pnpm typecheck"
+  },
+  "keywords": [
+    "aethermind",
+    "openai",
+    "anthropic",
+    "gemini",
+    "ai",
+    "telemetry",
+    "monitoring",
+    "plug-and-play"
+  ],
+  "author": "Aethermind Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gonzacba17/Aethermind-AgentOS.git",
+    "directory": "packages/providers"
+  },
+  "dependencies": {
+    "@aethermind/agent": "^0.1.5"
+  },
+  "peerDependencies": {
+    "openai": ">=4.0.0",
+    "@anthropic-ai/sdk": ">=0.1.0",
+    "@google/generative-ai": ">=0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": { "optional": true },
+    "@anthropic-ai/sdk": { "optional": true },
+    "@google/generative-ai": { "optional": true }
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "rimraf": "^5.0.10"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
