@@ -34,30 +34,22 @@ export class OpenAIInterceptor extends BaseInterceptor {
   }
 
   /**
-   * Instrument OpenAI SDK
+   * Instrument OpenAI SDK.
+   * @param sdkModule - Pre-loaded openai module (from dynamic import). Falls back to require().
    */
-  instrument(): void {
-    if (this.isInstrumented) {
-      console.warn('[Aethermind] OpenAI already instrumented');
-      return;
-    }
+  instrument(sdkModule?: any): void {
+    if (this.isInstrumented) return;
 
     try {
-      // Dynamically import OpenAI SDK if available
-      const OpenAI = this.getOpenAIConstructor();
-      
-      if (!OpenAI) {
-        console.warn('[Aethermind] OpenAI SDK not found, skipping instrumentation');
-        return;
-      }
+      const OpenAI = sdkModule
+        ? (sdkModule.default || sdkModule.OpenAI || sdkModule)
+        : this.getOpenAIConstructor();
+
+      if (!OpenAI) return;
 
       // Store original method
       originalCreate = OpenAI.prototype.chat?.completions?.create;
-
-      if (!originalCreate) {
-        console.warn('[Aethermind] OpenAI chat.completions.create not found');
-        return;
-      }
+      if (!originalCreate) return;
 
       // Monkey-patch the create method
       const self = this;
@@ -66,7 +58,7 @@ export class OpenAIInterceptor extends BaseInterceptor {
       };
 
       this.isInstrumented = true;
-      console.log('[Aethermind] OpenAI SDK instrumented successfully');
+      console.log('[Aethermind] OpenAI instrumented');
     } catch (error) {
       console.error('[Aethermind] Failed to instrument OpenAI:', error);
     }

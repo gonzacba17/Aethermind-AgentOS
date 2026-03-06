@@ -20,7 +20,7 @@ let globalConfig: AethermindConfig | null = null;
 
 /**
  * Initialize Aethermind SDK with configuration
- * 
+ *
  * @example
  * ```typescript
  * initAethermind({
@@ -31,42 +31,61 @@ let globalConfig: AethermindConfig | null = null;
 export function initAethermind(config: Partial<AethermindConfig> & { apiKey: string }): void {
   // Validate and merge with defaults
   const validated = AethermindConfigSchema.parse(config);
-  
+
   globalConfig = validated;
-  
+
   if (!validated.enabled) {
     console.log('[Aethermind] SDK initialized but disabled');
     return;
   }
-  
-  // Import interceptors and transport dynamically to avoid circular deps
-  import('../interceptors/index.js').then(({ OpenAIInterceptor, AnthropicInterceptor, GeminiInterceptor, FetchInterceptor }) => {
-    import('../transport/BatchTransport.js').then(({ getTransport }) => {
-      const transport = getTransport();
 
-      const sendEvent = (event: any) => {
-        transport.send(event);
-      };
-
-      // Create interceptors with callback to transport
-      const openaiInterceptor = new OpenAIInterceptor(sendEvent);
-      const anthropicInterceptor = new AnthropicInterceptor(sendEvent);
-      const geminiInterceptor = new GeminiInterceptor(sendEvent);
-      const fetchInterceptor = new FetchInterceptor(sendEvent);
-
-      // Instrument SDKs and global fetch
-      openaiInterceptor.instrument();
-      anthropicInterceptor.instrument();
-      geminiInterceptor.instrument();
-      fetchInterceptor.instrument();
-
-      console.log('[Aethermind] SDK initialized successfully');
-    }).catch((error) => {
-      console.error('[Aethermind] Failed to initialize transport:', error);
-    });
-  }).catch((error) => {
-    console.error('[Aethermind] Failed to initialize interceptors:', error);
+  // Deferred setup: discover SDKs via dynamic import, then instrument
+  setupInterceptors().catch((error) => {
+    console.error('[Aethermind] Failed to initialize:', error);
   });
+}
+
+/**
+ * Try to dynamically load a module. Returns null if not installed.
+ * Works in both CJS (compiled to require) and ESM (native import).
+ */
+async function tryLoadModule(name: string): Promise<any> {
+  try {
+    return await import(name);
+  } catch {
+    return null;
+  }
+}
+
+async function setupInterceptors(): Promise<void> {
+  const [
+    { OpenAIInterceptor, AnthropicInterceptor, GeminiInterceptor, FetchInterceptor },
+    { getTransport },
+  ] = await Promise.all([
+    import('../interceptors/index.js'),
+    import('../transport/BatchTransport.js'),
+  ]);
+
+  const transport = getTransport();
+  const sendEvent = (event: any) => {
+    transport.send(event);
+  };
+
+  // Discover user's SDK installations (fail silently if not installed)
+  const [openaiMod, anthropicMod] = await Promise.all([
+    tryLoadModule('openai'),
+    tryLoadModule('@anthropic-ai/sdk'),
+  ]);
+  const geminiMod = await tryLoadModule('@google/generative-ai')
+    || await tryLoadModule('@google/genai');
+
+  // Create and instrument interceptors, passing discovered SDK modules
+  new OpenAIInterceptor(sendEvent).instrument(openaiMod);
+  new AnthropicInterceptor(sendEvent).instrument(anthropicMod);
+  new GeminiInterceptor(sendEvent).instrument(geminiMod);
+  new FetchInterceptor(sendEvent).instrument();
+
+  console.log('[Aethermind] SDK initialized successfully');
 }
 
 /**

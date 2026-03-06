@@ -100,6 +100,36 @@ router.patch('/me', async (req, res) => {
 });
 
 /**
+ * DELETE /api/client/telemetry
+ *
+ * Deletes all telemetry_events for this organization.
+ * Used to clear test/demo data from the dashboard.
+ */
+router.delete('/telemetry', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no organization' });
+      return;
+    }
+
+    const result = await db
+      .delete(telemetryEvents)
+      .where(eq(telemetryEvents.organizationId, client.organizationId));
+
+    const deleted = (result as any).rowCount ?? (result as any).count ?? 0;
+
+    console.log(`[Client DELETE /telemetry] Deleted ${deleted} events for org ${client.organizationId}`);
+    res.json({ deleted });
+  } catch (error) {
+    console.error('[Client DELETE /telemetry] Error:', error);
+    res.status(500).json({ error: 'Failed to delete telemetry data' });
+  }
+});
+
+/**
  * GET /api/client/metrics?period=30d
  *
  * Totals: cost, tokens, events, avg latency, error count, success rate

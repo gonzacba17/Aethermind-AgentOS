@@ -34,10 +34,10 @@ export abstract class BaseInterceptor {
   protected isInstrumented = false;
 
   /**
-   * Instrument the provider SDK
-   * Subclasses override to monkey-patch the specific SDK
+   * Instrument the provider SDK.
+   * @param sdkModule - Optional pre-loaded SDK module (from dynamic import).
    */
-  abstract instrument(): void;
+  abstract instrument(sdkModule?: any): void;
 
   /**
    * Remove instrumentation

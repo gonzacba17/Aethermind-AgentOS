@@ -29,29 +29,22 @@ export class AnthropicInterceptor extends BaseInterceptor {
   }
 
   /**
-   * Instrument Anthropic SDK
+   * Instrument Anthropic SDK.
+   * @param sdkModule - Pre-loaded @anthropic-ai/sdk module (from dynamic import). Falls back to require().
    */
-  instrument(): void {
-    if (this.isInstrumented) {
-      console.warn('[Aethermind] Anthropic already instrumented');
-      return;
-    }
+  instrument(sdkModule?: any): void {
+    if (this.isInstrumented) return;
 
     try {
-      const Anthropic = this.getAnthropicConstructor();
-      
-      if (!Anthropic) {
-        console.warn('[Aethermind] Anthropic SDK not found, skipping instrumentation');
-        return;
-      }
+      const Anthropic = sdkModule
+        ? (sdkModule.default || sdkModule.Anthropic || sdkModule)
+        : this.getAnthropicConstructor();
+
+      if (!Anthropic) return;
 
       // Store original method
       originalMessagesCreate = Anthropic.prototype.messages?.create;
-
-      if (!originalMessagesCreate) {
-        console.warn('[Aethermind] Anthropic messages.create not found');
-        return;
-      }
+      if (!originalMessagesCreate) return;
 
       // Monkey-patch the create method
       const self = this;
@@ -60,7 +53,7 @@ export class AnthropicInterceptor extends BaseInterceptor {
       };
 
       this.isInstrumented = true;
-      console.log('[Aethermind] Anthropic SDK instrumented successfully');
+      console.log('[Aethermind] Anthropic instrumented');
     } catch (error) {
       console.error('[Aethermind] Failed to instrument Anthropic:', error);
     }

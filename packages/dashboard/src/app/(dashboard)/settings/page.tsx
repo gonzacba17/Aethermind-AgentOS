@@ -1,8 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Settings, Bell, User, Shield, Palette, CreditCard, ChevronRight, Key, Building2 } from "lucide-react"
+import { Settings, Bell, User, Shield, Palette, CreditCard, ChevronRight, Key, Building2, Trash2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 
 const settingsItems = [
   {
@@ -66,6 +68,44 @@ const settingsItems = [
 
 export default function SettingsPage() {
   const router = useRouter()
+  const [clearing, setClearing] = useState(false)
+  const [clearResult, setClearResult] = useState<string | null>(null)
+
+  async function handleClearTestData() {
+    if (!confirm("Are you sure you want to delete ALL telemetry data? This action cannot be undone.")) {
+      return
+    }
+
+    setClearing(true)
+    setClearResult(null)
+
+    try {
+      const token = document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("client_token="))
+        ?.split("=")[1]
+
+      const res = await fetch("/api/client/telemetry", {
+        method: "DELETE",
+        headers: {
+          "X-Client-Token": token || "",
+        },
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setClearResult(`Error: ${data.error || res.statusText}`)
+        return
+      }
+
+      const data = await res.json()
+      setClearResult(`Deleted ${data.deleted} events.`)
+    } catch (err) {
+      setClearResult(`Error: ${err instanceof Error ? err.message : "Unknown error"}`)
+    } finally {
+      setClearing(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -85,7 +125,7 @@ export default function SettingsPage() {
         {settingsItems.map((item) => {
           const Icon = item.icon
           return (
-            <Card 
+            <Card
               key={item.title}
               className={`cursor-pointer transition-all hover:shadow-md ${
                 item.disabled ? 'opacity-60 cursor-not-allowed' : 'hover:border-primary/50'
@@ -117,6 +157,35 @@ export default function SettingsPage() {
           )
         })}
       </div>
+
+      {/* Developer / Data Management */}
+      <Card className="border-destructive/30">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Trash2 className="h-5 w-5 text-destructive" />
+            Data Management
+          </CardTitle>
+          <CardDescription>
+            Clear telemetry data from your dashboard. Useful after testing with dummy events.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="destructive"
+              onClick={handleClearTestData}
+              disabled={clearing}
+            >
+              {clearing ? "Clearing..." : "Clear all test data"}
+            </Button>
+            {clearResult && (
+              <span className={`text-sm ${clearResult.startsWith("Error") ? "text-destructive" : "text-muted-foreground"}`}>
+                {clearResult}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

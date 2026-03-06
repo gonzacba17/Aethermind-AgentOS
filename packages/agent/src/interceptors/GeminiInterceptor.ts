@@ -32,29 +32,22 @@ export class GeminiInterceptor extends BaseInterceptor {
   }
 
   /**
-   * Instrument Gemini SDK
+   * Instrument Gemini SDK.
+   * @param sdkModule - Pre-loaded @google/generative-ai or @google/genai module. Falls back to require().
    */
-  instrument(): void {
-    if (this.isInstrumented) {
-      console.warn('[Aethermind] Gemini already instrumented');
-      return;
-    }
+  instrument(sdkModule?: any): void {
+    if (this.isInstrumented) return;
 
     try {
-      const GenerativeModel = this.getGenerativeModelPrototype();
+      const GenerativeModel = sdkModule
+        ? this.extractGenerativeModelPrototype(sdkModule)
+        : this.getGenerativeModelPrototype();
 
-      if (!GenerativeModel) {
-        console.warn('[Aethermind] Gemini SDK not found, skipping instrumentation');
-        return;
-      }
+      if (!GenerativeModel) return;
 
       // Store original method
       originalGenerateContent = GenerativeModel.generateContent;
-
-      if (!originalGenerateContent) {
-        console.warn('[Aethermind] Gemini generateContent not found');
-        return;
-      }
+      if (!originalGenerateContent) return;
 
       this.generativeModelPrototype = GenerativeModel;
 
@@ -65,7 +58,7 @@ export class GeminiInterceptor extends BaseInterceptor {
       };
 
       this.isInstrumented = true;
-      console.log('[Aethermind] Gemini SDK instrumented successfully');
+      console.log('[Aethermind] Gemini instrumented');
     } catch (error) {
       console.error('[Aethermind] Failed to instrument Gemini:', error);
     }
@@ -443,8 +436,20 @@ export class GeminiInterceptor extends BaseInterceptor {
   }
 
   /**
-   * Get GenerativeModel prototype (dynamically loaded)
-   * Tries both @google/generative-ai and @google/genai package names
+   * Extract GenerativeModel prototype from a pre-loaded module.
+   */
+  private extractGenerativeModelPrototype(sdkModule: any): any {
+    const mod = sdkModule.default || sdkModule;
+    const GM = mod.GenerativeModel;
+    if (GM?.prototype?.generateContent) {
+      return GM.prototype;
+    }
+    return null;
+  }
+
+  /**
+   * Get GenerativeModel prototype (dynamically loaded via require).
+   * Tries both @google/generative-ai and @google/genai package names.
    */
   private getGenerativeModelPrototype(): any {
     try {
