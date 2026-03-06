@@ -1,6 +1,6 @@
 {
   "name": "@aethermind/agent",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Lightweight SDK for monitoring AI API costs with Aethermind",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",

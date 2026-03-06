@@ -36,4 +36,4 @@ export { FetchInterceptor } from './interceptors/FetchInterceptor.js';
 export { OllamaInterceptor, type OllamaConfig, type OllamaChatRequest, type OllamaChatResponse, type OllamaGenerateRequest, type OllamaGenerateResponse } from './interceptors/OllamaInterceptor.js';
 
 // Version
-export const VERSION = '0.3.0';
+export const VERSION = '0.1.5';
