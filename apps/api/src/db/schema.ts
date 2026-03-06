@@ -404,9 +404,6 @@ export const clients = pgTable('clients', {
   companyName: varchar('company_name', { length: 255 }).notNull(),
   accessToken: varchar('access_token', { length: 80 }).notNull().unique(),
   sdkApiKey: varchar('sdk_api_key', { length: 255 }).notNull(),
-  // Phase 1 security: hashed SDK key (prefix for indexed lookup, hash for bcrypt compare)
-  sdkApiKeyHash: varchar('sdk_api_key_hash', { length: 255 }),
-  sdkApiKeyPrefix: varchar('sdk_api_key_prefix', { length: 20 }),
   organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
   rateLimitPerMin: integer('rate_limit_per_min').default(100).notNull(),
   isActive: boolean('is_active').default(true),
@@ -418,7 +415,6 @@ export const clients = pgTable('clients', {
 }, (table) => ({
   accessTokenIdx: index('idx_clients_access_token').on(table.accessToken),
   sdkApiKeyIdx: index('idx_clients_sdk_api_key').on(table.sdkApiKey),
-  sdkApiKeyPrefixIdx: index('idx_clients_sdk_api_key_prefix').on(table.sdkApiKeyPrefix),
   orgIdIdx: index('idx_clients_organization_id').on(table.organizationId),
   tokenExpiresIdx: index('idx_clients_token_expires_at').on(table.tokenExpiresAt),
 }));

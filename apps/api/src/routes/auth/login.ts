@@ -122,8 +122,6 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       const orgApiKeyPrefix = orgApiKeyPlaintext.slice(0, 16);
       const newClientToken = `ct_${randomBytes(32).toString('hex')}`;
       const sdkApiKey = `aether_sdk_${randomBytes(24).toString('hex')}`;
-      const sdkApiKeyHash = await bcrypt.hash(sdkApiKey, 10);
-      const sdkApiKeyPrefix = sdkApiKey.slice(0, 20);
       const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
       await db.transaction(async (tx) => {
@@ -140,8 +138,6 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
           companyName: user.email,
           accessToken: newClientToken,
           sdkApiKey,
-          sdkApiKeyHash,
-          sdkApiKeyPrefix,
           organizationId: org.id,
           isActive: true,
           tokenExpiresAt,
