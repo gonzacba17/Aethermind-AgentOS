@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Settings, Bell, User, Shield, Palette, CreditCard, ChevronRight, Key, Building2, Trash2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { apiRequest } from "@/lib/api"
 
 const settingsItems = [
   {
@@ -72,7 +73,7 @@ export default function SettingsPage() {
   const [clearResult, setClearResult] = useState<string | null>(null)
 
   async function handleClearTestData() {
-    if (!confirm("Are you sure you want to delete ALL telemetry data? This action cannot be undone.")) {
+    if (!confirm("¿Estás seguro? Esto borrará todos los eventos de telemetría de tu cuenta.")) {
       return
     }
 
@@ -80,26 +81,11 @@ export default function SettingsPage() {
     setClearResult(null)
 
     try {
-      const token = document.cookie
-        .split("; ")
-        .find((c) => c.startsWith("client_token="))
-        ?.split("=")[1]
-
-      const res = await fetch("/api/client/telemetry", {
+      const data = await apiRequest<{ deleted: number }>("/api/client/telemetry", {
         method: "DELETE",
-        headers: {
-          "X-Client-Token": token || "",
-        },
       })
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        setClearResult(`Error: ${data.error || res.statusText}`)
-        return
-      }
-
-      const data = await res.json()
-      setClearResult(`Deleted ${data.deleted} events.`)
+      setClearResult(`Telemetry data cleared (${data.deleted} events deleted)`)
+      router.refresh()
     } catch (err) {
       setClearResult(`Error: ${err instanceof Error ? err.message : "Unknown error"}`)
     } finally {
