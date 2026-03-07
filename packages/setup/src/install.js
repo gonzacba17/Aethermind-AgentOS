@@ -5,7 +5,7 @@ const { ok, fail } = require('./ui.js');
 
 function installProviders(packageManager) {
   const cmds = {
-    npm: 'npm install @aethermind/providers',
+    npm: 'npm install @aethermind/providers --legacy-peer-deps',
     pnpm: 'pnpm add @aethermind/providers',
     yarn: 'yarn add @aethermind/providers',
     bun: 'bun add @aethermind/providers',

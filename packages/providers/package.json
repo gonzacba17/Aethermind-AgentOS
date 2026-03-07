@@ -1,6 +1,6 @@
 {
   "name": "@aethermind/providers",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Plug-and-play AI provider instances with automatic Aethermind telemetry",
   "type": "module",
   "main": "./dist/cjs/index.js",
@@ -61,7 +61,7 @@
     "@aethermind/agent": "^0.1.5"
   },
   "peerDependencies": {
-    "openai": ">=4.0.0",
+    "openai": ">=3.0.0",
     "@anthropic-ai/sdk": ">=0.1.0",
     "@google/generative-ai": ">=0.1.0"
   },
