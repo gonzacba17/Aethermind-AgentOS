@@ -598,4 +598,46 @@ router.post(
   }
 });
 
+// ============================================
+// SDK key validation endpoint (used by @aethermind/setup)
+// ============================================
+
+/**
+ * GET /v1/validate
+ *
+ * Validates an SDK API key without side effects.
+ * Returns the linked organization name so the CLI can greet the user.
+ *
+ * Authentication: X-API-Key header (aether_sdk_* or aether_*)
+ *
+ * @returns { valid: true, organization: "..." }
+ */
+router.get(
+  '/validate',
+  ingestionAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { organizationId, organization } = req;
+
+    if (!organizationId) {
+      return res.status(401).json({
+        valid: false,
+        error: 'Missing organization context',
+      });
+    }
+
+    res.json({
+      valid: true,
+      organizationId,
+      organization: (organization as any)?.name || organizationId,
+    });
+  } catch (error) {
+    console.error('[Validate] Error:', error);
+    res.status(500).json({
+      valid: false,
+      error: 'Validation failed',
+    });
+  }
+});
+
 export default router;
