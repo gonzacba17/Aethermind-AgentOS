@@ -1,6 +1,6 @@
 {
   "name": "@aethermind/providers",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Plug-and-play AI provider instances with automatic Aethermind telemetry",
   "type": "module",
   "main": "./dist/cjs/index.js",
@@ -26,6 +26,11 @@
       "import": "./dist/esm/gemini.js",
       "require": "./dist/cjs/gemini.js",
       "types": "./dist/esm/gemini.d.ts"
+    },
+    "./ollama": {
+      "import": "./dist/esm/ollama.js",
+      "require": "./dist/cjs/ollama.js",
+      "types": "./dist/esm/ollama.d.ts"
     }
   },
   "files": [
@@ -48,6 +53,7 @@
     "ai",
     "telemetry",
     "monitoring",
+    "ollama",
     "plug-and-play"
   ],
   "author": "Aethermind Team",
@@ -63,12 +69,14 @@
   "peerDependencies": {
     "openai": ">=3.0.0",
     "@anthropic-ai/sdk": ">=0.1.0",
-    "@google/generative-ai": ">=0.1.0"
+    "@google/generative-ai": ">=0.1.0",
+    "ollama": ">=0.5.0"
   },
   "peerDependenciesMeta": {
     "openai": { "optional": true },
     "@anthropic-ai/sdk": { "optional": true },
-    "@google/generative-ai": { "optional": true }
+    "@google/generative-ai": { "optional": true },
+    "ollama": { "optional": true }
   },
   "devDependencies": {
     "typescript": "^5.4.0",

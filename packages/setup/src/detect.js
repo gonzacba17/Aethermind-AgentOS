@@ -31,6 +31,7 @@ const AI_SDKS = [
   { name: 'openai', label: 'openai' },
   { name: '@anthropic-ai/sdk', label: '@anthropic-ai/sdk' },
   { name: '@google/generative-ai', label: '@google/generative-ai' },
+  { name: 'ollama', label: 'ollama' },
 ];
 
 function detectInstalledSDKs(cwd) {
@@ -48,7 +49,7 @@ function detectInstalledSDKs(cwd) {
   if (found.length > 0) {
     ok(`SDKs detectados: ${found.join(', ')}`);
   } else {
-    info('No se detectaron SDKs de IA instalados (openai, anthropic, gemini)');
+    info('No se detectaron SDKs de IA instalados (openai, anthropic, gemini, ollama)');
   }
   return found;
 }
