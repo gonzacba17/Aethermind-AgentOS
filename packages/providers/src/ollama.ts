@@ -1,5 +1,6 @@
 import { ensureInit } from './_init.js';
 import { _require } from './_require.js';
+import { getTransport } from '@aethermind/agent';
 
 let _ollamaModule: any = null;
 
@@ -19,24 +20,23 @@ function getOllamaDefault(): any {
 }
 
 /**
+ * Send a telemetry event via the shared BatchTransport.
+ * Fails silently — telemetry must never break the user's app.
+ */
+function sendTelemetry(event: any): void {
+  try {
+    const transport = getTransport();
+    transport.send(event);
+  } catch {
+    // telemetry not available — silently ignore
+  }
+}
+
+/**
  * Wrap an async Ollama method to capture telemetry.
  */
 function wrapMethod(methodName: string, original: (...args: any[]) => Promise<any>) {
   return async function (this: any, ...args: any[]) {
-    let sendEvent: ((event: any) => void) | undefined;
-    try {
-      const agentMod = _require('@aethermind/agent');
-      const getTransport = agentMod.getTransport;
-      if (typeof getTransport === 'function') {
-        const transport = getTransport();
-        if (transport && typeof transport.send === 'function') {
-          sendEvent = (event: any) => transport.send(event);
-        }
-      }
-    } catch {
-      // telemetry not available — pass through
-    }
-
     const model = args[0]?.model || 'unknown';
     const startTime = Date.now();
 
@@ -44,43 +44,37 @@ function wrapMethod(methodName: string, original: (...args: any[]) => Promise<an
       const result = await original.apply(this, args);
       const latency = Date.now() - startTime;
 
-      if (sendEvent) {
-        const promptTokens = result.prompt_eval_count ?? 0;
-        const completionTokens = result.eval_count ?? 0;
+      const promptTokens = result.prompt_eval_count ?? 0;
+      const completionTokens = result.eval_count ?? 0;
 
-        sendEvent({
-          provider: 'ollama',
-          model,
-          type: methodName === 'chat' ? 'chat' : 'completion',
-          timestamp: new Date(startTime).toISOString(),
-          tokens: {
-            promptTokens,
-            completionTokens,
-            totalTokens: promptTokens + completionTokens,
-          },
-          cost: 0,
-          latency,
-          status: 'success',
-        });
-      }
+      sendTelemetry({
+        provider: 'ollama',
+        model,
+        timestamp: new Date(startTime).toISOString(),
+        tokens: {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+        },
+        cost: 0,
+        latency,
+        status: 'success',
+      });
 
       return result;
     } catch (error) {
       const latency = Date.now() - startTime;
 
-      if (sendEvent) {
-        sendEvent({
-          provider: 'ollama',
-          model,
-          type: methodName === 'chat' ? 'chat' : 'completion',
-          timestamp: new Date(startTime).toISOString(),
-          tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          cost: 0,
-          latency,
-          status: 'error',
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+      sendTelemetry({
+        provider: 'ollama',
+        model,
+        timestamp: new Date(startTime).toISOString(),
+        tokens: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        cost: 0,
+        latency,
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       throw error;
     }
