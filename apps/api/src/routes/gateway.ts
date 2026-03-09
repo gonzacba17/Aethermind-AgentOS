@@ -24,7 +24,7 @@ import {
   providerHealth,
   optimizationSettings,
 } from '../db/schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { clientAuth, type ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
 import { evaluateBudgetByOrg } from '../services/ClientBudgetService.js';
 import * as SemanticCacheService from '../services/SemanticCacheService.js';
@@ -119,21 +119,28 @@ async function getUserApiKey(
   organizationId: string,
   provider: string,
 ): Promise<string | null> {
-  // Bridge: organizationId → user → userApiKeys
+  // Get ALL users in this organization (not just the first one)
   const userRows = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.organizationId, organizationId))
-    .limit(1);
+    .where(
+      and(
+        eq(users.organizationId, organizationId),
+        isNull(users.deletedAt),
+      ),
+    );
 
-  if (!userRows[0]) return null;
+  if (!userRows.length) return null;
 
+  const userIds = userRows.map((u) => u.id);
+
+  // Search for a valid key across all users in the org
   const keyRows = await db
     .select({ encryptedKey: userApiKeys.encryptedKey })
     .from(userApiKeys)
     .where(
       and(
-        eq(userApiKeys.userId, userRows[0].id),
+        inArray(userApiKeys.userId, userIds),
         eq(userApiKeys.provider, provider),
         eq(userApiKeys.isValid, true),
       ),
