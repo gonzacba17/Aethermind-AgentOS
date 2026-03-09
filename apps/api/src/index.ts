@@ -59,7 +59,6 @@ import optimizationRoutes from "./routes/optimization.routes";
 import forecastingRoutes from "./routes/forecasting.routes";
 import organizationRoutes from "./routes/organizations";
 import gatewayRouter from "./routes/gateway";
-import adminRouter from "./routes/admin";
 import { WebSocketManager } from "./websocket/WebSocketManager";
 import { InMemoryStore } from "./services/InMemoryStore";
 import { DatabaseStore } from "./services/DatabaseStore";
@@ -361,9 +360,6 @@ async function startServer(): Promise<void> {
     wsManager.broadcast("workflow:failed", event);
   });
 
-  // TEMP: Admin migration endpoint — must be before ALL other middleware
-  app.use("/api", adminRouter);
-
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -447,8 +443,6 @@ async function startServer(): Promise<void> {
 
   // Auth routes — public (signup, login, etc.) — must be mounted BEFORE global auth
   app.use("/api/auth", authRoutes);
-
-  // (admin router moved above helmet)
 
   // Client routes — protected by clientAuth (B2B token), own rate limit (100/min)
   app.use("/api/client", clientLimiter, clientAuth, clientRoutes);
