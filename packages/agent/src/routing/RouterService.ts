@@ -1,3 +1,4 @@
+// DEPRECATED v0.2.0 — Client-side routing removed. Routing is now server-side only (gateway).
 import { getConfig, isInitialized } from '../config/index.js';
 import { classifyPrompt } from './PromptClassifier.js';
 

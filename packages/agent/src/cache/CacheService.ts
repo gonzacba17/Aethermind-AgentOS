@@ -1,3 +1,4 @@
+// DEPRECATED v0.2.0 — Client-side caching removed. Caching is now server-side only (gateway).
 import { getConfig, isInitialized } from '../config/index.js';
 
 /**

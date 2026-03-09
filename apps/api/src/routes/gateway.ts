@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { db } from '../db/index.js';
 import {
   telemetryEvents,
+  agentTraces,
   clients,
   users,
   userApiKeys,
@@ -235,6 +236,11 @@ async function recordTelemetry(
     originalTokens?: number;
     compressedTokens?: number;
     tokensSaved?: number;
+    traceId?: string;
+    agentName?: string;
+    workflowId?: string;
+    workflowStep?: number;
+    parentAgentId?: string;
   },
 ): Promise<void> {
   try {
@@ -259,6 +265,11 @@ async function recordTelemetry(
       originalTokens: data.originalTokens,
       compressedTokens: data.compressedTokens,
       tokensSaved: data.tokensSaved,
+      traceId: data.traceId,
+      agentName: data.agentName,
+      workflowId: data.workflowId,
+      workflowStep: data.workflowStep,
+      parentAgentId: data.parentAgentId,
     });
   } catch (err) {
     console.error('[Gateway] Failed to record telemetry:', (err as Error).message);
@@ -321,6 +332,18 @@ router.post(
       return res.status(401).json({ error: { message: 'Unauthorized', type: 'auth_error' } });
     }
     const organizationId = client.organizationId;
+
+    // Agent context — extracted from optional headers
+    const agentContext = {
+      agentId: req.headers['x-agent-id'] as string | undefined,
+      agentName: req.headers['x-agent-name'] as string | undefined,
+      workflowId: req.headers['x-workflow-id'] as string | undefined,
+      workflowStep: req.headers['x-workflow-step']
+        ? parseInt(req.headers['x-workflow-step'] as string, 10)
+        : undefined,
+      parentAgentId: req.headers['x-parent-agent-id'] as string | undefined,
+      traceId: (req.headers['x-trace-id'] as string) || crypto.randomUUID(),
+    };
 
     const body = req.body;
     if (!body || !body.model || !body.messages) {
@@ -394,6 +417,7 @@ router.post(
     }
 
     // ── 3. Prompt compression ──────────────────────────
+    // DEPRECATED v0.2.0 — Prompt compression disabled. Kept for reference.
     let compressionMeta: {
       applied: boolean;
       originalTokens: number;
@@ -401,6 +425,7 @@ router.post(
       tokensSaved: number;
     } = { applied: false, originalTokens: 0, compressedTokens: 0, tokensSaved: 0 };
 
+    /*
     try {
       // Check if compression is enabled for this client
       const settingsRows = await db
@@ -432,6 +457,7 @@ router.post(
     } catch {
       // Non-blocking
     }
+    */
 
     // ── 4. Smart routing ───────────────────────────────
     let routingMeta: { model: string; wasRouted: boolean; complexity: string } = {
@@ -567,7 +593,34 @@ router.post(
           originalTokens: compressionMeta.applied ? compressionMeta.originalTokens : undefined,
           compressedTokens: compressionMeta.applied ? compressionMeta.compressedTokens : undefined,
           tokensSaved: compressionMeta.applied ? compressionMeta.tokensSaved : undefined,
+          traceId: agentContext.traceId,
+          agentName: agentContext.agentName,
+          workflowId: agentContext.workflowId,
+          workflowStep: agentContext.workflowStep,
+          parentAgentId: agentContext.parentAgentId,
         });
+
+        if (agentContext.agentId) {
+          db.insert(agentTraces).values({
+            organizationId,
+            clientId: client.id,
+            traceId: agentContext.traceId,
+            agentId: agentContext.agentId,
+            agentName: agentContext.agentName,
+            parentAgentId: agentContext.parentAgentId,
+            workflowId: agentContext.workflowId,
+            workflowStep: agentContext.workflowStep,
+            model: finalModel,
+            provider,
+            inputTokens: promptTokens,
+            outputTokens: completionTokens,
+            costUsd: String(cost),
+            latencyMs: latency,
+            status: 'success',
+            startedAt: new Date(startTime),
+            completedAt: new Date(),
+          }).catch((err: Error) => console.error('[Gateway] Failed to write agent trace:', err.message));
+        }
 
         // Cache store for streaming (fire-and-forget)
         if (fullContent) {
@@ -732,7 +785,34 @@ router.post(
       originalTokens: compressionMeta.applied ? compressionMeta.originalTokens : undefined,
       compressedTokens: compressionMeta.applied ? compressionMeta.compressedTokens : undefined,
       tokensSaved: compressionMeta.applied ? compressionMeta.tokensSaved : undefined,
+      traceId: agentContext.traceId,
+      agentName: agentContext.agentName,
+      workflowId: agentContext.workflowId,
+      workflowStep: agentContext.workflowStep,
+      parentAgentId: agentContext.parentAgentId,
     });
+
+    if (agentContext.agentId) {
+      db.insert(agentTraces).values({
+        organizationId,
+        clientId: client.id,
+        traceId: agentContext.traceId,
+        agentId: agentContext.agentId,
+        agentName: agentContext.agentName,
+        parentAgentId: agentContext.parentAgentId,
+        workflowId: agentContext.workflowId,
+        workflowStep: agentContext.workflowStep,
+        model: routingMeta.model,
+        provider,
+        inputTokens: promptTokens,
+        outputTokens: completionTokens,
+        costUsd: String(cost),
+        latencyMs: latency,
+        status: 'success',
+        startedAt: new Date(startTime),
+        completedAt: new Date(),
+      }).catch((err: Error) => console.error('[Gateway] Failed to write agent trace:', err.message));
+    }
 
     // ── 9. Cache store (fire-and-forget) ───────────────
     const responseText = responseBody.choices?.[0]?.message?.content;

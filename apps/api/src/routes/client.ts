@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
-import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations, alertRules } from '../db/schema.js';
+import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations, alertRules, agentTraces } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
 import { ClientAuthenticatedRequest, invalidateClientCache } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
@@ -4058,6 +4058,132 @@ router.post('/logout', async (req, res) => {
   } catch (error) {
     console.error('[Client Logout] Error:', error);
     res.status(500).json({ error: 'Failed to logout' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// AGENT TRACING ANALYTICS
+// ═══════════════════════════════════════════════════════════
+
+// GET /api/client/analytics/agents/overview
+router.get('/analytics/agents/overview', async (req, res) => {
+  const client = (req as any).client;
+  try {
+    const rows = await db
+      .select({
+        agentId: agentTraces.agentId,
+        agentName: agentTraces.agentName,
+        totalRequests: sql<number>`count(*)::int`,
+        totalCost: sql<number>`sum(${agentTraces.costUsd})::float`,
+        avgLatency: sql<number>`avg(${agentTraces.latencyMs})::int`,
+        errorCount: sql<number>`sum(case when ${agentTraces.status} = 'error' then 1 else 0 end)::int`,
+        lastActive: sql<string>`max(${agentTraces.createdAt})`,
+      })
+      .from(agentTraces)
+      .where(eq(agentTraces.organizationId, client.organizationId))
+      .groupBy(agentTraces.agentId, agentTraces.agentName);
+
+    const totalCost = rows.reduce((sum, r) => sum + (r.totalCost || 0), 0);
+    const totalRequests = rows.reduce((sum, r) => sum + r.totalRequests, 0);
+
+    return res.json({
+      totalAgents: rows.length,
+      totalRequests,
+      totalCost,
+      agents: rows.map(r => ({
+        ...r,
+        errorRate: r.totalRequests > 0 ? r.errorCount / r.totalRequests : 0,
+      })),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// GET /api/client/analytics/agents/traces
+router.get('/analytics/agents/traces', async (req, res) => {
+  const client = (req as any).client;
+  const limit = parseInt(req.query.limit as string || '50', 10);
+  try {
+    const rows = await db
+      .select()
+      .from(agentTraces)
+      .where(eq(agentTraces.organizationId, client.organizationId))
+      .orderBy(desc(agentTraces.createdAt))
+      .limit(limit);
+
+    // Group by traceId
+    const grouped = rows.reduce((acc: any, row) => {
+      if (!acc[row.traceId]) {
+        acc[row.traceId] = { traceId: row.traceId, workflowId: row.workflowId, agents: [], totalCost: 0, startedAt: row.startedAt };
+      }
+      acc[row.traceId].agents.push(row);
+      acc[row.traceId].totalCost += parseFloat(String(row.costUsd));
+      return acc;
+    }, {});
+
+    return res.json({ traces: Object.values(grouped) });
+  } catch (err) {
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// GET /api/client/analytics/agents/:agentId/stats
+router.get('/analytics/agents/:agentId/stats', async (req, res) => {
+  const client = (req as any).client;
+  const { agentId } = req.params;
+  try {
+    const rows = await db
+      .select()
+      .from(agentTraces)
+      .where(and(
+        eq(agentTraces.organizationId, client.organizationId),
+        eq(agentTraces.agentId, agentId),
+      ));
+
+    if (!rows.length) return res.status(404).json({ error: 'Agent not found' });
+
+    const totalCost = rows.reduce((s, r) => s + parseFloat(String(r.costUsd)), 0);
+    const avgLatency = Math.round(rows.reduce((s, r) => s + (r.latencyMs || 0), 0) / rows.length);
+    const errors = rows.filter(r => r.status === 'error').length;
+
+    return res.json({
+      agentId,
+      agentName: rows[0]?.agentName,
+      totalRequests: rows.length,
+      totalCost,
+      avgLatency,
+      errorRate: errors / rows.length,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// GET /api/client/analytics/workflows/:workflowId
+router.get('/analytics/workflows/:workflowId', async (req, res) => {
+  const client = (req as any).client;
+  const { workflowId } = req.params;
+  try {
+    const rows = await db
+      .select()
+      .from(agentTraces)
+      .where(and(
+        eq(agentTraces.organizationId, client.organizationId),
+        eq(agentTraces.workflowId, workflowId),
+      ))
+      .orderBy(agentTraces.workflowStep, agentTraces.startedAt);
+
+    const totalCost = rows.reduce((s, r) => s + parseFloat(String(r.costUsd)), 0);
+
+    return res.json({
+      workflowId,
+      totalSteps: rows.length,
+      totalCost,
+      agents: rows,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: (err as Error).message });
   }
 });
 

@@ -9,6 +9,10 @@ export const AethermindConfigSchema = z.object({
   flushInterval: z.number().positive().default(5000), // 5 seconds
   batchSize: z.number().positive().max(1000).default(50),
   enabled: z.boolean().default(true),
+  agentId: z.string().optional(),
+  agentName: z.string().optional(),
+  workflowId: z.string().optional(),
+  traceId: z.string().optional(),
 });
 
 export type AethermindConfig = z.infer<typeof AethermindConfigSchema>;

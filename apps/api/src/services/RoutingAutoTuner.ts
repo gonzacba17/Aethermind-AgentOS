@@ -1,3 +1,5 @@
+// DEPRECATED v0.2.0 — Auto-tuner removed. File kept for reference.
+// export {} // Uncomment to disable all exports
 import { db } from '../db/index.js';
 import { telemetryEvents, clients, clientInsights, routingRules } from '../db/schema.js';
 import { eq, and, gte, sql } from 'drizzle-orm';

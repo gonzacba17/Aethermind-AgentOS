@@ -1,3 +1,4 @@
+// DEPRECATED v0.2.0 — Client-side routing removed. Routing is now server-side only (gateway).
 /**
  * PromptClassifier — deterministic, sub-millisecond prompt complexity classification.
  *

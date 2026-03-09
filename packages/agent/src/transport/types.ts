@@ -39,6 +39,9 @@ export const TelemetryEventSchema = z.object({
   originalTokens: z.number().int().nonnegative().optional(),
   compressedTokens: z.number().int().nonnegative().optional(),
   tokensSaved: z.number().int().nonnegative().optional(),
+  // Multi-agent tracing metadata
+  agentName: z.string().optional(),
+  workflowId: z.string().optional(),
 });
 
 export type TelemetryEvent = z.infer<typeof TelemetryEventSchema>;

@@ -302,6 +302,12 @@ export const telemetryEvents = pgTable('telemetry_events', {
   originalTokens: integer('original_tokens'),
   compressedTokens: integer('compressed_tokens'),
   tokensSaved: integer('tokens_saved'),
+  // Multi-agent tracing fields
+  traceId: varchar('trace_id', { length: 64 }),
+  agentName: varchar('agent_name', { length: 255 }),
+  workflowId: varchar('workflow_id', { length: 255 }),
+  workflowStep: integer('workflow_step'),
+  parentAgentId: varchar('parent_agent_id', { length: 255 }),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
 }, (table) => ({
   orgTimeIdx: index('idx_telemetry_org_time').on(table.organizationId, table.timestamp),
@@ -311,6 +317,8 @@ export const telemetryEvents = pgTable('telemetry_events', {
   agentIdIdx: index('idx_telemetry_agent_id').on(table.agentId),
   sessionIdIdx: index('idx_telemetry_session_id').on(table.sessionId),
   routedModelIdx: index('idx_telemetry_routed_model').on(table.routedModel),
+  traceIdIdx: index('idx_telemetry_trace_id').on(table.traceId),
+  workflowIdIdx: index('idx_telemetry_workflow_id').on(table.workflowId),
 }));
 
 // ============================================
@@ -616,6 +624,37 @@ export const platformBenchmarks = pgTable('platform_benchmarks', {
 }));
 
 // ============================================
+// AGENT TRACES TABLE (Multi-agent tracing)
+// ============================================
+export const agentTraces = pgTable('agent_traces', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+  clientId: uuid('client_id').references(() => clients.id, { onDelete: 'set null' }),
+  traceId: varchar('trace_id', { length: 64 }).notNull(),
+  agentId: varchar('agent_id', { length: 255 }).notNull(),
+  agentName: varchar('agent_name', { length: 255 }),
+  parentAgentId: varchar('parent_agent_id', { length: 255 }),
+  workflowId: varchar('workflow_id', { length: 255 }),
+  workflowStep: integer('workflow_step'),
+  model: varchar('model', { length: 255 }),
+  provider: varchar('provider', { length: 50 }),
+  inputTokens: integer('input_tokens').default(0).notNull(),
+  outputTokens: integer('output_tokens').default(0).notNull(),
+  costUsd: decimal('cost_usd', { precision: 10, scale: 6 }).default('0').notNull(),
+  latencyMs: integer('latency_ms'),
+  status: varchar('status', { length: 20 }).default('success').notNull(),
+  error: text('error'),
+  startedAt: timestamp('started_at', { withTimezone: true, precision: 6 }).notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true, precision: 6 }),
+  createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
+}, (table) => ({
+  traceIdIdx: index('idx_agent_traces_trace_id').on(table.organizationId, table.traceId),
+  workflowIdIdx: index('idx_agent_traces_workflow_id').on(table.organizationId, table.workflowId),
+  agentIdIdx: index('idx_agent_traces_agent_id').on(table.organizationId, table.agentId),
+  createdAtIdx: index('idx_agent_traces_created_at').on(table.createdAt),
+}));
+
+// ============================================
 // TYPESCRIPT TYPE EXPORTS
 // ============================================
 export type Organization = typeof organizations.$inferSelect;
@@ -701,3 +740,6 @@ export type NewPlatformBenchmark = typeof platformBenchmarks.$inferInsert;
 
 export type AlertRule = typeof alertRules.$inferSelect;
 export type NewAlertRule = typeof alertRules.$inferInsert;
+
+export type AgentTrace = typeof agentTraces.$inferSelect;
+export type NewAgentTrace = typeof agentTraces.$inferInsert;

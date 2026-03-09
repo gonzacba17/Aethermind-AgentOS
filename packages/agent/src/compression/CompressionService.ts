@@ -1,3 +1,4 @@
+// DEPRECATED v0.2.0 — Client-side compression removed. Compression is now server-side only (gateway).
 /**
  * CompressionService — SDK-side prompt compression client.
  *

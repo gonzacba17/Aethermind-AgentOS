@@ -212,6 +212,17 @@ export class OpenAIInterceptor extends BaseInterceptor {
           event.tokensSaved = compressionResult.originalTokens - compressionResult.finalTokens;
         }
 
+        // Add agent context for multi-agent tracing
+        const agentId = config.agentId;
+        const agentName = config.agentName;
+        const workflowId = config.workflowId;
+
+        if (agentId) {
+          event.agentId = agentId;
+          event.agentName = agentName;
+          event.workflowId = workflowId;
+        }
+
         // Send to callback (BatchTransport in production)
         if (this.eventCallback) {
           this.eventCallback(event);
