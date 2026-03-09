@@ -62,13 +62,13 @@ export default function CompletePage() {
   const nextSteps = [
     {
       icon: <BarChart3 className="w-5 h-5 text-blue-400" />,
-      title: 'Run your AI application',
-      description: 'With the SDK initialized, make some API calls to your AI provider'
+      title: 'Send requests through the gateway',
+      description: 'Make API calls with your updated baseURL and watch traces appear instantly'
     },
     {
       icon: <Sparkles className="w-5 h-5 text-purple-400" />,
-      title: 'Watch the magic happen',
-      description: 'Your costs and usage will appear in the dashboard automatically'
+      title: 'Explore agent traces',
+      description: 'See per-agent costs, latency breakdowns, and error patterns in real-time'
     },
     {
       icon: <Bell className="w-5 h-5 text-yellow-400" />,
@@ -147,7 +147,7 @@ export default function CompletePage() {
               You're All Set! <span className="inline-block animate-bounce">🎉</span>
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Your Aethermind account is ready. Let's see your AI costs in action.
+              Your gateway is connected. Start sending requests and watch your agent traces appear in the dashboard.
             </p>
           </div>
 
