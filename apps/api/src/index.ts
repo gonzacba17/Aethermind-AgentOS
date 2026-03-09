@@ -58,6 +58,7 @@ import userApiKeysRoutes from "./routes/user-api-keys";
 import optimizationRoutes from "./routes/optimization.routes";
 import forecastingRoutes from "./routes/forecasting.routes";
 import organizationRoutes from "./routes/organizations";
+import gatewayRouter from "./routes/gateway";
 import { WebSocketManager } from "./websocket/WebSocketManager";
 import { InMemoryStore } from "./services/InMemoryStore";
 import { DatabaseStore } from "./services/DatabaseStore";
@@ -435,6 +436,9 @@ async function startServer(): Promise<void> {
 
   // Public ingestion endpoint - uses its own auth middleware (unchanged)
   app.use("/v1", ingestionRoutes);
+
+  // AI Gateway — OpenAI/Anthropic-compatible proxy (uses clientAuth internally)
+  app.use("/gateway", gatewayRouter);
 
   // Auth routes — public (signup, login, etc.) — must be mounted BEFORE global auth
   app.use("/api/auth", authRoutes);
