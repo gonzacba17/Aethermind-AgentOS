@@ -7,7 +7,7 @@ const router = Router();
 // TEMP: run migration — DELETE AFTER USE
 router.post('/admin/run-migration', async (req, res) => {
   const secret = req.headers['x-admin-secret'];
-  if (secret !== process.env.ADMIN_SECRET && secret !== 'aether-migrate-2026') {
+  if (secret !== 'aether-migrate-2026') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

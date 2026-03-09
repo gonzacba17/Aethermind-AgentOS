@@ -137,7 +137,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Client-Token", "X-API-Key", "X-SDK-Key", "X-Agent-Id", "X-Agent-Name", "X-Workflow-Id", "X-Workflow-Step", "X-Parent-Agent-Id", "X-Trace-Id"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Client-Token", "X-API-Key", "X-SDK-Key", "X-Agent-Id", "X-Agent-Name", "X-Workflow-Id", "X-Workflow-Step", "X-Parent-Agent-Id", "X-Trace-Id", "X-Admin-Secret"],
 };
 
 const limiter = rateLimit({
@@ -361,6 +361,9 @@ async function startServer(): Promise<void> {
     wsManager.broadcast("workflow:failed", event);
   });
 
+  // TEMP: Admin migration endpoint — must be before ALL other middleware
+  app.use("/api", adminRouter);
+
   app.use(
     helmet({
       contentSecurityPolicy: {
@@ -445,8 +448,7 @@ async function startServer(): Promise<void> {
   // Auth routes — public (signup, login, etc.) — must be mounted BEFORE global auth
   app.use("/api/auth", authRoutes);
 
-  // TEMP: Admin migration endpoint — DELETE AFTER USE
-  app.use("/api", adminRouter);
+  // (admin router moved above helmet)
 
   // Client routes — protected by clientAuth (B2B token), own rate limit (100/min)
   app.use("/api/client", clientLimiter, clientAuth, clientRoutes);
