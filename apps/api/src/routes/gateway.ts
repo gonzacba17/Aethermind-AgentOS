@@ -295,22 +295,24 @@ function buildProviderHeaders(provider: string, apiKey: string): Record<string, 
   } else if (provider === 'gemini') {
     headers['x-goog-api-key'] = apiKey;
   }
+  console.log(`[Gateway] buildProviderHeaders provider=${provider} keys=${Object.keys(headers).join(',')}`);
   return headers;
 }
 
 /** Build the upstream URL for a provider */
 function buildProviderUrl(provider: string, apiKey: string): string {
+  let url: string;
   if (provider === 'openai') {
-    return `${PROVIDER_URLS.openai}/v1/chat/completions`;
+    url = `${PROVIDER_URLS.openai}/v1/chat/completions`;
+  } else if (provider === 'anthropic') {
+    url = `${PROVIDER_URLS.anthropic}/v1/messages`;
+  } else if (provider === 'gemini') {
+    url = `${PROVIDER_URLS.gemini}/v1beta/openai/chat/completions`;
+  } else {
+    url = `${PROVIDER_URLS.openai}/v1/chat/completions`;
   }
-  if (provider === 'anthropic') {
-    return `${PROVIDER_URLS.anthropic}/v1/messages`;
-  }
-  if (provider === 'gemini') {
-    // Gemini uses a different URL pattern
-    return `${PROVIDER_URLS.gemini}/v1beta/openai/chat/completions`;
-  }
-  return `${PROVIDER_URLS.openai}/v1/chat/completions`;
+  console.log(`[Gateway] buildProviderUrl provider=${provider} url=${url}`);
+  return url;
 }
 
 // ─── Provider fallback map ──────────────────────────────────
