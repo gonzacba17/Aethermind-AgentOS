@@ -293,7 +293,7 @@ function buildProviderHeaders(provider: string, apiKey: string): Record<string, 
     headers['x-api-key'] = apiKey;
     headers['anthropic-version'] = '2023-06-01';
   } else if (provider === 'gemini') {
-    headers['x-goog-api-key'] = apiKey;
+    headers['Authorization'] = `Bearer ${apiKey}`;
   }
   console.log(`[Gateway] buildProviderHeaders provider=${provider} keys=${Object.keys(headers).join(',')}`);
   return headers;
