@@ -5,6 +5,26 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 
+/**
+ * Resolve userId from JWT auth (req.user) or client auth (req.client).
+ * For client auth, looks up the first user in the client's organization.
+ */
+async function resolveUserId(req: Request): Promise<string | null> {
+  const jwtUserId = (req as any).user?.id;
+  if (jwtUserId) return jwtUserId;
+
+  const orgId = (req as any).client?.organizationId;
+  if (!orgId) return null;
+
+  const rows = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.organizationId, orgId))
+    .limit(1);
+
+  return rows[0]?.id ?? null;
+}
+
 const router = Router();
 
 // SECURITY: Encryption key MUST be set in production - no fallback allowed
@@ -135,7 +155,7 @@ async function validateApiKey(provider: string, apiKey: string): Promise<{ valid
 // GET /api/user/api-keys - List user's API keys
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -163,7 +183,7 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/user/api-keys - Add a new API key
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -216,7 +236,7 @@ router.post('/', async (req: Request, res: Response) => {
 // DELETE /api/user/api-keys/:id - Delete an API key
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -248,7 +268,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // POST /api/user/api-keys/:id/validate - Re-validate an API key
 router.post('/:id/validate', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -294,7 +314,7 @@ router.post('/:id/validate', async (req: Request, res: Response) => {
 // GET /api/user/api-keys/:provider/usage - Get usage/costs from provider
 router.get('/:provider/usage', async (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = await resolveUserId(req);
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }

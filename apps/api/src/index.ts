@@ -445,6 +445,7 @@ async function startServer(): Promise<void> {
   app.use("/api/auth", authRoutes);
 
   // Client routes — protected by clientAuth (B2B token), own rate limit (100/min)
+  app.use("/api/client/api-keys", clientLimiter, clientAuth, userApiKeysRoutes);
   app.use("/api/client", clientLimiter, clientAuth, clientRoutes);
 
   // Global auth middleware — JWT-based for all other /api/* routes
