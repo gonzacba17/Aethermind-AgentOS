@@ -7,46 +7,56 @@ export default function OnboardingPricing() {
 
   const plans = [
     {
+      id: 'trial',
+      name: 'Trial',
+      price: 0,
+      period: '14 days',
+      description: 'Try the gateway free',
+      features: ['Gateway access', '10k requests', 'Basic analytics', 'No credit card required'],
+      highlighted: false,
+      cta: 'Start Free Trial'
+    },
+    {
       id: 'starter',
       name: 'Starter',
-      price: 29,
-      description: 'Perfect for small teams',
-      features: ['1,000 executions/month', 'Real-time cost tracking', 'Email support', 'Basic analytics'],
-      highlighted: true
+      price: 9,
+      period: '/month',
+      description: 'For individual developers',
+      features: ['Gateway access', '100k requests/month', 'Agent tracing', 'Email support'],
+      highlighted: true,
+      cta: 'Get Started'
+    },
+    {
+      id: 'growth',
+      name: 'Growth',
+      price: 49,
+      period: '/month',
+      description: 'For growing teams',
+      features: ['500k requests/month', 'Agent tracing', 'Budget controls', 'Ollama support'],
+      highlighted: false,
+      cta: 'Get Started'
     },
     {
       id: 'pro',
       name: 'Pro',
-      price: 99,
-      description: 'For growing companies',
-      features: ['10,000 executions/month', 'Advanced optimization', 'Priority support', 'Custom models', 'API access'],
-      highlighted: false
-    },
-    {
-      id: 'enterprise',
-      name: 'Enterprise',
-      price: null,
-      description: 'For large organizations',
-      features: ['Unlimited executions', 'Dedicated support', 'Custom integrations', 'SLA guarantee', 'White-label option'],
-      highlighted: false
+      price: 149,
+      period: '/month',
+      description: 'For production workloads',
+      features: ['Unlimited requests', 'Priority support', 'Custom models', 'Advanced analytics'],
+      highlighted: false,
+      cta: 'Get Started'
     }
   ]
 
   const handleSelectPlan = (planId: string) => {
-    // Save selected plan to localStorage with timestamp
     const onboardingData = {
       selectedPlan: planId,
       timestamp: Date.now(),
       completed: true
     }
     localStorage.setItem('onboarding_payment', JSON.stringify(onboardingData))
-
-    // Mark marketing onboarding as seen
     localStorage.setItem('onboarding_marketing_seen', 'true')
 
-    console.log('[Onboarding Pricing] Plan selected:', planId)
-
-    // Redirect to setup page for API key and SDK installation
     router.push('/onboarding/setup')
   }
 
@@ -56,17 +66,17 @@ export default function OnboardingPricing() {
         <div className="text-center space-y-4">
           <h2 className="text-4xl font-bold">Choose Your Plan</h2>
           <p className="text-xl text-gray-400">
-            To access the dashboard and start controlling AI costs
+            Start routing AI requests through the gateway in seconds
           </p>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-4 gap-6">
           {plans.map((plan) => (
             <div
               key={plan.id}
               className={`relative bg-gradient-to-br from-gray-900 to-black rounded-2xl p-8 space-y-6 transition-all ${
-                plan.highlighted 
-                  ? 'border-2 border-blue-500 scale-105' 
+                plan.highlighted
+                  ? 'border-2 border-blue-500 scale-105'
                   : 'border border-gray-800'
               }`}
             >
@@ -75,21 +85,17 @@ export default function OnboardingPricing() {
                   Most Popular
                 </div>
               )}
-              
+
               <div>
                 <h3 className="text-2xl font-bold">{plan.name}</h3>
                 <p className="text-gray-400 text-sm mt-1">{plan.description}</p>
               </div>
 
               <div>
-                {plan.price ? (
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-5xl font-bold">${plan.price}</span>
-                    <span className="text-gray-400">/month</span>
-                  </div>
-                ) : (
-                  <div className="text-3xl font-bold">Custom</div>
-                )}
+                <div className="flex items-baseline gap-1">
+                  <span className="text-5xl font-bold">${plan.price}</span>
+                  <span className="text-gray-400">{plan.period}</span>
+                </div>
               </div>
 
               <ul className="space-y-3">
@@ -109,7 +115,7 @@ export default function OnboardingPricing() {
                     : 'bg-gray-800 text-white hover:bg-gray-700'
                 }`}
               >
-                {plan.price ? 'Start 7-Day Trial' : 'Contact Sales'}
+                {plan.cta}
               </button>
             </div>
           ))}
@@ -123,7 +129,7 @@ export default function OnboardingPricing() {
             </span>
             <span className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-400" />
-              7-day money back
+              14-day free trial
             </span>
             <span className="flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-green-400" />

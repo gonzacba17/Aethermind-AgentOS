@@ -62,18 +62,18 @@ export default function CompletePage() {
   const nextSteps = [
     {
       icon: <BarChart3 className="w-5 h-5 text-blue-400" />,
-      title: 'Send requests through the gateway',
-      description: 'Make API calls with your updated baseURL and watch traces appear instantly'
+      title: 'Send your first request',
+      description: 'Route a request through the gateway using your client token'
     },
     {
       icon: <Sparkles className="w-5 h-5 text-purple-400" />,
-      title: 'Explore agent traces',
-      description: 'See per-agent costs, latency breakdowns, and error patterns in real-time'
+      title: 'Watch traces appear',
+      description: 'See agent costs, latency, and traces appear in your dashboard in real-time'
     },
     {
       icon: <Bell className="w-5 h-5 text-yellow-400" />,
-      title: 'Set up budget alerts',
-      description: 'Never overspend - get notified before you hit your limit'
+      title: 'Set up budgets',
+      description: 'Configure spending limits per agent or workflow'
     }
   ];
 
@@ -147,7 +147,7 @@ export default function CompletePage() {
               You're All Set! <span className="inline-block animate-bounce">🎉</span>
             </h1>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Your gateway is connected. Start sending requests and watch your agent traces appear in the dashboard.
+              Your gateway is connected. Start sending requests and watch your agent traces appear in real-time.
             </p>
           </div>
 
