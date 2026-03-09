@@ -105,6 +105,7 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'claude-3-opus-20240229': { input: 0.015, output: 0.075 },
   'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
   'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
+  'gemini-2.0-flash-lite': { input: 0.000075, output: 0.0003 },
   'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
   'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
 };
@@ -307,7 +308,7 @@ function buildProviderUrl(provider: string, apiKey: string): string {
   }
   if (provider === 'gemini') {
     // Gemini uses a different URL pattern
-    return `${PROVIDER_URLS.gemini}/v1beta/chat/completions`;
+    return `${PROVIDER_URLS.gemini}/v1beta/openai/chat/completions`;
   }
   return `${PROVIDER_URLS.openai}/v1/chat/completions`;
 }
@@ -323,7 +324,7 @@ const PROVIDER_FALLBACKS: Record<string, string | null> = {
 const FALLBACK_MODELS: Record<string, string> = {
   openai: 'gpt-4o-mini',
   anthropic: 'claude-3-5-sonnet-20241022',
-  gemini: 'gemini-1.5-flash',
+  gemini: 'gemini-2.0-flash',
 };
 
 // ═══════════════════════════════════════════════════════════
