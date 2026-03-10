@@ -29,6 +29,70 @@ function periodToDate(period: string): Date {
 }
 
 /**
+ * GET /api/client/trial-status
+ * Returns plan and trial information for the authenticated client's organization.
+ */
+router.get('/trial-status', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const [org] = await db
+      .select({ plan: organizations.plan, createdAt: organizations.createdAt })
+      .from(organizations)
+      .where(eq(organizations.id, client.organizationId))
+      .limit(1);
+
+    if (!org) {
+      res.json({
+        plan: 'trial',
+        isTrialActive: false,
+        trialDaysRemaining: null,
+        trialExpiresAt: null,
+      });
+      return;
+    }
+
+    const plan = (org.plan || 'FREE').toLowerCase();
+    const isTrial = plan === 'free' || plan === 'trial';
+
+    if (!isTrial) {
+      res.json({
+        plan,
+        isTrialActive: false,
+        trialDaysRemaining: null,
+        trialExpiresAt: null,
+      });
+      return;
+    }
+
+    const TRIAL_DURATION_DAYS = 14;
+    const createdAt = new Date(org.createdAt);
+    const expiresAt = new Date(createdAt.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const elapsedMs = now.getTime() - createdAt.getTime();
+    const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+    const daysRemaining = Math.max(0, Math.ceil(TRIAL_DURATION_DAYS - elapsedDays));
+    const isTrialActive = elapsedDays <= TRIAL_DURATION_DAYS;
+
+    res.json({
+      plan: 'trial',
+      isTrialActive,
+      trialDaysRemaining: daysRemaining,
+      trialExpiresAt: expiresAt.toISOString(),
+    });
+  } catch (error) {
+    console.error('[Client trial-status] Error:', error);
+    res.status(500).json({ error: 'Failed to fetch trial status' });
+  }
+});
+
+/**
  * GET /api/client/me
  * Returns the authenticated client's info.
  */

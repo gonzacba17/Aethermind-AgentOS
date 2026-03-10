@@ -23,6 +23,7 @@ import {
   routingRules,
   providerHealth,
   optimizationSettings,
+  organizations,
 } from '../db/schema.js';
 import { eq, and, inArray, isNull } from 'drizzle-orm';
 import { clientAuth, type ClientAuthenticatedRequest } from '../middleware/clientAuth.js';
@@ -31,6 +32,41 @@ import * as SemanticCacheService from '../services/SemanticCacheService.js';
 import { analyze as analyzePrompt } from '../services/PromptAnalyzer.js';
 
 const router = Router();
+
+// ─── Trial constants ────────────────────────────────────────
+const TRIAL_DURATION_DAYS = 14;
+const TRIAL_WARNING_DAYS = 3;
+
+/** Check trial status for an organization. Returns null if no restriction. */
+async function checkTrialStatus(organizationId: string): Promise<{
+  expired: boolean;
+  daysRemaining: number | null;
+} | null> {
+  try {
+    const [org] = await db
+      .select({ plan: organizations.plan, createdAt: organizations.createdAt })
+      .from(organizations)
+      .where(eq(organizations.id, organizationId))
+      .limit(1);
+    if (!org) return null;
+
+    const plan = (org.plan || 'FREE').toLowerCase();
+    if (plan !== 'free' && plan !== 'trial') return null;
+
+    const createdAt = new Date(org.createdAt);
+    const now = new Date();
+    const elapsedMs = now.getTime() - createdAt.getTime();
+    const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+    const daysRemaining = Math.max(0, Math.ceil(TRIAL_DURATION_DAYS - elapsedDays));
+
+    return {
+      expired: elapsedDays > TRIAL_DURATION_DAYS,
+      daysRemaining,
+    };
+  } catch {
+    return null; // Non-blocking on error
+  }
+}
 
 // ─── Provider URLs ──────────────────────────────────────────
 const PROVIDER_URLS: Record<string, string> = {
@@ -342,6 +378,21 @@ router.post(
       return res.status(401).json({ error: { message: 'Unauthorized', type: 'auth_error' } });
     }
     const organizationId = client.organizationId;
+
+    // ── 0. Trial enforcement ────────────────────────────
+    const trial = await checkTrialStatus(organizationId);
+    if (trial?.expired) {
+      return res.status(402).json({
+        error: {
+          message: 'Trial expired. Upgrade your plan to continue.',
+          type: 'trial_expired',
+          upgradeUrl: '/settings/billing',
+        },
+      });
+    }
+    if (trial && trial.daysRemaining !== null && trial.daysRemaining <= TRIAL_WARNING_DAYS) {
+      res.setHeader('X-Trial-Days-Remaining', String(trial.daysRemaining));
+    }
 
     // Agent context — extracted from optional headers
     const agentContext = {
@@ -888,6 +939,21 @@ router.post(
       return res.status(401).json({ error: { message: 'Unauthorized', type: 'auth_error' } });
     }
     const organizationId = client.organizationId;
+
+    // Trial enforcement
+    const trial = await checkTrialStatus(organizationId);
+    if (trial?.expired) {
+      return res.status(402).json({
+        error: {
+          message: 'Trial expired. Upgrade your plan to continue.',
+          type: 'trial_expired',
+          upgradeUrl: '/settings/billing',
+        },
+      });
+    }
+    if (trial && trial.daysRemaining !== null && trial.daysRemaining <= TRIAL_WARNING_DAYS) {
+      res.setHeader('X-Trial-Days-Remaining', String(trial.daysRemaining));
+    }
 
     const body = req.body;
     if (!body || !body.model || !body.messages) {

@@ -145,6 +145,10 @@ export {
 } from './api/useClientBenchmarks';
 export type { BenchmarkData, ClientBenchmarkMetrics, BenchmarkComparison } from './api/useClientBenchmarks';
 
+// Trial Hook
+export { useTrialStatus, trialKeys } from './api/useTrial';
+export type { TrialStatus } from './api/useTrial';
+
 // WebSocket Hook
 export { useWebSocket, useWebSocketEvent } from './useWebSocket';
 export type { ConnectionStatus, WebSocketEvent } from './useWebSocket';

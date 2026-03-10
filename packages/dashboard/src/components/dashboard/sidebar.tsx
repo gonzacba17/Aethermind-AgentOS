@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Home, LayoutDashboard, Bot, FileText, GitBranch, DollarSign, ChevronLeft, ChevronRight, Settings, Bell, Wallet, TrendingUp, Sparkles, Route, Lightbulb, LogOut, Network } from "lucide-react"
+import { Home, LayoutDashboard, Bot, GitBranch, DollarSign, ChevronLeft, ChevronRight, Settings, Bell, Wallet, TrendingUp, Sparkles, Route, Lightbulb, LogOut, Network } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -20,9 +20,8 @@ const navGroups = [
   {
     label: "AI Operations",
     items: [
-      { icon: Network, label: "Agent Tracing", href: "/agents" },
-      { icon: GitBranch, label: "Workflows", href: "/workflows" },
-      { icon: FileText, label: "Traces", href: "/traces" },
+      { icon: GitBranch, label: "Traces", href: "/traces" },
+      { icon: Network, label: "Workflows", href: "/workflows" },
     ],
   },
   {
@@ -42,6 +41,7 @@ const navGroups = [
     label: "Account",
     items: [
       { icon: Settings, label: "Settings", href: "/settings" },
+      { icon: Bot, label: "Agent Config", href: "/agent-config" },
     ],
   },
 ]

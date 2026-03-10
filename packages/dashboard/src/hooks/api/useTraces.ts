@@ -128,6 +128,10 @@ export interface TraceStep {
   };
   cost?: number;
   error?: string;
+  model?: string;
+  provider?: string;
+  parentAgentId?: string;
+  workflowStep?: number;
 }
 
 export interface TraceDetail {
@@ -135,6 +139,8 @@ export interface TraceDetail {
   name: string;
   agent: string;
   agentId?: string;
+  workflowId?: string;
+  parentAgentId?: string;
   status: 'success' | 'running' | 'error';
   duration: string;
   timestamp: string;
@@ -174,6 +180,10 @@ export function useTrace(
         } : undefined,
         cost: a.costUsd,
         error: a.error,
+        model: a.model,
+        provider: a.provider,
+        parentAgentId: a.parentAgentId,
+        workflowStep: a.workflowStep,
       }));
 
       return {
@@ -181,6 +191,8 @@ export function useTrace(
         name: agents[0]?.agentName || trace.traceId || 'Unknown',
         agent: agents[0]?.agentName || 'gateway',
         agentId: agents[0]?.agentId,
+        workflowId: trace.workflowId,
+        parentAgentId: agents[0]?.parentAgentId,
         status: trace.status === 'error' ? 'error' : 'success',
         duration: trace.latencyMs > 0 ? `${(trace.latencyMs / 1000).toFixed(1)}s` : '-',
         timestamp: new Date(trace.createdAt).toLocaleString(),

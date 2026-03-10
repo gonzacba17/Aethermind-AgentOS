@@ -61,9 +61,16 @@ function StepCard({ step, index, isLast }: { step: TraceStep; index: number; isL
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Step {index + 1}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {step.type}
-                      </Badge>
+                      {step.model && (
+                        <Badge variant="outline" className="text-xs font-mono">
+                          {step.model}
+                        </Badge>
+                      )}
+                      {step.parentAgentId && (
+                        <Badge variant="outline" className="text-xs bg-violet-500/10 text-violet-500 border-violet-500/20">
+                          child of {step.parentAgentId}
+                        </Badge>
+                      )}
                     </div>
                     <h4 className="font-medium mt-1">{step.name}</h4>
                   </div>
@@ -294,10 +301,16 @@ export default function TraceDetailPage() {
                 {trace.status}
               </Badge>
             </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="flex items-center gap-2 text-muted-foreground flex-wrap">
               <span>{trace.agent}</span>
+              {trace.workflowId && (
+                <>
+                  <span>•</span>
+                  <span className="text-sm">workflow: {trace.workflowId}</span>
+                </>
+              )}
               <span>•</span>
-              <button 
+              <button
                 onClick={copyTraceId}
                 className="font-mono text-sm hover:text-foreground transition-colors"
               >
@@ -473,13 +486,13 @@ export default function TraceDetailPage() {
                 <p className="font-medium">{trace.agent}</p>
               </div>
             </div>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="gap-2"
-              onClick={() => router.push(`/agents/${trace.agentId || trace.agent}`)}
+              onClick={() => router.push(`/traces`)}
             >
               <Eye className="h-4 w-4" />
-              View Agent
+              All Traces
             </Button>
           </div>
         </CardContent>
