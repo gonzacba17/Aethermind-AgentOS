@@ -156,6 +156,13 @@ async function getUserApiKey(
   organizationId: string,
   provider: string,
 ): Promise<string | null> {
+  // Normalize: keys may be stored as 'google' or 'gemini' depending on the source
+  const providerAliases: Record<string, string[]> = {
+    gemini: ['gemini', 'google'],
+    google: ['gemini', 'google'],
+  };
+  const providers = providerAliases[provider] ?? [provider];
+
   // Get ALL users in this organization (not just the first one)
   const userRows = await db
     .select({ id: users.id })
@@ -178,7 +185,7 @@ async function getUserApiKey(
     .where(
       and(
         inArray(userApiKeys.userId, userIds),
-        eq(userApiKeys.provider, provider),
+        inArray(userApiKeys.provider, providers),
         eq(userApiKeys.isValid, true),
       ),
     )
