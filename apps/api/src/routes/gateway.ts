@@ -745,6 +745,7 @@ router.post(
 
     if (!upstream!.ok) {
       const errText = await upstream!.text();
+      const errMsg = `${upstream!.status}: ${errText.slice(0, 500)}`;
       recordTelemetry(organizationId, {
         provider,
         model: routingMeta.model,
@@ -754,10 +755,40 @@ router.post(
         cost: 0,
         latency,
         status: 'error',
-        error: `${upstream!.status}: ${errText.slice(0, 500)}`,
+        error: errMsg,
         originalModel: routingMeta.wasRouted ? originalModel : undefined,
         routedModel: routingMeta.wasRouted ? routingMeta.model : undefined,
+        traceId: agentContext.traceId,
+        agentName: agentContext.agentName,
+        workflowId: agentContext.workflowId,
+        workflowStep: agentContext.workflowStep,
+        parentAgentId: agentContext.parentAgentId,
       });
+
+      // Also record in agent_traces for error visibility
+      if (agentContext.agentId) {
+        db.insert(agentTraces).values({
+          organizationId,
+          clientId: client.id,
+          traceId: agentContext.traceId,
+          agentId: agentContext.agentId,
+          agentName: agentContext.agentName,
+          parentAgentId: agentContext.parentAgentId,
+          workflowId: agentContext.workflowId,
+          workflowStep: agentContext.workflowStep,
+          model: routingMeta.model,
+          provider,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: '0',
+          latencyMs: latency,
+          status: 'error',
+          error: errMsg,
+          startedAt: new Date(startTime),
+          completedAt: new Date(),
+        }).catch((err: Error) => console.error('[Gateway] Failed to write error agent trace:', err.message));
+      }
+
       // Pass through the provider's error exactly
       return res.status(upstream!.status).type('json').send(errText);
     }
