@@ -1,5 +1,5 @@
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { fetchTraces, fetchTrace, Trace } from '@/lib/api';
+import { apiRequest } from '@/lib/api';
 
 /**
  * Query key factory for traces
@@ -29,6 +29,8 @@ export interface TraceListItem {
   duration: string;
   timestamp: string;
   steps: number;
+  workflowId?: string;
+  totalCost?: number;
 }
 
 interface TracesResponse {
@@ -36,11 +38,33 @@ interface TracesResponse {
   total: number;
 }
 
+/** Shape returned by GET /api/client/traces (gateway agent_traces) */
+interface BackendTrace {
+  id: string;
+  traceId: string;
+  agentName: string;
+  workflowId?: string;
+  status: string;
+  totalCost: number;
+  latencyMs: number;
+  steps: number;
+  startedAt: string;
+  createdAt: string;
+  agents: Array<{
+    agentId: string;
+    agentName: string;
+    model: string;
+    provider: string;
+    status: string;
+    costUsd: number;
+    latencyMs: number;
+    workflowStep?: number;
+    parentAgentId?: string;
+  }>;
+}
+
 /**
  * Hook to fetch list of traces
- * 
- * @param filters - Optional filters for the trace list
- * @param options - Additional React Query options
  */
 export function useTraces(
   filters: TraceFilters = {},
@@ -48,44 +72,34 @@ export function useTraces(
 ) {
   return useQuery({
     queryKey: traceKeys.list(filters),
-    queryFn: async () => {
-      // Helper to transform traces
-      const transformTraces = (traces: Trace[]) => {
-        const transformedTraces: TraceListItem[] = traces.map(trace => ({
-          id: trace.id,
-          name: trace.rootNode?.name || 'Unknown',
-          agent: trace.rootNode?.type === 'agent' ? trace.rootNode.name : 'System',
-          status: trace.rootNode?.error ? 'error' : 
-                  trace.rootNode?.completedAt ? 'success' : 'running',
-          duration: trace.rootNode?.duration 
-            ? `${(trace.rootNode.duration / 1000).toFixed(1)}s` 
-            : 'ongoing',
-          timestamp: new Date(trace.createdAt).toLocaleString(),
-          steps: countNodes(trace.rootNode),
-        }));
-        
-        let filteredTraces = transformedTraces;
-        
-        if (filters.status && filters.status.length > 0) {
-          filteredTraces = filteredTraces.filter(
-            trace => filters.status!.includes(trace.status)
-          );
-        }
-        
-        if (filters.agentId) {
-          filteredTraces = filteredTraces.filter(
-            trace => trace.agent.toLowerCase().includes(filters.agentId!.toLowerCase())
-          );
-        }
-        
-        return {
-          data: filteredTraces,
-          total: filteredTraces.length,
-        };
-      };
+    queryFn: async (): Promise<TracesResponse> => {
+      const response = await apiRequest<{ data: BackendTrace[]; total: number }>('/api/client/traces');
 
-      const traces = await fetchTraces();
-      return transformTraces(traces);
+      const traces: TraceListItem[] = (response.data || []).map(t => ({
+        id: t.id,
+        name: t.agentName || t.traceId || 'Unknown',
+        agent: t.agents?.[0]?.agentName || t.agentName || 'gateway',
+        status: t.status === 'error' ? 'error' : 'success' as const,
+        duration: t.latencyMs > 0 ? `${(t.latencyMs / 1000).toFixed(1)}s` : '-',
+        timestamp: new Date(t.createdAt).toLocaleString(),
+        steps: t.steps || t.agents?.length || 1,
+        workflowId: t.workflowId,
+        totalCost: t.totalCost,
+      }));
+
+      let filtered = traces;
+
+      if (filters.status && filters.status.length > 0) {
+        filtered = filtered.filter(t => filters.status!.includes(t.status));
+      }
+
+      if (filters.agentId) {
+        filtered = filtered.filter(t =>
+          t.agent.toLowerCase().includes(filters.agentId!.toLowerCase())
+        );
+      }
+
+      return { data: filtered, total: filtered.length };
     },
     staleTime: 15 * 1000,
     refetchInterval: 30 * 1000,
@@ -125,7 +139,7 @@ export interface TraceDetail {
   duration: string;
   timestamp: string;
   steps: TraceStep[];
-  rootNode?: Trace['rootNode'];
+  rootNode?: any;
   createdAt: string;
   completedAt?: string;
   totalTokens?: number;
@@ -134,9 +148,6 @@ export interface TraceDetail {
 
 /**
  * Hook to fetch a single trace by ID
- * 
- * @param id - Trace ID
- * @param options - Additional React Query options
  */
 export function useTrace(
   id: string,
@@ -145,81 +156,45 @@ export function useTrace(
   return useQuery({
     queryKey: traceKeys.detail(id),
     queryFn: async (): Promise<TraceDetail> => {
-      const trace = await fetchTrace(id);
-      
-      // Transform to detail format
-      const steps: TraceStep[] = extractSteps(trace.rootNode);
-      
+      const trace = await apiRequest<any>(`/api/client/traces/${id}`);
+
+      const agents = trace.agents || [];
+      const steps: TraceStep[] = agents.map((a: any, i: number) => ({
+        id: a.agentId || `step-${i}`,
+        name: a.agentName || a.agentId || `Step ${i + 1}`,
+        type: 'llm' as const,
+        status: a.status === 'error' ? 'error' : 'success',
+        duration: a.latencyMs || 0,
+        startTime: a.startedAt || trace.createdAt,
+        endTime: a.completedAt,
+        tokens: a.inputTokens || a.outputTokens ? {
+          prompt: a.inputTokens || 0,
+          completion: a.outputTokens || 0,
+          total: (a.inputTokens || 0) + (a.outputTokens || 0),
+        } : undefined,
+        cost: a.costUsd,
+        error: a.error,
+      }));
+
       return {
-        id: trace.id,
-        name: trace.rootNode?.name || 'Unknown',
-        agent: trace.rootNode?.type === 'agent' ? trace.rootNode.name : 'System',
-        agentId: (trace.rootNode as any)?.agentId,
-        status: trace.rootNode?.error ? 'error' : 
-                trace.rootNode?.completedAt ? 'success' : 'running',
-        duration: trace.rootNode?.duration 
-          ? `${(trace.rootNode.duration / 1000).toFixed(1)}s` 
-          : 'ongoing',
+        id: trace.id || trace.traceId,
+        name: agents[0]?.agentName || trace.traceId || 'Unknown',
+        agent: agents[0]?.agentName || 'gateway',
+        agentId: agents[0]?.agentId,
+        status: trace.status === 'error' ? 'error' : 'success',
+        duration: trace.latencyMs > 0 ? `${(trace.latencyMs / 1000).toFixed(1)}s` : '-',
         timestamp: new Date(trace.createdAt).toLocaleString(),
         steps,
-        rootNode: trace.rootNode,
         createdAt: trace.createdAt,
-        completedAt: trace.rootNode?.completedAt,
+        completedAt: agents[agents.length - 1]?.completedAt,
         totalTokens: steps.reduce((sum, s) => sum + (s.tokens?.total || 0), 0),
-        totalCost: steps.reduce((sum, s) => sum + (s.cost || 0), 0),
+        totalCost: trace.totalCost,
       };
     },
     enabled: !!id,
-    staleTime: 10 * 1000, // 10 seconds - individual trace may still be updating
+    staleTime: 10 * 1000,
     ...options,
   });
-}
-
-/**
- * Extract steps from the trace tree
- */
-function extractSteps(node: Trace['rootNode'] | undefined, steps: TraceStep[] = []): TraceStep[] {
-  if (!node) return steps;
-  
-  // Cast to any to access potentially extended fields
-  const n = node as any;
-  
-  // Add this node as a step
-  steps.push({
-    id: n.id || `step-${steps.length}`,
-    name: n.name || 'Unknown Step',
-    type: mapNodeType(n.type),
-    status: n.error ? 'error' : n.completedAt ? 'success' : 'running',
-    duration: n.duration || 0,
-    startTime: n.createdAt || n.startedAt || new Date().toISOString(),
-    endTime: n.completedAt,
-    input: n.input,
-    output: n.output,
-    tokens: n.tokens,
-    cost: n.cost,
-    error: n.error,
-  });
-  
-  // Recursively add children
-  if (n.children) {
-    for (const child of n.children) {
-      extractSteps(child as any, steps);
-    }
-  }
-  
-  return steps;
-}
-
-/**
- * Map node type to step type
- */
-function mapNodeType(type: string | undefined): TraceStep['type'] {
-  if (!type) return 'other';
-  const lower = type.toLowerCase();
-  if (lower.includes('llm') || lower.includes('model')) return 'llm';
-  if (lower.includes('tool')) return 'tool';
-  if (lower.includes('function')) return 'function';
-  return 'other';
 }
 
 /**
@@ -229,50 +204,27 @@ export function useTraceStats() {
   return useQuery({
     queryKey: [...traceKeys.all, 'stats'],
     queryFn: async () => {
-      const traces = await fetchTraces();
-      
-      const now = Date.now();
-      const last24h = now - 24 * 60 * 60 * 1000;
-      
-      // Filter traces from last 24 hours
-      const recentTraces = traces.filter(
-        trace => new Date(trace.createdAt).getTime() > last24h
-      );
-      
+      const response = await apiRequest<{ data: BackendTrace[]; total: number }>('/api/client/traces');
+      const traces = response.data || [];
+
       const stats = {
-        total: recentTraces.length,
-        success: 0,
+        total: traces.length,
+        success: traces.filter(t => t.status !== 'error').length,
         running: 0,
-        error: 0,
+        error: traces.filter(t => t.status === 'error').length,
         avgDuration: 0,
       };
-      
-      let totalDuration = 0;
-      let completedCount = 0;
-      
-      for (const trace of recentTraces) {
-        if (trace.rootNode?.error) {
-          stats.error++;
-        } else if (trace.rootNode?.completedAt) {
-          stats.success++;
-          if (trace.rootNode.duration) {
-            totalDuration += trace.rootNode.duration;
-            completedCount++;
-          }
-        } else {
-          stats.running++;
-        }
-      }
-      
-      stats.avgDuration = completedCount > 0 ? totalDuration / completedCount : 0;
-      
+
+      const totalLatency = traces.reduce((s, t) => s + (t.latencyMs || 0), 0);
+      stats.avgDuration = traces.length > 0 ? totalLatency / traces.length : 0;
+
       return {
         ...stats,
-        successRate: stats.total > 0 
-          ? ((stats.success / stats.total) * 100).toFixed(1) 
+        successRate: stats.total > 0
+          ? ((stats.success / stats.total) * 100).toFixed(1)
           : '0',
-        errorRate: stats.total > 0 
-          ? ((stats.error / stats.total) * 100).toFixed(1) 
+        errorRate: stats.total > 0
+          ? ((stats.error / stats.total) * 100).toFixed(1)
           : '0',
       };
     },
@@ -282,30 +234,16 @@ export function useTraceStats() {
 }
 
 /**
- * Helper to count total nodes in a trace tree
- */
-function countNodes(node: Trace['rootNode'] | undefined): number {
-  if (!node) return 0;
-  let count = 1;
-  if (node.children) {
-    for (const child of node.children) {
-      count += countNodes(child as any);
-    }
-  }
-  return count;
-}
-
-/**
  * Export trace data - downloads as file
  */
 export async function exportTraces(
-  traces: TraceListItem[], 
+  traces: TraceListItem[],
   format: 'csv' | 'json' = 'csv'
 ): Promise<void> {
   let content: string;
   let mimeType: string;
   let extension: string;
-  
+
   if (format === 'json') {
     content = JSON.stringify(traces, null, 2);
     mimeType = 'application/json';
@@ -325,7 +263,7 @@ export async function exportTraces(
     mimeType = 'text/csv';
     extension = 'csv';
   }
-  
+
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

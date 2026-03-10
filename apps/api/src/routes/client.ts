@@ -2241,40 +2241,51 @@ router.get('/logs', async (req, res) => {
     const offset = parseInt(req.query.offset as string) || 0;
     const level = req.query.level as string | undefined;
 
-    const conditions = [
-      eq(users.organizationId, client.organizationId),
+    // Query telemetry_events (gateway data) instead of old logs table
+    const conditions: any[] = [
+      eq(telemetryEvents.organizationId, client.organizationId),
     ];
 
     if (level) {
-      conditions.push(eq(logs.level, level));
+      // Map log levels to telemetry status
+      if (level === 'error') {
+        conditions.push(eq(telemetryEvents.status, 'error'));
+      }
     }
 
     const rows = await db
       .select({
-        id: logs.id,
-        level: logs.level,
-        message: logs.message,
-        metadata: logs.metadata,
-        timestamp: logs.timestamp,
-        agentId: logs.agentId,
-        executionId: logs.executionId,
+        id: telemetryEvents.id,
+        timestamp: telemetryEvents.timestamp,
+        provider: telemetryEvents.provider,
+        model: telemetryEvents.model,
+        status: telemetryEvents.status,
+        error: telemetryEvents.error,
+        tokens: telemetryEvents.tokens,
+        cost: telemetryEvents.cost,
+        latency: telemetryEvents.latency,
+        agentId: telemetryEvents.agentId,
+        agentName: telemetryEvents.agentName,
+        traceId: telemetryEvents.traceId,
+        workflowId: telemetryEvents.workflowId,
+        createdAt: telemetryEvents.createdAt,
       })
-      .from(logs)
-      .innerJoin(agents, eq(logs.agentId, agents.id))
-      .innerJoin(users, eq(agents.userId, users.id))
+      .from(telemetryEvents)
       .where(and(...conditions))
-      .orderBy(desc(logs.timestamp))
+      .orderBy(desc(telemetryEvents.createdAt))
       .limit(limit)
       .offset(offset);
 
     const data = rows.map((r) => ({
       id: r.id,
-      level: r.level,
-      message: r.message,
-      metadata: r.metadata,
-      timestamp: r.timestamp?.toISOString() ?? new Date().toISOString(),
-      agentId: r.agentId,
-      executionId: r.executionId,
+      level: r.status === 'error' ? 'error' : r.status === 'success' ? 'info' : 'warn',
+      message: r.error
+        ? `[${r.provider}/${r.model}] Error: ${r.error}`
+        : `[${r.provider}/${r.model}] ${r.status} — ${r.tokens ?? 0} tokens, $${parseFloat(String(r.cost ?? 0)).toFixed(4)}, ${r.latency ?? 0}ms`,
+      metadata: { provider: r.provider, model: r.model, tokens: r.tokens, cost: r.cost, latency: r.latency },
+      timestamp: r.timestamp?.toISOString() ?? r.createdAt?.toISOString() ?? new Date().toISOString(),
+      agentId: r.agentId ?? undefined,
+      source: r.agentName || r.provider || 'gateway',
     }));
 
     res.json({ logs: data, total: data.length });
@@ -2305,31 +2316,54 @@ router.get('/traces', async (req, res) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
     const offset = parseInt(req.query.offset as string) || 0;
 
+    // Query agent_traces (gateway data) instead of old traces table
     const rows = await db
-      .select({
-        id: traces.id,
-        executionId: traces.executionId,
-        treeData: traces.treeData,
-        metadata: traces.metadata,
-        createdAt: traces.createdAt,
-      })
-      .from(traces)
-      .innerJoin(executions, eq(traces.executionId, executions.id))
-      .innerJoin(users, eq(executions.userId, users.id))
-      .where(eq(users.organizationId, client.organizationId))
-      .orderBy(desc(traces.createdAt))
+      .select()
+      .from(agentTraces)
+      .where(eq(agentTraces.organizationId, client.organizationId))
+      .orderBy(desc(agentTraces.createdAt))
       .limit(limit)
       .offset(offset);
 
-    const data = rows.map((r) => ({
-      id: r.id,
-      executionId: r.executionId,
-      rootNode: r.treeData,
-      metadata: r.metadata,
-      createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
-    }));
+    // Group by traceId for the frontend
+    const grouped: Record<string, any> = {};
+    for (const row of rows) {
+      const tid = row.traceId;
+      if (!grouped[tid]) {
+        grouped[tid] = {
+          id: tid,
+          traceId: tid,
+          agentName: row.agentName || row.agentId || 'unknown',
+          workflowId: row.workflowId,
+          status: row.status || 'success',
+          totalCost: 0,
+          latencyMs: 0,
+          steps: 0,
+          startedAt: row.startedAt?.toISOString() ?? row.createdAt?.toISOString() ?? new Date().toISOString(),
+          createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+          agents: [],
+        };
+      }
+      grouped[tid].agents.push({
+        agentId: row.agentId,
+        agentName: row.agentName,
+        model: row.model,
+        provider: row.provider,
+        status: row.status,
+        costUsd: parseFloat(String(row.costUsd ?? 0)),
+        latencyMs: row.latencyMs ?? 0,
+        workflowStep: row.workflowStep,
+        parentAgentId: row.parentAgentId,
+      });
+      grouped[tid].totalCost += parseFloat(String(row.costUsd ?? 0));
+      grouped[tid].latencyMs += row.latencyMs ?? 0;
+      grouped[tid].steps += 1;
+      if (row.status === 'error') grouped[tid].status = 'error';
+    }
 
-    res.json(data);
+    const data = Object.values(grouped);
+
+    res.json({ data, total: data.length });
   } catch (error) {
     console.error('[Client Traces] Error:', error);
     res.status(500).json({ error: 'Failed to fetch traces' });
@@ -2350,37 +2384,53 @@ router.get('/traces/:id', async (req, res) => {
       return;
     }
 
+    // Query agent_traces by traceId (gateway data)
     const rows = await db
-      .select({
-        id: traces.id,
-        executionId: traces.executionId,
-        treeData: traces.treeData,
-        metadata: traces.metadata,
-        createdAt: traces.createdAt,
-      })
-      .from(traces)
-      .innerJoin(executions, eq(traces.executionId, executions.id))
-      .innerJoin(users, eq(executions.userId, users.id))
+      .select()
+      .from(agentTraces)
       .where(
         and(
-          eq(traces.id, req.params.id),
-          eq(users.organizationId, client.organizationId),
+          eq(agentTraces.traceId, req.params.id),
+          eq(agentTraces.organizationId, client.organizationId),
         ),
       )
-      .limit(1);
+      .orderBy(agentTraces.startedAt);
 
-    const r = rows[0];
-    if (!r) {
+    if (rows.length === 0) {
       res.status(404).json({ error: 'Trace not found' });
       return;
     }
 
+    const first = rows[0]!;
+    const totalCost = rows.reduce((s, r) => s + parseFloat(String(r.costUsd ?? 0)), 0);
+    const totalLatency = rows.reduce((s, r) => s + (r.latencyMs ?? 0), 0);
+    const hasError = rows.some(r => r.status === 'error');
+
     res.json({
-      id: r.id,
-      executionId: r.executionId,
-      rootNode: r.treeData,
-      metadata: r.metadata,
-      createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
+      id: first.traceId,
+      traceId: first.traceId,
+      workflowId: first.workflowId,
+      status: hasError ? 'error' : 'success',
+      totalCost,
+      latencyMs: totalLatency,
+      startedAt: first.startedAt?.toISOString() ?? first.createdAt?.toISOString(),
+      createdAt: first.createdAt?.toISOString() ?? new Date().toISOString(),
+      agents: rows.map(r => ({
+        agentId: r.agentId,
+        agentName: r.agentName,
+        model: r.model,
+        provider: r.provider,
+        status: r.status,
+        costUsd: parseFloat(String(r.costUsd ?? 0)),
+        latencyMs: r.latencyMs ?? 0,
+        workflowStep: r.workflowStep,
+        parentAgentId: r.parentAgentId,
+        inputTokens: r.inputTokens,
+        outputTokens: r.outputTokens,
+        startedAt: r.startedAt?.toISOString(),
+        completedAt: r.completedAt?.toISOString(),
+        error: r.error,
+      })),
     });
   } catch (error) {
     console.error('[Client Traces] Error:', error);
@@ -2979,7 +3029,7 @@ router.get('/workflows', async (req, res) => {
       return;
     }
 
-    // Get users in this organization
+    // First try old workflows table
     const orgUsers = await db
       .select({ id: users.id })
       .from(users)
@@ -2987,26 +3037,60 @@ router.get('/workflows', async (req, res) => {
 
     const userIds = orgUsers.map(u => u.id);
 
-    if (userIds.length === 0) {
-      res.json({ data: [], total: 0, limit: 50, offset: 0, hasMore: false });
-      return;
+    let data: any[] = [];
+
+    if (userIds.length > 0) {
+      const rows = await db
+        .select()
+        .from(workflows)
+        .where(sql`${workflows.userId} = ANY(${userIds})`)
+        .orderBy(desc(workflows.createdAt))
+        .limit(50);
+
+      data = rows.map(w => ({
+        name: w.name,
+        description: w.description,
+        steps: (w.definition as any)?.steps || [],
+        entryPoint: (w.definition as any)?.entryPoint || '',
+        createdAt: w.createdAt?.toISOString(),
+        updatedAt: w.updatedAt?.toISOString(),
+        source: 'workflow',
+      }));
     }
 
-    const rows = await db
-      .select()
-      .from(workflows)
-      .where(sql`${workflows.userId} = ANY(${userIds})`)
-      .orderBy(desc(workflows.createdAt))
-      .limit(50);
+    // Also aggregate workflows from agent_traces (gateway data)
+    const traceWorkflows = await db
+      .select({
+        workflowId: agentTraces.workflowId,
+        stepCount: sql<number>`count(*)`.as('step_count'),
+        uniqueAgents: sql<number>`count(distinct ${agentTraces.agentId})`.as('unique_agents'),
+        totalCost: sql<number>`sum(${agentTraces.costUsd})`.as('total_cost'),
+        firstSeen: sql<string>`min(${agentTraces.createdAt})`.as('first_seen'),
+        lastSeen: sql<string>`max(${agentTraces.createdAt})`.as('last_seen'),
+      })
+      .from(agentTraces)
+      .where(
+        and(
+          eq(agentTraces.organizationId, client.organizationId),
+          isNotNull(agentTraces.workflowId),
+        ),
+      )
+      .groupBy(agentTraces.workflowId);
 
-    const data = rows.map(w => ({
-      name: w.name,
-      description: w.description,
-      steps: (w.definition as any)?.steps || [],
-      entryPoint: (w.definition as any)?.entryPoint || '',
-      createdAt: w.createdAt?.toISOString(),
-      updatedAt: w.updatedAt?.toISOString(),
-    }));
+    for (const tw of traceWorkflows) {
+      // Skip if already in data from workflows table
+      if (data.some(d => d.name === tw.workflowId)) continue;
+      data.push({
+        name: tw.workflowId,
+        description: `${tw.uniqueAgents} agent(s), ${tw.stepCount} trace(s)`,
+        steps: Array.from({ length: Number(tw.uniqueAgents) }, (_, i) => ({ id: `step-${i+1}`, agent: `agent-${i+1}` })),
+        entryPoint: 'step-1',
+        createdAt: tw.firstSeen,
+        updatedAt: tw.lastSeen,
+        source: 'gateway',
+        totalCost: parseFloat(String(tw.totalCost ?? 0)),
+      });
+    }
 
     res.json({
       data,

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback, useRef, useEffect, Suspense } from "react"
+import { useState, useMemo, useCallback, useRef, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { FileText, Search, Filter, Download, X, RefreshCw, Loader2, Pause, Play, Circle, AlertCircle, Info, AlertTriangle, Bug } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -9,8 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
-import { useLogs, useLogStats, exportLogs, useWebSocket, EnhancedLogEntry } from "@/hooks"
-import { ConnectionStatus } from "@/components/ui/connection-status"
+import { useLogs, useLogStats, exportLogs, EnhancedLogEntry } from "@/hooks"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -37,46 +36,21 @@ function LogsPageContent() {
   const [agentIdFilter, setAgentIdFilter] = useState(initialAgentId)
   const [isPaused, setIsPaused] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
-  const [autoScroll, setAutoScroll] = useState(true)
-  
-  // Live logs buffer (from WebSocket)
-  const [liveLogs, setLiveLogs] = useState<EnhancedLogEntry[]>([])
-  
-  // Data fetching
+
+  // Data fetching with polling (5s when not paused)
   const { data, isLoading, error, refetch } = useLogs({
     level: levelFilters.length > 0 ? levelFilters : undefined,
     agentId: agentIdFilter || undefined,
     search: searchQuery || undefined,
     limit: 200,
+  }, {
+    refetchInterval: isPaused ? false : 5000,
   })
   const { data: stats } = useLogStats()
-  const { lastEvent, isConnected } = useWebSocket()
-  
-  // Handle live log events
-  useEffect(() => {
-    if (lastEvent?.type === 'log' && !isPaused && lastEvent.data) {
-      const newLog = lastEvent.data as EnhancedLogEntry
-      setLiveLogs(prev => [newLog, ...prev].slice(0, 100)) // Keep max 100 live logs
-    }
-  }, [lastEvent, isPaused])
-  
-  // Auto-scroll to bottom when new logs arrive
-  useEffect(() => {
-    if (autoScroll && logsContainerRef.current && liveLogs.length > 0) {
-      logsContainerRef.current.scrollTop = 0
-    }
-  }, [liveLogs, autoScroll])
-  
-  // Combine live logs with API logs
+
   const allLogs = useMemo(() => {
-    const apiLogs = data?.logs || []
-    if (isPaused) return apiLogs
-    
-    // Merge and dedupe by id, live logs first
-    const liveIds = new Set(liveLogs.map(l => l.id))
-    const uniqueApiLogs = apiLogs.filter((l: EnhancedLogEntry) => !liveIds.has(l.id))
-    return [...liveLogs, ...uniqueApiLogs]
-  }, [data?.logs, liveLogs, isPaused])
+    return data?.logs || []
+  }, [data?.logs])
   
   // Client-side filtering
   const filteredLogs = useMemo(() => {
@@ -138,14 +112,6 @@ function LogsPageContent() {
     } finally {
       setIsExporting(false)
     }
-  }
-  
-  const handleClearLogs = () => {
-    setLiveLogs([])
-    toast({
-      title: "Live Logs Cleared",
-      description: "Live log buffer has been cleared",
-    })
   }
   
   const formatTimestamp = (timestamp: string) => {
@@ -221,12 +187,9 @@ function LogsPageContent() {
           <div className="p-2.5 rounded-xl bg-amber-500/10">
             <FileText className="h-6 w-6 text-amber-500" />
           </div>
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Logs</h1>
-              <p className="text-muted-foreground">View system and agent logs</p>
-            </div>
-            <ConnectionStatus showLabel />
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Logs</h1>
+            <p className="text-muted-foreground">View system and agent logs</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -414,9 +377,9 @@ function LogsPageContent() {
             <div>
               <CardTitle className="flex items-center gap-2">
                 Log Stream
-                {!isPaused && liveLogs.length > 0 && (
+                {!isPaused && (
                   <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
-                    Live
+                    Polling 5s
                   </Badge>
                 )}
                 {isPaused && (
@@ -427,11 +390,10 @@ function LogsPageContent() {
               </CardTitle>
               <CardDescription>
                 Showing {filteredLogs.length} logs
-                {liveLogs.length > 0 && ` (${liveLogs.length} live)`}
               </CardDescription>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleClearLogs}>
-              Clear Live
+            <Button variant="ghost" size="sm" onClick={() => refetch()}>
+              Refresh
             </Button>
           </div>
         </CardHeader>
@@ -454,9 +416,7 @@ function LogsPageContent() {
                 return (
                   <div
                     key={log.id || `log-${index}`}
-                    className={`flex items-start gap-3 p-2 rounded hover:bg-muted/50 transition-colors ${
-                      liveLogs.some(l => l.id === log.id) ? 'bg-primary/5' : ''
-                    }`}
+                    className="flex items-start gap-3 p-2 rounded hover:bg-muted/50 transition-colors"
                   >
                     <span className="text-xs text-muted-foreground shrink-0 w-24">
                       {formatTimestamp(log.timestamp)}
