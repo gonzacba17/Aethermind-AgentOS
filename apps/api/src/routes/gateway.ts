@@ -73,6 +73,7 @@ const PROVIDER_URLS: Record<string, string> = {
   openai: 'https://api.openai.com',
   anthropic: 'https://api.anthropic.com',
   gemini: 'https://generativelanguage.googleapis.com',
+  groq: 'https://api.groq.com/openai',
 };
 
 // ─── Encryption (mirrors user-api-keys.ts) ──────────────────
@@ -115,6 +116,7 @@ function detectProvider(model: string): string {
   if (model.startsWith('gpt-') || model.startsWith('o1-') || model.startsWith('o3-')) return 'openai';
   if (model.startsWith('claude-')) return 'anthropic';
   if (model.startsWith('gemini-')) return 'gemini';
+  if (model.startsWith('llama-') || model.startsWith('llama3') || model.startsWith('mixtral-')) return 'groq';
   // Default to openai for unknown models (OpenAI-compatible endpoint)
   return 'openai';
 }
@@ -144,6 +146,10 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'gemini-2.0-flash-lite': { input: 0.000075, output: 0.0003 },
   'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
   'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
+  // Groq
+  'llama-3.3-70b-versatile': { input: 0.00059, output: 0.00079 },
+  'llama-3.1-8b-instant': { input: 0.00005, output: 0.00008 },
+  'mixtral-8x7b-32768': { input: 0.00024, output: 0.00024 },
 };
 
 function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
@@ -206,6 +212,7 @@ function getEnvApiKey(provider: string): string | null {
     openai: 'OPENAI_API_KEY',
     anthropic: 'ANTHROPIC_API_KEY',
     gemini: 'GEMINI_API_KEY',
+    groq: 'GROQ_API_KEY',
   };
   const envVar = map[provider];
   return envVar ? process.env[envVar] || null : null;
@@ -337,6 +344,8 @@ function buildProviderHeaders(provider: string, apiKey: string): Record<string, 
     headers['anthropic-version'] = '2023-06-01';
   } else if (provider === 'gemini') {
     headers['Authorization'] = `Bearer ${apiKey}`;
+  } else if (provider === 'groq') {
+    headers['Authorization'] = `Bearer ${apiKey}`;
   }
   console.log(`[Gateway] buildProviderHeaders provider=${provider} keys=${Object.keys(headers).join(',')}`);
   return headers;
@@ -351,6 +360,8 @@ function buildProviderUrl(provider: string, apiKey: string): string {
     url = `${PROVIDER_URLS.anthropic}/v1/messages`;
   } else if (provider === 'gemini') {
     url = `${PROVIDER_URLS.gemini}/v1beta/openai/chat/completions`;
+  } else if (provider === 'groq') {
+    url = `${PROVIDER_URLS.groq}/v1/chat/completions`;
   } else {
     url = `${PROVIDER_URLS.openai}/v1/chat/completions`;
   }
@@ -363,6 +374,7 @@ const PROVIDER_FALLBACKS: Record<string, string | null> = {
   openai: 'anthropic',
   anthropic: 'openai',
   gemini: 'openai',
+  groq: 'openai',
 };
 
 // Map a model to the fallback provider's default model
@@ -370,6 +382,7 @@ const FALLBACK_MODELS: Record<string, string> = {
   openai: 'gpt-4o-mini',
   anthropic: 'claude-3-5-sonnet-20241022',
   gemini: 'gemini-2.0-flash',
+  groq: 'llama-3.3-70b-versatile',
 };
 
 // ═══════════════════════════════════════════════════════════
@@ -1153,6 +1166,10 @@ router.get(
       { id: 'gemini-2.0-flash', provider: 'gemini' },
       { id: 'gemini-1.5-pro', provider: 'gemini' },
       { id: 'gemini-1.5-flash', provider: 'gemini' },
+      // Groq
+      { id: 'llama-3.3-70b-versatile', provider: 'groq' },
+      { id: 'llama-3.1-8b-instant', provider: 'groq' },
+      { id: 'mixtral-8x7b-32768', provider: 'groq' },
     ];
 
     return res.json({
