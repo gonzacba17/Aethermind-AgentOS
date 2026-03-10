@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
 import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations, alertRules, agentTraces } from '../db/schema.js';
-import { eq, and, gte, lte, sql, isNotNull, isNull, desc } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, isNotNull, isNull, desc, inArray } from 'drizzle-orm';
 import { ClientAuthenticatedRequest, invalidateClientCache } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
 import { classifyPrompt } from '../services/PromptClassifier.js';
@@ -3043,7 +3043,7 @@ router.get('/workflows', async (req, res) => {
       const rows = await db
         .select()
         .from(workflows)
-        .where(sql`${workflows.userId} = ANY(${userIds})`)
+        .where(inArray(workflows.userId, userIds))
         .orderBy(desc(workflows.createdAt))
         .limit(50);
 
@@ -3138,7 +3138,7 @@ router.get('/workflows/:name', async (req, res) => {
       .from(workflows)
       .where(and(
         eq(workflows.name, decodeURIComponent(name)),
-        sql`${workflows.userId} = ANY(${userIds})`,
+        inArray(workflows.userId, userIds),
       ))
       .limit(1);
 
@@ -3249,7 +3249,7 @@ router.put('/workflows/:name', async (req, res) => {
       .set(updateData)
       .where(and(
         eq(workflows.name, decodeURIComponent(name)),
-        sql`${workflows.userId} = ANY(${userIds})`,
+        inArray(workflows.userId, userIds),
       ))
       .returning({ name: workflows.name });
 
@@ -3296,7 +3296,7 @@ router.delete('/workflows/:name', async (req, res) => {
       .delete(workflows)
       .where(and(
         eq(workflows.name, decodeURIComponent(name)),
-        sql`${workflows.userId} = ANY(${userIds})`,
+        inArray(workflows.userId, userIds),
       ));
 
     res.json({ message: 'Workflow deleted' });

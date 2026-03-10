@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Columns2, Trash2, Circle, AlertCircle, Pause, Play, ExternalLink } from "lucide-react"
-import { useLogs, useWebSocket } from "@/hooks"
+import { ChevronDown, Circle, AlertCircle, Pause, Play, ExternalLink, RefreshCw } from "lucide-react"
+import { useLogs } from "@/hooks"
 import { LogsPanelSkeleton } from "@/components/ui/skeleton"
 import { EmptyState } from "@/components/ui/empty-state"
-import { ConnectionStatus } from "@/components/ui/connection-status"
 import { Badge } from "@/components/ui/badge"
 
 const levelColors = {
@@ -20,48 +19,28 @@ const levelColors = {
   error: 'text-destructive fill-destructive',
 };
 
-const levelLabels = {
-  debug: 'Debug',
-  info: 'Info',
-  warn: 'Warning',
-  warning: 'Warning',
-  error: 'Error',
-};
-
 /**
  * Logs Panel Component
- * 
- * Displays recent logs in the dashboard with real-time updates.
- * Connected to real data via useLogs hook and WebSocket.
+ *
+ * Displays recent logs in the dashboard with polling updates.
  */
 export function LogsPanel() {
   const router = useRouter();
   const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
   const [isPaused, setIsPaused] = useState(false);
-  
-  const { isConnected, lastEvent } = useWebSocket();
-  const { data, isLoading, error, refetch } = useLogs({ 
+
+  const { data, isLoading, error, refetch } = useLogs({
     level: selectedLevels.length > 0 ? selectedLevels : undefined,
-    limit: 10 
+    limit: 10
+  }, {
+    refetchInterval: isPaused ? false : 5000,
   });
 
-  // Track new logs from WebSocket when not paused
-  const [liveLogs, setLiveLogs] = useState<any[]>([]);
-  
-  useEffect(() => {
-    if (lastEvent?.type === 'log' && !isPaused) {
-      setLiveLogs(prev => [lastEvent.data, ...prev].slice(0, 10));
-    }
-  }, [lastEvent, isPaused]);
-
-  // Combine API logs with live logs
-  const logs = isPaused 
-    ? (data?.logs || []) 
-    : [...liveLogs, ...(data?.logs || [])].slice(0, 10);
+  const logs = data?.logs || [];
 
   const toggleLevel = (level: string) => {
-    setSelectedLevels(prev => 
-      prev.includes(level) 
+    setSelectedLevels(prev =>
+      prev.includes(level)
         ? prev.filter(l => l !== level)
         : [...prev, level]
     );
@@ -71,20 +50,14 @@ export function LogsPanel() {
     router.push('/logs');
   };
 
-  const handleClearLogs = () => {
-    setLiveLogs([]);
-    // Note: This only clears live logs from display
-    // Backend logs are not deleted
-  };
-
   const formatTimestamp = (timestamp: string) => {
     try {
       const date = new Date(timestamp);
-      return date.toLocaleTimeString('en-US', { 
-        hour12: false, 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        second: '2-digit' 
+      return date.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
       });
     } catch {
       return timestamp;
@@ -117,7 +90,11 @@ export function LogsPanel() {
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <div className="flex items-center gap-2">
           <CardTitle className="text-lg font-semibold text-foreground">Logs</CardTitle>
-          <ConnectionStatus size="sm" />
+          {!isPaused && (
+            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+              Polling
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <DropdownMenu>
@@ -128,28 +105,28 @@ export function LogsPanel() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuCheckboxItem 
+              <DropdownMenuCheckboxItem
                 checked={selectedLevels.includes('info')}
                 onCheckedChange={() => toggleLevel('info')}
               >
                 <Circle className="h-2 w-2 text-primary fill-primary mr-2" />
                 Info
               </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem 
+              <DropdownMenuCheckboxItem
                 checked={selectedLevels.includes('warn')}
                 onCheckedChange={() => toggleLevel('warn')}
               >
                 <Circle className="h-2 w-2 text-amber-500 fill-amber-500 mr-2" />
                 Warning
               </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem 
+              <DropdownMenuCheckboxItem
                 checked={selectedLevels.includes('error')}
                 onCheckedChange={() => toggleLevel('error')}
               >
                 <Circle className="h-2 w-2 text-destructive fill-destructive mr-2" />
                 Error
               </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem 
+              <DropdownMenuCheckboxItem
                 checked={selectedLevels.includes('debug')}
                 onCheckedChange={() => toggleLevel('debug')}
               >
@@ -166,27 +143,27 @@ export function LogsPanel() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             className="h-8 w-8 bg-transparent border-border"
             onClick={() => setIsPaused(!isPaused)}
             title={isPaused ? 'Resume' : 'Pause'}
           >
             {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
           </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             className="h-8 w-8 bg-transparent border-border"
-            onClick={handleClearLogs}
-            title="Clear logs"
+            onClick={() => refetch()}
+            title="Refresh"
           >
-            <Trash2 className="h-4 w-4" />
+            <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
+          <Button
+            variant="outline"
+            size="icon"
             className="h-8 w-8 bg-transparent border-border"
             onClick={handleViewAll}
             title="View all logs"
