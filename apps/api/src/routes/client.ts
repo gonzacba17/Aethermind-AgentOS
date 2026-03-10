@@ -460,8 +460,16 @@ router.get('/budget-status', async (req, res) => {
     const evaluation = await evaluateBudget(client.id);
 
     if (!evaluation) {
-      // No budget defined — return a zero-state BudgetInfo
-      res.status(404).json({ error: 'No budget configured' });
+      // No budget defined — return a zero-state so the frontend renders gracefully
+      res.json({
+        limit: 0,
+        spent: 0,
+        remaining: 0,
+        percentUsed: 0,
+        period: 'monthly',
+        status: 'ok',
+        budgetId: null,
+      });
       return;
     }
 
@@ -1071,15 +1079,36 @@ router.get('/routing/provider-health', async (req, res) => {
 
     const latencyMap = new Map(latencyRows.map(r => [r.provider, { avgLatency: r.avgLatency, count: r.count }]));
 
-    const providers = healthRows.map(h => ({
-      provider: h.provider,
-      status: h.status,
-      latencyMs: h.latencyMs,
-      lastCheckedAt: h.lastCheckedAt,
-      errorMessage: h.errorMessage,
-      avg24hLatency: latencyMap.get(h.provider)?.avgLatency ?? null,
-      requests24h: latencyMap.get(h.provider)?.count ?? 0,
-    }));
+    const providers = healthRows.map(h => {
+      const telemetry = latencyMap.get(h.provider);
+      // If we have successful requests via the gateway in the last 24h,
+      // the provider is effectively "up" regardless of env-var health checks
+      const hasRecentTraffic = telemetry && telemetry.count > 0;
+      return {
+        provider: h.provider,
+        status: hasRecentTraffic ? 'ok' : h.status,
+        latencyMs: hasRecentTraffic ? telemetry.avgLatency : h.latencyMs,
+        lastCheckedAt: h.lastCheckedAt,
+        errorMessage: hasRecentTraffic ? null : h.errorMessage,
+        avg24hLatency: telemetry?.avgLatency ?? null,
+        requests24h: telemetry?.count ?? 0,
+      };
+    });
+
+    // Also include providers found in telemetry but not in provider_health table
+    for (const [provider, stats] of latencyMap) {
+      if (!providers.some(p => p.provider === provider)) {
+        providers.push({
+          provider,
+          status: 'ok',
+          latencyMs: stats.avgLatency,
+          lastCheckedAt: new Date().toISOString() as any,
+          errorMessage: null,
+          avg24hLatency: stats.avgLatency,
+          requests24h: stats.count,
+        });
+      }
+    }
 
     res.json({ providers });
   } catch (error) {
@@ -1140,7 +1169,7 @@ router.get('/routing/optimization', async (req, res) => {
         and(
           eq(telemetryEvents.organizationId, client.organizationId),
           gte(telemetryEvents.timestamp, since),
-          sql`${telemetryEvents.model} = ANY(${EXPENSIVE_MODELS})`,
+          inArray(telemetryEvents.model, EXPENSIVE_MODELS),
         ),
       );
 
