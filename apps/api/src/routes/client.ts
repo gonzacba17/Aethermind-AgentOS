@@ -2261,7 +2261,7 @@ router.get('/logs', async (req, res) => {
         model: telemetryEvents.model,
         status: telemetryEvents.status,
         error: telemetryEvents.error,
-        tokens: telemetryEvents.tokens,
+        tokens: telemetryEvents.totalTokens,
         cost: telemetryEvents.cost,
         latency: telemetryEvents.latency,
         agentId: telemetryEvents.agentId,
