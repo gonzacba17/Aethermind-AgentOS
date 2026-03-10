@@ -43,7 +43,7 @@ export interface OptimizationReport {
 
 export interface ModelInfo {
   model: string;
-  provider: 'openai' | 'anthropic' | 'cohere' | 'google' | 'azure';
+  provider: 'openai' | 'anthropic' | 'cohere' | 'google' | 'groq' | 'azure';
   tier: string;
   pricing: {
     inputPer1kTokens: number;

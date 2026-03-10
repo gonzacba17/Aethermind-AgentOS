@@ -20,6 +20,7 @@ const PROVIDERS = [
   { value: 'anthropic', label: 'Anthropic', prefix: 'sk-ant-' },
   { value: 'cohere', label: 'Cohere', prefix: '' },
   { value: 'google', label: 'Google AI', prefix: '' },
+  { value: 'groq', label: 'Groq', prefix: 'gsk_' },
   { value: 'azure', label: 'Azure OpenAI', prefix: '' },
   { value: 'custom', label: 'Custom', prefix: '' },
 ] as const
