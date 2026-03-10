@@ -101,7 +101,7 @@ function maskApiKey(key: string): string {
 
 // Validation schema
 const apiKeySchema = z.object({
-  provider: z.enum(['openai', 'anthropic', 'cohere', 'google', 'azure', 'custom']),
+  provider: z.enum(['openai', 'anthropic', 'cohere', 'google', 'groq', 'azure', 'custom']),
   name: z.string().min(1).max(100),
   apiKey: z.string().min(10),
 });
