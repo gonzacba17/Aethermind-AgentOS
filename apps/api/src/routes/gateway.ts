@@ -74,6 +74,7 @@ const PROVIDER_URLS: Record<string, string> = {
   anthropic: 'https://api.anthropic.com',
   gemini: 'https://generativelanguage.googleapis.com',
   groq: 'https://api.groq.com/openai',
+  lmstudio: process.env.LMSTUDIO_BASE_URL || 'https://conscientious-bertram-gangliate.ngrok-free.dev',
 };
 
 // ─── Encryption (mirrors user-api-keys.ts) ──────────────────
@@ -113,12 +114,17 @@ function decrypt(encryptedText: string): string {
 
 /** Detect provider from model name */
 function detectProvider(model: string): string {
-  if (model.startsWith('gpt-') || model.startsWith('o1-') || model.startsWith('o3-')) return 'openai';
-  if (model.startsWith('claude-')) return 'anthropic';
-  if (model.startsWith('gemini-')) return 'gemini';
-  if (model.startsWith('llama-') || model.startsWith('llama3') || model.startsWith('mixtral-')) return 'groq';
+  const m = model.toLowerCase();
+  let provider: string;
+  if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('o3-')) provider = 'openai';
+  else if (m.startsWith('claude-')) provider = 'anthropic';
+  else if (m.startsWith('gemini-')) provider = 'gemini';
+  else if (m.startsWith('llama-') || m.startsWith('llama3') || m.startsWith('mixtral-')) provider = 'groq';
+  else if (m.includes('qwen') || m.includes('lmstudio')) provider = 'lmstudio';
   // Default to openai for unknown models (OpenAI-compatible endpoint)
-  return 'openai';
+  else provider = 'openai';
+  console.log(`[Gateway] detectProvider: ${model} → ${provider}`);
+  return provider;
 }
 
 /** Extract prompt text from messages array */
@@ -162,6 +168,9 @@ async function getUserApiKey(
   organizationId: string,
   provider: string,
 ): Promise<string | null> {
+  // LM Studio doesn't require authentication — return a fake key
+  if (provider === 'lmstudio') return 'lm-studio';
+
   // Normalize: keys may be stored as 'google' or 'gemini' depending on the source
   const providerAliases: Record<string, string[]> = {
     gemini: ['gemini', 'google'],
@@ -213,6 +222,7 @@ function getEnvApiKey(provider: string): string | null {
     anthropic: 'ANTHROPIC_API_KEY',
     gemini: 'GEMINI_API_KEY',
     groq: 'GROQ_API_KEY',
+    lmstudio: '', // LM Studio doesn't need an API key
   };
   const envVar = map[provider];
   return envVar ? process.env[envVar] || null : null;
@@ -346,6 +356,8 @@ function buildProviderHeaders(provider: string, apiKey: string): Record<string, 
     headers['Authorization'] = `Bearer ${apiKey}`;
   } else if (provider === 'groq') {
     headers['Authorization'] = `Bearer ${apiKey}`;
+  } else if (provider === 'lmstudio') {
+    headers['Authorization'] = 'Bearer lm-studio';
   }
   console.log(`[Gateway] buildProviderHeaders provider=${provider} keys=${Object.keys(headers).join(',')}`);
   return headers;
@@ -362,6 +374,8 @@ function buildProviderUrl(provider: string, apiKey: string): string {
     url = `${PROVIDER_URLS.gemini}/v1beta/openai/chat/completions`;
   } else if (provider === 'groq') {
     url = `${PROVIDER_URLS.groq}/v1/chat/completions`;
+  } else if (provider === 'lmstudio') {
+    url = `${PROVIDER_URLS.lmstudio}/v1/chat/completions`;
   } else {
     url = `${PROVIDER_URLS.openai}/v1/chat/completions`;
   }
@@ -375,6 +389,7 @@ const PROVIDER_FALLBACKS: Record<string, string | null> = {
   anthropic: 'openai',
   gemini: 'openai',
   groq: 'openai',
+  lmstudio: 'openai',
 };
 
 // Map a model to the fallback provider's default model
