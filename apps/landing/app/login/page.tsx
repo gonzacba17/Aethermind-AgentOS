@@ -13,7 +13,6 @@ import { config } from '@/lib/config'
 function LoginForm() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
-  const [rememberMe, setRememberMe] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
@@ -43,7 +42,6 @@ function LoginForm() {
       removeToken();
       removeClientToken();
       localStorage.removeItem('user');
-      // Remove ?logout=true from URL to prevent re-clearing on refresh
       const url = new URL(window.location.href);
       url.searchParams.delete('logout');
       window.history.replaceState({}, '', url.toString());
@@ -51,12 +49,9 @@ function LoginForm() {
   }, [searchParams]);
 
   useEffect(() => {
-    // Success message if coming from signup
     if (searchParams.get('registered') === 'true') {
       setSuccessMessage('Account created successfully! Please sign in.');
     }
-
-    // Handle auth errors
     const authError = searchParams.get('error');
     if (authError) {
       if (authError === 'session_expired') {
@@ -71,12 +66,8 @@ function LoginForm() {
 
   const onSubmit = async (data: LoginFormData) => {
     setError('')
-
     try {
-      // authAPI.login now handles token storage with rememberMe preference
-      const response = await authAPI.login(data, rememberMe)
-
-      // Check for returnTo parameter
+      const response = await authAPI.login(data, false)
       const returnTo = searchParams.get('returnTo');
       if (returnTo && returnTo.startsWith('/')) {
         window.location.href = returnTo;
@@ -84,7 +75,6 @@ function LoginForm() {
         const dashUrl = await buildDashboardUrl();
         window.location.href = dashUrl;
       } else {
-        // Fallback: use redirectAfterAuth for edge cases
         await redirectAfterAuth(response.user)
       }
     } catch (err: unknown) {
@@ -92,112 +82,115 @@ function LoginForm() {
     }
   }
 
-  // Show loading while checking auth
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
-          <p className="text-white">Loading...</p>
-        </div>
+        <div className="font-mono text-xs text-white/40 animate-pulse">loading...</div>
       </div>
     );
   }
 
-  // Don't render if authenticated (will redirect)
   if (isAuthenticated) {
     return null;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black px-4">
-      <div className="max-w-md w-full space-y-8 bg-zinc-900 p-8 rounded-2xl border border-zinc-800">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-white">AETHERMIND</h1>
-          <p className="mt-2 text-zinc-400">Welcome back</p>
+    <div className="min-h-screen flex bg-black">
+      {/* Left panel — branding */}
+      <div className="hidden lg:flex lg:w-[40%] flex-col justify-center px-16 border-r border-white/[0.06]">
+        <h1 className="font-mono text-sm tracking-[0.2em] text-white mb-6">AETHERMIND</h1>
+        <p className="text-lg font-light text-white/40 mb-12 leading-relaxed">
+          The AI Gateway built for<br />multi-agent systems.
+        </p>
+        <div className="space-y-4 font-mono text-xs text-white/20">
+          <p>// agent-level tracing</p>
+          <p>// byok — your keys</p>
+          <p>// drop-in openai replacement</p>
         </div>
+      </div>
 
-        {successMessage && (
-          <div className="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
-            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-            <span>{successMessage}</span>
-          </div>
-        )}
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/50 text-red-500 px-4 py-3 rounded-lg text-sm">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              {...register('email')}
-              className="mt-1 block w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
-              placeholder="you@example.com"
-            />
-            {errors.email && (
-              <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>
-            )}
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center px-6 bg-[#0a0a0a]">
+        <div className="w-full max-w-md space-y-8">
+          {/* Mobile logo */}
+          <div className="lg:hidden mb-8">
+            <h1 className="font-mono text-sm tracking-[0.2em] text-white">AETHERMIND</h1>
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              {...register('password')}
-              className="mt-1 block w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
-              placeholder="••••••••"
-            />
-            {errors.password && (
-              <p className="mt-1 text-sm text-red-400">{errors.password.message}</p>
-            )}
+            <h2 className="text-2xl font-light text-white mb-2">Welcome back.</h2>
+            <p className="text-sm text-white/40">Sign in to your dashboard.</p>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 bg-zinc-800 border-zinc-700 rounded text-white focus:ring-white focus:ring-2"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-zinc-400">
-                Remember me
+          {successMessage && (
+            <div className="border border-green-500/30 text-green-400 px-4 py-3 text-sm flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="border border-[#ff4444]/30 text-[#ff4444] px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div>
+              <label htmlFor="email" className="block font-mono text-xs text-white/40 mb-2">
+                email
               </label>
+              <input
+                id="email"
+                type="email"
+                {...register('email')}
+                className="block w-full px-4 py-3 bg-black border border-white/[0.1] text-white text-sm placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                placeholder="you@example.com"
+              />
+              {errors.email && (
+                <p className="mt-1 text-xs text-[#ff4444]">{errors.email.message}</p>
+              )}
             </div>
 
-            <Link href="/forgot-password" className="text-sm text-white hover:underline">
-              Forgot password?
+            <div>
+              <label htmlFor="password" className="block font-mono text-xs text-white/40 mb-2">
+                password
+              </label>
+              <input
+                id="password"
+                type="password"
+                {...register('password')}
+                className="block w-full px-4 py-3 bg-black border border-white/[0.1] text-white text-sm placeholder-white/20 focus:outline-none focus:border-white/30 transition-colors"
+                placeholder="••••••••"
+              />
+              {errors.password && (
+                <p className="mt-1 text-xs text-[#ff4444]">{errors.password.message}</p>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <Link href="/forgot-password" className="font-mono text-xs text-white/40 hover:text-white transition-colors">
+                forgot password?
+              </Link>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full font-mono text-sm bg-white text-black py-3 hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'signing in...' : 'sign_in()'}
+            </button>
+          </form>
+
+          <div className="text-center text-sm">
+            <span className="text-white/40">Don&apos;t have an account?</span>{' '}
+            <Link href="/signup" className="font-mono text-xs text-white hover:text-white/70 transition-colors">
+              start_free()
             </Link>
           </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-white text-black py-3 px-4 rounded-lg font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="text-center text-sm">
-          <span className="text-zinc-400">Don&apos;t have an account?</span>{' '}
-          <Link href="/signup" className="text-white hover:underline font-medium">
-            Sign up
-          </Link>
         </div>
       </div>
     </div>
@@ -208,7 +201,7 @@ export default function LoginPage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-black">
-        <div className="text-white">Loading...</div>
+        <div className="font-mono text-xs text-white/40 animate-pulse">loading...</div>
       </div>
     }>
       <LoginForm />

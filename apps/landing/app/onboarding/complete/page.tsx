@@ -1,8 +1,6 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, Sparkles, BarChart3, Bell, ArrowRight } from 'lucide-react';
 import { config } from '@/lib/config';
 import { getToken, getClientToken } from '@/lib/auth-utils';
 
@@ -16,18 +14,15 @@ export default function CompletePage() {
     setError(null);
 
     try {
-      // Mark onboarding as complete
       localStorage.setItem('onboarding_marketing_seen', 'true');
       localStorage.setItem('onboarding_technical_complete', 'true');
 
-      // Prefer client access token (bridged from signup/login)
       const clientToken = getClientToken();
       if (clientToken) {
         window.location.href = `${config.dashboardUrl}?token=${encodeURIComponent(clientToken)}`;
         return;
       }
 
-      // Fallback: try creating a temp session via JWT
       const token = getToken();
       if (!token) {
         throw new Error('No authentication token found');
@@ -37,8 +32,8 @@ export default function CompletePage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {
@@ -52,7 +47,6 @@ export default function CompletePage() {
     } catch (err) {
       console.error('Redirect failed:', err);
       setError('Something went wrong. Redirecting directly...');
-
       setTimeout(() => {
         window.location.href = `${config.dashboardUrl}`;
       }, 1000);
@@ -60,160 +54,75 @@ export default function CompletePage() {
   };
 
   const nextSteps = [
-    {
-      icon: <BarChart3 className="w-5 h-5 text-blue-400" />,
-      title: 'Send your first request',
-      description: 'Route a request through the gateway using your client token'
-    },
-    {
-      icon: <Sparkles className="w-5 h-5 text-purple-400" />,
-      title: 'Watch traces appear',
-      description: 'See agent costs, latency, and traces appear in your dashboard in real-time'
-    },
-    {
-      icon: <Bell className="w-5 h-5 text-yellow-400" />,
-      title: 'Set up budgets',
-      description: 'Configure spending limits per agent or workflow'
-    }
+    { label: 'send_first_request()', description: 'Route a request through the gateway using your client token.' },
+    { label: 'watch_traces()', description: 'See agent costs, latency, and traces appear in your dashboard.' },
+    { label: 'set_budgets()', description: 'Configure spending limits per agent or workflow.' },
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Background effects */}
-      <div className="fixed inset-0 bg-gradient-to-br from-green-900/20 via-black to-blue-900/20" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-green-500/10 via-transparent to-transparent" />
-      
-      {/* Confetti-like particles */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        {[...Array(20)].map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-2 h-2 rounded-full animate-pulse"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              backgroundColor: ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B'][i % 4],
-              opacity: 0.3,
-              animationDelay: `${i * 0.1}s`,
-            }}
-          />
-        ))}
+    <div className="min-h-screen bg-black text-white flex flex-col">
+      <div className="fixed top-0 left-0 right-0 h-px bg-white/[0.06] z-50">
+        <div className="h-full bg-white" style={{ width: '100%' }} />
+      </div>
+      <div className="fixed top-3 left-6 font-mono text-xs text-white/20 z-50">
+        // step_06 — complete
       </div>
 
-      <div className="relative container max-w-4xl mx-auto px-4 py-16">
-        <div className="text-center space-y-10">
-          {/* Step Indicator */}
-          <div className="flex items-center justify-center gap-3 text-sm">
-            <span className="flex items-center gap-2 text-gray-500">
-              <span className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center text-xs">✓</span>
-              Welcome
-            </span>
-            <div className="w-8 h-px bg-gray-700" />
-            <span className="flex items-center gap-2 text-gray-500">
-              <span className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center text-xs">✓</span>
-              Demo
-            </span>
-            <div className="w-8 h-px bg-gray-700" />
-            <span className="flex items-center gap-2 text-gray-500">
-              <span className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center text-xs">✓</span>
-              Pricing
-            </span>
-            <div className="w-8 h-px bg-gray-700" />
-            <span className="flex items-center gap-2 text-gray-500">
-              <span className="w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center text-xs">✓</span>
-              Setup
-            </span>
-            <div className="w-8 h-px bg-gray-700" />
-            <span className="flex items-center gap-2 text-green-400">
-              <span className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-xs font-bold">✓</span>
-              Complete
-            </span>
-          </div>
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full text-center">
+          <p className="font-mono text-xs text-white/20 mb-8">// setup_complete</p>
 
-          {/* Success Icon */}
-          <div className="flex justify-center">
-            <div className="relative">
-              {/* Glow effect */}
-              <div className="absolute inset-0 rounded-full bg-green-500/30 blur-2xl animate-pulse" />
-              <div className="relative rounded-full bg-gradient-to-br from-green-400 to-emerald-600 p-6 shadow-2xl shadow-green-500/30">
-                <CheckCircle2 className="h-16 w-16 text-white" />
+          <h1
+            className="font-light tracking-[-0.04em] text-white mb-4"
+            style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)' }}
+          >
+            You&apos;re all set.
+          </h1>
+
+          <p className="text-[1.1rem] font-light text-white/40 max-w-lg mx-auto mb-12">
+            Your gateway is connected. Start sending requests and watch your agent traces appear in real-time.
+          </p>
+
+          {/* Next steps */}
+          <div className="border border-white/[0.06] text-left mb-12">
+            <div className="px-6 py-3 border-b border-white/[0.06]">
+              <span className="font-mono text-xs text-white/20">// what_happens_next</span>
+            </div>
+            {nextSteps.map((step, i) => (
+              <div
+                key={step.label}
+                className={`px-6 py-5 ${i < nextSteps.length - 1 ? 'border-b border-white/[0.06]' : ''}`}
+              >
+                <h3 className="font-mono text-xs text-white/60 mb-1">{step.label}</h3>
+                <p className="text-sm text-white/40">{step.description}</p>
               </div>
-            </div>
+            ))}
           </div>
 
-          {/* Header */}
-          <div className="space-y-4">
-            <h1 className="text-5xl md:text-6xl font-bold">
-              You're All Set! <span className="inline-block animate-bounce">🎉</span>
-            </h1>
-            <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-              Your gateway is connected. Start sending requests and watch your agent traces appear in real-time.
-            </p>
-          </div>
-
-          {/* Next Steps */}
-          <div className="bg-gradient-to-br from-gray-900/80 to-gray-800/50 rounded-2xl p-8 text-left max-w-2xl mx-auto border border-gray-700/50 backdrop-blur-sm">
-            <h2 className="text-xl font-semibold mb-6 text-center">What happens next?</h2>
-            <div className="space-y-5">
-              {nextSteps.map((step, index) => (
-                <div key={index} className="flex items-start gap-4 group">
-                  <div className="flex-shrink-0 p-2.5 rounded-xl bg-gray-800/80 border border-gray-700/50 group-hover:border-gray-600/50 transition-colors">
-                    {step.icon}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-white">{step.title}</h3>
-                    <p className="text-sm text-gray-400 mt-0.5">{step.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Error message */}
           {error && (
-            <div className="text-yellow-400 text-sm animate-pulse">
-              {error}
-            </div>
+            <p className="font-mono text-xs text-[#ff4444] mb-4 animate-pulse">{error}</p>
           )}
 
-          {/* CTA Button */}
-          <div className="space-y-4">
-            <Button 
-              size="lg"
-              onClick={handleGoToDashboard}
-              disabled={redirecting}
-              className="h-14 px-10 text-lg font-medium bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-[length:200%_100%] hover:bg-[position:100%_0] transition-all duration-500 text-white shadow-2xl shadow-purple-500/20 hover:shadow-purple-500/40"
-            >
-              {redirecting ? (
-                <>
-                  <Loader2 className="mr-3 h-5 w-5 animate-spin" />
-                  Setting up your dashboard...
-                </>
-              ) : (
-                <>
-                  Go to Dashboard
-                  <ArrowRight className="ml-3 h-5 w-5" />
-                </>
-              )}
-            </Button>
-          </div>
+          <button
+            onClick={handleGoToDashboard}
+            disabled={redirecting}
+            className="font-mono text-sm px-10 py-3 bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+          >
+            {redirecting ? 'redirecting...' : 'open_dashboard()'}
+          </button>
 
-          {/* Skip option */}
-          <div className="pt-4">
+          <div>
             <button
               onClick={() => router.push('/')}
-              className="text-sm text-gray-500 hover:text-gray-300 transition-colors underline-offset-4 hover:underline"
+              className="font-mono text-xs text-white/20 hover:text-white/40 transition-colors"
             >
-              Skip for now, I'll explore later
+              skip for now
             </button>
           </div>
 
-          {/* Support note */}
-          <div className="pt-8 text-sm text-gray-500">
+          <div className="mt-12 font-mono text-xs text-white/20">
             Need help? Check our{' '}
-            <a href="/docs" className="text-blue-400 hover:underline">documentation</a>
-            {' '}or{' '}
-            <a href="mailto:support@aethermind.ai" className="text-blue-400 hover:underline">contact support</a>
+            <a href="/docs" className="text-white/40 hover:text-white transition-colors">docs</a>
           </div>
         </div>
       </div>

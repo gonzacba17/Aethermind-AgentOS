@@ -11,87 +11,66 @@ export function IntroSequence() {
   })
 
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0])
-  const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.8])
-  const y = useTransform(scrollYProgress, [0, 0.5], [0, -100])
-  const letterSpacing = useTransform(scrollYProgress, [0, 0.3], [0, 20])
+  const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.95])
+  const y = useTransform(scrollYProgress, [0, 0.5], [0, -80])
 
   return (
     <div ref={containerRef} className="relative min-h-[120vh]">
       <motion.div
         style={{ opacity, scale, y }}
-        className="sticky top-0 flex min-h-screen flex-col items-center justify-center px-4"
+        className="sticky top-0 flex min-h-screen flex-col items-center justify-center px-6"
       >
-        <motion.div className="text-center">
+        <motion.div className="text-center max-w-4xl">
           <motion.h1
-            style={{ letterSpacing }}
-            className="text-5xl md:text-7xl lg:text-8xl font-bold mb-6 tracking-tight"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            className="text-white font-light tracking-[-0.04em] leading-[1.05]"
+            style={{ fontSize: "clamp(3rem, 7vw, 6rem)" }}
           >
-            <span className="bg-gradient-to-r from-white via-neutral-300 to-neutral-600 bg-clip-text text-transparent">
-              Control Your AI Costs.
-            </span>
-            <br />
-            <span className="text-white">
-              Ship Faster.
-            </span>
+            See inside your agents.
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 1 }}
-            className="text-lg md:text-xl text-neutral-400 mb-8 max-w-2xl mx-auto font-light"
+            transition={{ delay: 0.3, duration: 0.8 }}
+            className="mt-8 text-[1.1rem] font-light text-white/50 max-w-2xl mx-auto leading-relaxed"
           >
-            The only platform that shows AI costs{" "}
-            <span className="text-white font-medium">before</span>{" "}
-            execution
+            Know exactly which agent ran, what it cost, and why it failed.
+            <br />
+            Drop-in OpenAI replacement with native agent-level tracing.
           </motion.p>
 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.7, duration: 1 }}
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-6"
+            transition={{ delay: 0.6, duration: 0.8 }}
+            className="mt-10 flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
-            <a 
+            <a
               href="/signup"
-              className="group px-8 py-4 bg-white text-black rounded-full font-semibold hover:scale-105 transition-all duration-300 flex flex-col items-center"
+              className="font-mono text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
             >
-              <span>Get Started</span>
-              <span className="text-neutral-600 text-sm">100 executions/month</span>
+              start_free()
             </a>
-            
             <a
               href="/docs"
-              className="px-8 py-4 border border-neutral-700 text-white rounded-full font-semibold hover:bg-white/5 hover:border-white/20 backdrop-blur-sm transition-all duration-300"
+              className="font-mono text-sm px-8 py-3 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
             >
-              Read Documentation
+              read_docs()
             </a>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.9, duration: 1 }}
-            className="flex flex-wrap items-center justify-center gap-6 text-sm text-neutral-500 mb-12"
+            transition={{ delay: 0.8, duration: 0.8 }}
+            className="mt-6 font-mono text-xs text-white/20 flex items-center justify-center gap-4"
           >
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-1 rounded-full bg-white" />
-              <span>No credit card</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-1 rounded-full bg-white" />
-              <span>2 min setup</span>
-            </div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.1, duration: 1 }}
-            className="flex flex-col items-center gap-4"
-          >
-            <div className="h-16 w-px bg-gradient-to-b from-transparent via-white to-transparent" />
-            <span className="text-sm text-neutral-500">Scroll para explorar</span>
+            <span>// no credit card</span>
+            <span>·</span>
+            <span>// 2 min setup</span>
           </motion.div>
         </motion.div>
       </motion.div>

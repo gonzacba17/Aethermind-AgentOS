@@ -13,17 +13,6 @@ const navigationLinks = [
   { label: "GitHub", href: "https://github.com/aethermind/agentos", external: true },
 ]
 
-const ctaButton = {
-  label: "Start Free",
-  href: "/signup",
-}
-
-// Opcional: Selector de idioma/país (descomenta para usar)
-// const languageOptions = [
-//   { code: "es", label: "ES" },
-//   { code: "en", label: "EN" },
-// ]
-
 export function SiteHeader() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -31,28 +20,18 @@ export function SiteHeader() {
 
   const handleLogout = () => {
     authAPI.logout()
-    window.location.href = '/'
+    window.location.href = "/"
   }
 
-  // Detectar scroll para cambiar el estilo del header
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 20)
-    }
+    const handleScroll = () => setIsScrolled(window.scrollY > 20)
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Prevenir scroll cuando el menú móvil está abierto
   useEffect(() => {
-    if (isMobileMenuOpen) {
-      document.body.style.overflow = "hidden"
-    } else {
-      document.body.style.overflow = "unset"
-    }
-    return () => {
-      document.body.style.overflow = "unset"
-    }
+    document.body.style.overflow = isMobileMenuOpen ? "hidden" : "unset"
+    return () => { document.body.style.overflow = "unset" }
   }, [isMobileMenuOpen])
 
   return (
@@ -63,217 +42,134 @@ export function SiteHeader() {
         transition={{ duration: 0.6, ease: "easeOut" }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
           isScrolled
-            ? "bg-black/80 backdrop-blur-md border-b border-white/10"
+            ? "bg-black/90 backdrop-blur-md border-b border-white/[0.06]"
             : "bg-transparent"
         }`}
       >
-        <nav className="mx-auto max-w-7xl px-6 lg:px-8" aria-label="Navegación principal">
-          <div className="flex h-20 items-center justify-between">
-            {/* ============================================
-                LOGO - Clickable hacia home
-                ============================================ */}
-            <Link
-              href="/"
-              className="group flex items-center transition-opacity hover:opacity-70"
-              aria-label="Ir a inicio"
-            >
-              <motion.span
-                className="text-xl font-bold tracking-widest text-white"
-                whileHover={{ letterSpacing: "0.2em" }}
-                transition={{ duration: 0.3 }}
-              >
+        <nav className="mx-auto max-w-[1200px] px-10" aria-label="Main navigation">
+          <div className="flex h-16 items-center justify-between">
+            <Link href="/" className="transition-opacity hover:opacity-70">
+              <span className="font-mono text-sm font-medium tracking-[0.2em] text-white">
                 AETHERMIND
-              </motion.span>
+              </span>
             </Link>
 
-            <div className="hidden items-center space-x-8 lg:flex">
+            <div className="hidden items-center gap-8 lg:flex">
               {navigationLinks.map((link) => (
                 <Link
                   key={link.label}
                   href={link.href}
                   target={link.external ? "_blank" : undefined}
                   rel={link.external ? "noopener noreferrer" : undefined}
-                  className="text-sm text-neutral-400 transition-colors hover:text-white"
+                  className="font-mono text-xs tracking-wide text-white/40 transition-colors hover:text-white"
                 >
                   {link.label}
                 </Link>
               ))}
 
-              {/* Auth Section - Desktop */}
               {!isLoading && (
                 isAuthenticated && user ? (
                   <div className="flex items-center gap-4">
-                    <span className="text-sm text-neutral-400">
-                      {user.name}
-                    </span>
+                    <span className="font-mono text-xs text-white/40">{user.name}</span>
                     <button
                       onClick={handleLogout}
-                      className="px-6 py-2 bg-white/10 text-white rounded-full text-sm font-semibold hover:bg-white/20 transition-all"
+                      className="font-mono text-xs px-4 py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
                     >
-                      Logout
+                      logout()
                     </button>
                     <Link
                       href={config.dashboardUrl}
-                      className="px-6 py-2 bg-white text-black rounded-full text-sm font-semibold hover:scale-105 transition-transform"
+                      className="font-mono text-xs px-4 py-2 bg-white text-black hover:bg-white/90 transition-colors"
                     >
-                      Dashboard
+                      dashboard()
                     </Link>
                   </div>
                 ) : (
                   <Link
                     href="/login"
-                    className="px-6 py-2 bg-white text-black rounded-full text-sm font-semibold hover:scale-105 transition-transform"
+                    className="font-mono text-xs px-5 py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
                   >
-                    Sign In
+                    sign_in()
                   </Link>
                 )
               )}
             </div>
 
-            {/* ============================================
-                BOTÓN HAMBURGUESA (MÓVIL)
-                ============================================ */}
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="flex flex-col items-center justify-center space-y-1.5 lg:hidden focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black p-2"
-              aria-label={isMobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+              className="flex flex-col items-center justify-center gap-1.5 lg:hidden p-2"
+              aria-label={isMobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={isMobileMenuOpen}
             >
-              <motion.span
-                animate={isMobileMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }}
-                className="h-0.5 w-6 bg-white transition-all"
-              />
-              <motion.span
-                animate={isMobileMenuOpen ? { opacity: 0 } : { opacity: 1 }}
-                className="h-0.5 w-6 bg-white transition-all"
-              />
-              <motion.span
-                animate={isMobileMenuOpen ? { rotate: -45, y: -8 } : { rotate: 0, y: 0 }}
-                className="h-0.5 w-6 bg-white transition-all"
-              />
+              <motion.span animate={isMobileMenuOpen ? { rotate: 45, y: 8 } : { rotate: 0, y: 0 }} className="h-px w-5 bg-white" />
+              <motion.span animate={isMobileMenuOpen ? { opacity: 0 } : { opacity: 1 }} className="h-px w-5 bg-white" />
+              <motion.span animate={isMobileMenuOpen ? { rotate: -45, y: -8 } : { rotate: 0, y: 0 }} className="h-px w-5 bg-white" />
             </button>
           </div>
         </nav>
       </motion.header>
 
-      {/* ============================================
-          MENÚ MÓVIL (DRAWER)
-          ============================================ */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            {/* Overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-              aria-hidden="true"
+              className="fixed inset-0 z-40 bg-black/80 lg:hidden"
             />
-
-            {/* Drawer */}
             <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed right-0 top-0 z-50 h-full w-full max-w-sm bg-black border-l border-white/10 lg:hidden"
+              className="fixed right-0 top-0 z-50 h-full w-full max-w-sm bg-black border-l border-white/[0.06] lg:hidden"
             >
               <div className="flex h-full flex-col">
-                {/* Header del drawer */}
-                <div className="flex items-center justify-between border-b border-white/10 px-6 py-6">
-                  <span className="text-lg font-bold tracking-widest text-white">MENÚ</span>
-                  <button
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="p-2 text-white hover:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-white"
-                    aria-label="Cerrar menú"
-                  >
-                    <svg
-                      className="h-6 w-6"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
+                <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
+                  <span className="font-mono text-xs tracking-[0.2em] text-white/40">MENU</span>
+                  <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-white/40 hover:text-white">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
                 </div>
-
-                {/* Links de navegación */}
-                <nav className="flex-1 overflow-y-auto px-6 py-8" aria-label="Navegación móvil">
+                <nav className="flex-1 px-6 py-8">
                   <ul className="space-y-1">
                     {navigationLinks.map((link, index) => (
-                      <motion.li
-                        key={link.label}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                      >
+                      <motion.li key={link.label} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }}>
                         <Link
                           href={link.href}
                           onClick={() => setIsMobileMenuOpen(false)}
-                          className="block border-b border-white/5 py-4 text-lg tracking-wide text-neutral-300 transition-colors hover:text-white focus:text-white focus:outline-none"
+                          className="block border-b border-white/[0.06] py-4 font-mono text-sm text-white/40 hover:text-white transition-colors"
                         >
                           {link.label}
                         </Link>
                       </motion.li>
                     ))}
-                    
-                    {/* Auth Section - Mobile */}
                     {!isLoading && (
                       isAuthenticated && user ? (
                         <>
-                          <motion.li
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: navigationLinks.length * 0.05 }}
-                          >
-                            <Link
-                              href={config.dashboardUrl}
-                              onClick={() => setIsMobileMenuOpen(false)}
-                              className="block border-b border-white/5 py-4 text-lg tracking-wide text-neutral-300 transition-colors hover:text-white focus:text-white focus:outline-none"
-                            >
+                          <motion.li initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: navigationLinks.length * 0.05 }}>
+                            <Link href={config.dashboardUrl} onClick={() => setIsMobileMenuOpen(false)} className="block border-b border-white/[0.06] py-4 font-mono text-sm text-white/40 hover:text-white">
                               Dashboard
                             </Link>
                           </motion.li>
-                          <motion.li
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: (navigationLinks.length + 1) * 0.05 }}
-                          >
-                            <div className="border-b border-white/5 py-4">
-                              <div className="text-sm text-neutral-500 mb-2">Logged in as</div>
-                              <div className="text-white mb-3">{user.name}</div>
-                              <button
-                                onClick={() => {
-                                  setIsMobileMenuOpen(false);
-                                  handleLogout();
-                                }}
-                                className="w-full px-6 py-2 bg-white/10 text-white rounded-full text-sm font-semibold hover:bg-white/20 transition-all"
-                              >
-                                Logout
+                          <motion.li initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: (navigationLinks.length + 1) * 0.05 }}>
+                            <div className="border-b border-white/[0.06] py-4">
+                              <div className="font-mono text-xs text-white/20 mb-2">Logged in as</div>
+                              <div className="text-white mb-3 text-sm">{user.name}</div>
+                              <button onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }} className="w-full font-mono text-xs py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors">
+                                logout()
                               </button>
                             </div>
                           </motion.li>
                         </>
                       ) : (
-                        <motion.li
-                          initial={{ opacity: 0, x: 20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: navigationLinks.length * 0.05 }}
-                        >
-                          <Link
-                            href="/login"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className="block border-b border-white/5 py-4 text-lg tracking-wide text-neutral-300 transition-colors hover:text-white focus:text-white focus:outline-none"
-                          >
-                            Sign In
+                        <motion.li initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: navigationLinks.length * 0.05 }}>
+                          <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="block border-b border-white/[0.06] py-4 font-mono text-sm text-white/40 hover:text-white">
+                            sign_in()
                           </Link>
                         </motion.li>
                       )

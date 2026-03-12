@@ -1,146 +1,144 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Check } from "lucide-react"
+
+const plans = [
+  {
+    name: "Trial",
+    price: "$0",
+    period: "/ 14 days",
+    features: [
+      "gateway access",
+      "10k requests",
+      "basic analytics",
+      "no credit card required",
+    ],
+    cta: "start_free()",
+    href: "/signup",
+    highlighted: false,
+  },
+  {
+    name: "Starter",
+    price: "$9",
+    period: "/ month",
+    features: [
+      "100k requests/month",
+      "agent tracing",
+      "multi-provider routing",
+      "email support",
+    ],
+    cta: "get_started()",
+    href: "/signup?plan=starter",
+    highlighted: false,
+  },
+  {
+    name: "Growth",
+    price: "$49",
+    period: "/ month",
+    features: [
+      "500k requests/month",
+      "agent tracing",
+      "budget controls",
+      "Ollama support",
+    ],
+    cta: "get_started()",
+    href: "/signup?plan=growth",
+    highlighted: false,
+  },
+  {
+    name: "Pro",
+    price: "$149",
+    period: "/ month",
+    features: [
+      "unlimited requests",
+      "priority support",
+      "custom models",
+      "advanced analytics",
+    ],
+    cta: "get_started()",
+    href: "/signup?plan=pro",
+    highlighted: false,
+  },
+]
 
 export function PricingSection() {
-  const plans = [
-    {
-      name: "Free",
-      price: "$0",
-      period: "forever",
-      description: "Perfect for testing and small projects",
-      features: [
-        "100 executions/month",
-        "3 agents max",
-        "1 workflow",
-        "Community support",
-        "Basic cost tracking"
-      ],
-      cta: "Start Free",
-      href: "/signup",
-      highlighted: false
-    },
-    {
-      name: "Starter",
-      price: "$49",
-      period: "/month",
-      description: "For growing teams and production use",
-      features: [
-        "10,000 executions/month",
-        "20 agents",
-        "10 workflows",
-        "Email support (48h)",
-        "Advanced analytics",
-        "Webhook notifications"
-      ],
-      cta: "Start Trial",
-      href: "/signup?plan=starter",
-      highlighted: true
-    },
-    {
-      name: "Pro",
-      price: "$199",
-      period: "/month",
-      description: "For teams at scale",
-      features: [
-        "100,000 executions/month",
-        "Unlimited agents & workflows",
-        "Priority support (4h)",
-        "Team collaboration",
-        "Custom integrations",
-        "Export data"
-      ],
-      cta: "Start Trial",
-      href: "/signup?plan=pro",
-      highlighted: false
-    }
-  ]
-
   return (
-    <section id="pricing" className="relative flex items-center justify-center px-6 py-32">
-      <div className="max-w-7xl mx-auto w-full">
-        
+    <section id="pricing" className="relative px-6 py-32 border-t border-white/[0.06]">
+      <div className="max-w-[1200px] mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          className="text-center mb-12"
+          viewport={{ once: true }}
+          className="mb-16"
         >
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Simple, Transparent Pricing
+          <p className="font-mono text-xs text-white/20 mb-4">// pricing</p>
+          <h2
+            className="font-light tracking-[-0.04em] text-white mb-6"
+            style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
+          >
+            Simple pricing. No surprises.
           </h2>
-          <p className="text-lg text-neutral-400">
-            Start free. Scale as you grow. Cancel anytime.
+          <p className="text-[1.1rem] font-light text-white/40 max-w-2xl leading-relaxed">
+            BYOK — you pay your provider directly. We charge for the gateway.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {plans.map((plan, index) => (
-            <motion.div
-              key={plan.name}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: index * 0.1 }}
-              className={`
-                relative p-8 rounded-lg border transition-all duration-300
-                ${plan.highlighted 
-                  ? "border-white bg-white/5 scale-105" 
-                  : "border-neutral-800 bg-transparent hover:border-white/20"
-                }
-              `}
-            >
-              {plan.highlighted && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-white text-black text-sm font-semibold rounded-full">
-                  Most Popular
-                </div>
-              )}
-
-              <div className="mb-6">
-                <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-                <p className="text-sm text-neutral-400">{plan.description}</p>
-              </div>
-
-              <div className="mb-6">
-                <span className="text-5xl font-bold text-white">{plan.price}</span>
-                <span className="text-neutral-400">{plan.period}</span>
-              </div>
-
-              <ul className="space-y-3 mb-8">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-3">
-                    <Check className="w-5 h-5 text-white flex-shrink-0 mt-0.5" />
-                    <span className="text-neutral-300">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <a
-                href={plan.href}
-                className={`
-                  block w-full py-3 rounded-full font-semibold text-center transition-all duration-300
-                  ${plan.highlighted
-                    ? "bg-white text-black hover:scale-105"
-                    : "border border-neutral-700 text-white hover:bg-white/5 hover:border-white/20 backdrop-blur-sm"
-                  }
-                `}
+        <div className="border border-white/[0.06]">
+          <div className="grid md:grid-cols-4">
+            {plans.map((plan, index) => (
+              <motion.div
+                key={plan.name}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: index * 0.1 }}
+                viewport={{ once: true }}
+                className={`p-8 flex flex-col ${
+                  index > 0 ? "md:border-l border-t md:border-t-0 border-white/[0.06]" : ""
+                } group hover:bg-white/[0.02] transition-colors`}
               >
-                {plan.cta}
-              </a>
-            </motion.div>
-          ))}
+                <div className="mb-6">
+                  <h3 className="font-mono text-sm text-white mb-1">{plan.name}</h3>
+                </div>
+
+                <div className="mb-6">
+                  <span className="text-4xl font-light tracking-[-0.04em] text-white">{plan.price}</span>
+                  <span className="text-sm text-white/20 ml-2">{plan.period}</span>
+                </div>
+
+                <ul className="space-y-3 mb-8 flex-1">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="text-sm text-white/40 flex items-start gap-2">
+                      <span className="text-white/20">—</span>
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <a
+                  href={plan.href}
+                  className="block w-full text-center font-mono text-xs py-2.5 border border-white/[0.15] text-white hover:bg-white hover:text-black transition-colors"
+                >
+                  {plan.cta}
+                </a>
+              </motion.div>
+            ))}
+          </div>
         </div>
 
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           transition={{ duration: 0.8, delay: 0.4 }}
-          className="mt-12 text-center text-neutral-500 text-sm"
+          viewport={{ once: true }}
+          className="mt-8 font-mono text-xs text-white/20 flex flex-wrap items-center justify-center gap-4"
         >
-          <p>All plans include multi-provider support (OpenAI, Anthropic, Google, Ollama)</p>
-          <p className="mt-2">Need more? <a href="/contact" className="text-white hover:underline">Contact us</a> for Enterprise pricing</p>
+          <span>// cancel anytime</span>
+          <span>·</span>
+          <span>// no setup fees</span>
+          <span>·</span>
+          <span>// byok — your keys, your data</span>
         </motion.div>
-
       </div>
     </section>
   )

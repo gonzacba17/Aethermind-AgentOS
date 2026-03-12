@@ -1,10 +1,11 @@
 import { NeuralBackground } from "@/components/neural-background"
 import { SiteHeader } from "@/components/site-header"
 import { IntroSequence } from "@/components/intro-sequence"
-import { ProblemSolution } from "@/components/problem-solution"
-import { SocialProof } from "@/components/social-proof"
-import { CapacidadesSection } from "@/components/capacidades-section"
+import { ProblemSection } from "@/components/problem-section"
+import { HowItWorks } from "@/components/how-it-works"
+import { CapabilitiesSection } from "@/components/capabilities-section"
 import { PricingSection } from "@/components/pricing-section"
+import { QuickstartSection } from "@/components/quickstart-section"
 import { SiteFooter } from "@/components/site-footer"
 
 export default function AethermindPage() {
@@ -14,11 +15,11 @@ export default function AethermindPage() {
       <div className="relative z-10">
         <SiteHeader />
         <IntroSequence />
-        <ProblemSolution />
-        <SocialProof />
-        <CapacidadesSection />
+        <ProblemSection />
+        <HowItWorks />
+        <CapabilitiesSection />
         <PricingSection />
-
+        <QuickstartSection />
         <SiteFooter />
       </div>
     </main>

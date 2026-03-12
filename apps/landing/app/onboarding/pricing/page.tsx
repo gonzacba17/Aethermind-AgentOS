@@ -1,140 +1,118 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { CheckCircle } from 'lucide-react'
+
+const plans = [
+  {
+    id: 'trial',
+    name: 'Trial',
+    price: 0,
+    period: '14 days',
+    features: ['Gateway access', '10k requests', 'Basic analytics', 'No credit card required'],
+    cta: 'start_free()',
+  },
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: 9,
+    period: '/month',
+    features: ['100k requests/month', 'Agent tracing', 'Multi-provider routing', 'Email support'],
+    cta: 'get_started()',
+  },
+  {
+    id: 'growth',
+    name: 'Growth',
+    price: 49,
+    period: '/month',
+    features: ['500k requests/month', 'Agent tracing', 'Budget controls', 'Ollama support'],
+    cta: 'get_started()',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 149,
+    period: '/month',
+    features: ['Unlimited requests', 'Priority support', 'Custom models', 'Advanced analytics'],
+    cta: 'get_started()',
+  },
+]
 
 export default function OnboardingPricing() {
   const router = useRouter()
-
-  const plans = [
-    {
-      id: 'trial',
-      name: 'Trial',
-      price: 0,
-      period: '14 days',
-      description: 'Try the gateway free',
-      features: ['Gateway access', '10k requests', 'Basic analytics', 'No credit card required'],
-      highlighted: false,
-      cta: 'Start Free Trial'
-    },
-    {
-      id: 'starter',
-      name: 'Starter',
-      price: 9,
-      period: '/month',
-      description: 'For individual developers',
-      features: ['Gateway access', '100k requests/month', 'Agent tracing', 'Email support'],
-      highlighted: true,
-      cta: 'Get Started'
-    },
-    {
-      id: 'growth',
-      name: 'Growth',
-      price: 49,
-      period: '/month',
-      description: 'For growing teams',
-      features: ['500k requests/month', 'Agent tracing', 'Budget controls', 'Ollama support'],
-      highlighted: false,
-      cta: 'Get Started'
-    },
-    {
-      id: 'pro',
-      name: 'Pro',
-      price: 149,
-      period: '/month',
-      description: 'For production workloads',
-      features: ['Unlimited requests', 'Priority support', 'Custom models', 'Advanced analytics'],
-      highlighted: false,
-      cta: 'Get Started'
-    }
-  ]
 
   const handleSelectPlan = (planId: string) => {
     const onboardingData = {
       selectedPlan: planId,
       timestamp: Date.now(),
-      completed: true
+      completed: true,
     }
     localStorage.setItem('onboarding_payment', JSON.stringify(onboardingData))
     localStorage.setItem('onboarding_marketing_seen', 'true')
-
     router.push('/onboarding/setup')
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 flex items-center justify-center">
-      <div className="max-w-6xl w-full space-y-12 py-12">
-        <div className="text-center space-y-4">
-          <h2 className="text-4xl font-bold">Choose Your Plan</h2>
-          <p className="text-xl text-gray-400">
-            Start routing AI requests through the gateway in seconds
+    <div className="min-h-screen bg-black text-white flex flex-col">
+      <div className="fixed top-0 left-0 right-0 h-px bg-white/[0.06] z-50">
+        <div className="h-full bg-white" style={{ width: '80%' }} />
+      </div>
+      <div className="fixed top-3 left-6 font-mono text-xs text-white/20 z-50">
+        // step_04 — pricing
+      </div>
+
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="max-w-5xl w-full py-16">
+          <h2
+            className="font-light tracking-[-0.04em] text-white mb-4"
+            style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
+          >
+            Simple pricing. No surprises.
+          </h2>
+          <p className="text-[1.1rem] font-light text-white/40 mb-12">
+            BYOK — you pay your provider directly. We charge for the gateway.
           </p>
-        </div>
 
-        <div className="grid md:grid-cols-4 gap-6">
-          {plans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`relative bg-gradient-to-br from-gray-900 to-black rounded-2xl p-8 space-y-6 transition-all ${
-                plan.highlighted
-                  ? 'border-2 border-blue-500 scale-105'
-                  : 'border border-gray-800'
-              }`}
-            >
-              {plan.highlighted && (
-                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-sm font-semibold px-4 py-1 rounded-full">
-                  Most Popular
+          <div className="border border-white/[0.06]">
+            <div className="grid md:grid-cols-4">
+              {plans.map((plan, index) => (
+                <div
+                  key={plan.id}
+                  className={`p-8 flex flex-col ${
+                    index > 0 ? 'md:border-l border-t md:border-t-0 border-white/[0.06]' : ''
+                  } hover:bg-white/[0.02] transition-colors`}
+                >
+                  <h3 className="font-mono text-sm text-white mb-6">{plan.name}</h3>
+
+                  <div className="mb-6">
+                    <span className="text-4xl font-light tracking-[-0.04em] text-white">${plan.price}</span>
+                    <span className="text-sm text-white/20 ml-2">{plan.period}</span>
+                  </div>
+
+                  <ul className="space-y-3 mb-8 flex-1">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="text-sm text-white/40 flex items-start gap-2">
+                        <span className="text-white/20">—</span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button
+                    onClick={() => handleSelectPlan(plan.id)}
+                    className="w-full font-mono text-xs py-2.5 border border-white/[0.15] text-white hover:bg-white hover:text-black transition-colors"
+                  >
+                    {plan.cta}
+                  </button>
                 </div>
-              )}
-
-              <div>
-                <h3 className="text-2xl font-bold">{plan.name}</h3>
-                <p className="text-gray-400 text-sm mt-1">{plan.description}</p>
-              </div>
-
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-5xl font-bold">${plan.price}</span>
-                  <span className="text-gray-400">{plan.period}</span>
-                </div>
-              </div>
-
-              <ul className="space-y-3">
-                {plan.features.map((feature, i) => (
-                  <li key={i} className="flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm text-gray-300">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <button
-                onClick={() => handleSelectPlan(plan.id)}
-                className={`w-full py-3 rounded-xl font-semibold transition-all ${
-                  plan.highlighted
-                    ? 'bg-white text-black hover:bg-gray-100'
-                    : 'bg-gray-800 text-white hover:bg-gray-700'
-                }`}
-              >
-                {plan.cta}
-              </button>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
 
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-8 text-sm text-gray-400">
-            <span className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              Cancel anytime
-            </span>
-            <span className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              14-day free trial
-            </span>
-            <span className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              No setup fees
-            </span>
+          <div className="mt-8 font-mono text-xs text-white/20 flex flex-wrap items-center justify-center gap-4">
+            <span>// cancel anytime</span>
+            <span>·</span>
+            <span>// no setup fees</span>
+            <span>·</span>
+            <span>// byok — your keys, your data</span>
           </div>
         </div>
       </div>
