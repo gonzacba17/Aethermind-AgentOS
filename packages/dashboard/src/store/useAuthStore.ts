@@ -15,6 +15,7 @@ interface AuthState {
   isLoading: boolean;
 
   initialize: () => Promise<boolean>;
+  refreshClient: () => Promise<void>;
   setOnboardingComplete: () => void;
   logout: () => void;
 }
@@ -62,6 +63,28 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     } catch {
       set({ client: null, isAuthenticated: false, isLoading: false });
       return false;
+    }
+  },
+
+  refreshClient: async () => {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_URL}/api/client/me`, {
+        headers: { 'X-Client-Token': token },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      set({
+        client: {
+          companyName: data.companyName,
+          sdkApiKeyPrefix: data.sdkApiKeyPrefix ?? null,
+          id: data.id,
+          hasCompletedOnboarding: data.hasCompletedOnboarding ?? true,
+        },
+      });
+    } catch {
+      // silent
     }
   },
 

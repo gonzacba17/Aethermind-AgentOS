@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   Rocket, Key, Bot, DollarSign, CheckCircle2, ChevronRight,
-  ChevronLeft, Sparkles, Loader2
+  ChevronLeft, Sparkles, Loader2, Copy, Check, AlertTriangle, Code2
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,33 +31,39 @@ const PROVIDERS = [
 ] as const;
 
 const STEPS = [
-  { 
-    id: 'welcome', 
-    title: 'Welcome to Aethermind', 
+  {
+    id: 'welcome',
+    title: 'Welcome to Aethermind',
     icon: Sparkles,
     description: 'Let\'s get you started with AI agent orchestration'
   },
-  { 
-    id: 'api-key', 
-    title: 'Connect Your API Key', 
+  {
+    id: 'sdk-key',
+    title: 'Your SDK API Key',
+    icon: Code2,
+    description: 'Save this key — you won\'t be able to see it again'
+  },
+  {
+    id: 'api-key',
+    title: 'Connect a Provider Key',
     icon: Key,
     description: 'Add an API key to power your AI agents'
   },
-  { 
-    id: 'agent', 
-    title: 'Create Your First Agent', 
+  {
+    id: 'agent',
+    title: 'Create Your First Agent',
     icon: Bot,
     description: 'Set up an AI agent to automate tasks'
   },
-  { 
-    id: 'budget', 
-    title: 'Set a Budget', 
+  {
+    id: 'budget',
+    title: 'Set a Budget',
     icon: DollarSign,
     description: 'Control your AI spending with budget limits'
   },
-  { 
-    id: 'complete', 
-    title: 'You\'re All Set!', 
+  {
+    id: 'complete',
+    title: 'You\'re All Set!',
     icon: CheckCircle2,
     description: 'Start building with Aethermind'
   },
@@ -69,10 +75,38 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
   const [currentStep, setCurrentStep] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   
+  // SDK key revealed during onboarding
+  const [revealedSdkKey, setRevealedSdkKey] = useState<string | null>(null)
+  const [sdkKeyLoading, setSdkKeyLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+
   // Form data
   const [apiKeyData, setApiKeyData] = useState({ provider: 'openai', key: '' })
   const [agentData, setAgentData] = useState({ name: 'My First Agent', model: 'gpt-4' })
   const [budgetData, setBudgetData] = useState({ limit: 100, period: 'monthly' })
+
+  // Fetch SDK key when reaching the sdk-key step
+  useEffect(() => {
+    if (currentStep === 1 && !revealedSdkKey && !sdkKeyLoading) {
+      setSdkKeyLoading(true)
+      apiRequest<{ sdkApiKey: string }>('/api/client/sdk-key-reveal')
+        .then((data) => setRevealedSdkKey(data.sdkApiKey))
+        .catch(() => setRevealedSdkKey(null))
+        .finally(() => setSdkKeyLoading(false))
+    }
+  }, [currentStep])
+
+  const handleCopySdkKey = async () => {
+    if (!revealedSdkKey) return
+    try {
+      await navigator.clipboard.writeText(revealedSdkKey)
+      setCopied(true)
+      toast({ title: "Copied!", description: "SDK API key copied to clipboard" })
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast({ title: "Failed to copy", description: "Please copy manually", variant: "destructive" })
+    }
+  }
   
   const progress = ((currentStep + 1) / STEPS.length) * 100
   const step = STEPS[currentStep]
@@ -80,7 +114,7 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
   
   const handleNext = async () => {
     // Validate current step
-    if (currentStep === 1 && !apiKeyData.key) {
+    if (currentStep === 2 && !apiKeyData.key) {
       toast({
         title: "API Key Required",
         description: "Please enter your API key to continue",
@@ -88,8 +122,8 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
       })
       return
     }
-    
-    if (currentStep === 2 && !agentData.name) {
+
+    if (currentStep === 3 && !agentData.name) {
       toast({
         title: "Agent Name Required",
         description: "Please enter a name for your agent",
@@ -181,7 +215,47 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
             </div>
           )}
 
-          {currentStep === 1 && (() => {
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              {sdkKeyLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : revealedSdkKey ? (
+                <>
+                  <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                    <div className="flex items-start gap-2 mb-3">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                      <p className="text-sm text-amber-500 font-medium">
+                        This is the only time this key will be shown. Copy it now.
+                      </p>
+                    </div>
+                    <code className="block p-3 rounded-lg bg-zinc-950 text-zinc-100 font-mono text-sm break-all select-all">
+                      {revealedSdkKey}
+                    </code>
+                  </div>
+                  <Button className="w-full gap-2" onClick={handleCopySdkKey}>
+                    {copied ? (
+                      <><Check className="h-4 w-4" /> Copied!</>
+                    ) : (
+                      <><Copy className="h-4 w-4" /> Copy to Clipboard</>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Use this key with <code className="text-primary">initAethermind({'{'} apiKey: '...' {'}'})</code> in your project.
+                  </p>
+                </>
+              ) : (
+                <div className="p-4 rounded-lg bg-muted/30 border text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No SDK key found. You can generate one from the Home page after onboarding.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentStep === 2 && (() => {
             const selectedProvider = PROVIDERS.find(p => p.value === apiKeyData.provider) || PROVIDERS[0];
             return (
               <div className="space-y-4">
@@ -220,7 +294,7 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
             );
           })()}
 
-          {currentStep === 2 && (
+          {currentStep === 3 && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Agent Name</Label>
@@ -249,7 +323,7 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
             </div>
           )}
 
-          {currentStep === 3 && (
+          {currentStep === 4 && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Monthly Budget Limit ($)</Label>
@@ -270,7 +344,7 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
             </div>
           )}
 
-          {currentStep === 4 && (
+          {currentStep === 5 && (
             <div className="space-y-4">
               <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                 <h4 className="font-medium text-emerald-500 mb-2">Setup Complete!</h4>

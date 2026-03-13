@@ -181,6 +181,53 @@ router.post('/regenerate-sdk-key', async (req, res) => {
 });
 
 /**
+ * GET /api/client/sdk-key-reveal
+ * Returns the full SDK API key for first-time users (onboarding not completed).
+ * After onboarding is complete, this endpoint returns 403.
+ */
+router.get('/sdk-key-reveal', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+
+    // Check if onboarding is completed — if so, deny reveal
+    if (client.organizationId) {
+      const [linkedUser] = await db
+        .select({ hasCompletedOnboarding: users.hasCompletedOnboarding })
+        .from(users)
+        .where(eq(users.organizationId, client.organizationId))
+        .limit(1);
+
+      if (linkedUser?.hasCompletedOnboarding) {
+        res.status(403).json({
+          error: 'SDK key can only be revealed during onboarding. Use regenerate instead.',
+        });
+        return;
+      }
+    }
+
+    if (!client.sdkApiKey) {
+      res.status(404).json({ error: 'No SDK API key found. Use regenerate to create one.' });
+      return;
+    }
+
+    res.json({
+      sdkApiKey: client.sdkApiKey,
+      sdkApiKeyShownOnce: true,
+      message: 'Save this key now — after onboarding it will not be shown again.',
+    });
+  } catch (error) {
+    console.error('[Client] sdk-key-reveal error:', (error as Error).message);
+    res.status(500).json({ error: 'Failed to reveal SDK API key' });
+  }
+});
+
+/**
  * POST /api/client/complete-onboarding
  * Marks onboarding as completed for the user linked to this client's org.
  */

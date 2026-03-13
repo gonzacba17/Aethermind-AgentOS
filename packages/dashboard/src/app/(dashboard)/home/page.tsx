@@ -1,12 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { Home, ArrowRight, Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2 } from "lucide-react"
+import { Home, ArrowRight, Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2, RefreshCw, AlertTriangle, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import Link from "next/link"
 import { useAuthStore } from "@/store/useAuthStore"
+import { useRegenerateApiKey } from "@/hooks/api/useUserProfile"
 
 // ─── Previous version used SDKConnectCard with useUserProfile hook ───
 // import { SDKConnectCard } from "@/components/dashboard/SDKConnectCard"
@@ -47,6 +49,9 @@ const quickLinks = [
 function SDKKeyCard() {
   const client = useAuthStore((s) => s.client)
   const [copied, setCopied] = useState<string | null>(null)
+  const [revealedKey, setRevealedKey] = useState<string | null>(null)
+  const regenerateKey = useRegenerateApiKey()
+  const refreshClient = useAuthStore((s) => s.refreshClient)
 
   const sdkApiKeyPrefix = client?.sdkApiKeyPrefix || null
 
@@ -57,6 +62,17 @@ function SDKKeyCard() {
       setTimeout(() => setCopied(null), 2000)
     } catch {
       // ignore
+    }
+  }
+
+  const handleGenerateKey = async () => {
+    try {
+      const newKey = await regenerateKey.mutateAsync()
+      setRevealedKey(newKey)
+      // Re-fetch /me to update sdkApiKeyPrefix in store
+      refreshClient()
+    } catch {
+      // error handled by toast in hook
     }
   }
 
@@ -85,6 +101,7 @@ const response = await openai.chat.completions.create({
 console.log(response.choices[0].message.content);`
 
   return (
+    <>
     <Card className="bg-[#111] border border-white/[0.06] rounded-none">
       <CardHeader>
         <div className="flex items-center gap-3">
@@ -109,21 +126,55 @@ console.log(response.choices[0].message.content);`
               <span className="font-light text-white/50">SDK API Key</span>
             </div>
             <div className="flex items-center gap-2">
+              {sdkApiKeyPrefix && (
+                <button
+                  onClick={() => handleCopy(sdkApiKeyPrefix, 'SDK Key Prefix')}
+                  className="text-white/40 hover:text-white/70 transition-colors"
+                >
+                  {copied === 'SDK Key Prefix' ? (
+                    <Check className="h-4 w-4 text-[#00BFA5]" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </button>
+              )}
               <button
-                onClick={() => sdkApiKeyPrefix && handleCopy(sdkApiKeyPrefix, 'SDK Key Prefix')}
-                className="text-white/40 hover:text-white/70 transition-colors"
+                onClick={handleGenerateKey}
+                className="text-white/40 hover:text-white/70 transition-colors flex items-center gap-1 text-sm"
+                disabled={regenerateKey.isPending}
               >
-                {copied === 'SDK Key Prefix' ? (
-                  <Check className="h-4 w-4 text-[#00BFA5]" />
+                {regenerateKey.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Copy className="h-4 w-4" />
+                  <RefreshCw className="h-4 w-4" />
                 )}
               </button>
             </div>
           </div>
-          <code className="block p-3 bg-black border border-white/[0.1] font-mono text-sm break-all text-white/70">
-            {sdkApiKeyPrefix || 'No SDK key — generate one in Settings'}
-          </code>
+          {sdkApiKeyPrefix ? (
+            <code className="block p-3 bg-black border border-white/[0.1] font-mono text-sm break-all text-white/70">
+              {sdkApiKeyPrefix}
+            </code>
+          ) : (
+            <div className="p-3 bg-black border border-amber-500/20">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-500/70 text-sm">No SDK key found</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 gap-2"
+                  onClick={handleGenerateKey}
+                  disabled={regenerateKey.isPending}
+                >
+                  {regenerateKey.isPending ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Generating...</>
+                  ) : (
+                    <><Key className="h-3 w-3" /> Generate Key</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Install / Connect tabs */}
@@ -183,6 +234,51 @@ console.log(response.choices[0].message.content);`
         </Tabs>
       </CardContent>
     </Card>
+
+    {/* Revealed Key Modal */}
+    <Dialog open={!!revealedKey} onOpenChange={(open) => { if (!open) setRevealedKey(null) }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Key className="h-5 w-5" />
+            Your New SDK API Key
+          </DialogTitle>
+          <DialogDescription>
+            Copy this key now — you will not be able to see it again.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+            <div className="flex items-start gap-2 mb-3">
+              <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <p className="text-sm text-amber-500 font-medium">
+                This is the only time this key will be shown. Store it securely.
+              </p>
+            </div>
+            <code className="block p-3 rounded-lg bg-zinc-950 text-zinc-100 font-mono text-sm break-all select-all">
+              {revealedKey}
+            </code>
+          </div>
+          <Button
+            className="w-full gap-2"
+            size="lg"
+            onClick={() => revealedKey && handleCopy(revealedKey, 'SDK Key')}
+          >
+            {copied === 'SDK Key' ? (
+              <><Check className="h-4 w-4" /> Copied!</>
+            ) : (
+              <><Copy className="h-4 w-4" /> Copy to Clipboard</>
+            )}
+          </Button>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setRevealedKey(null)}>
+            I've saved my key
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 
