@@ -94,8 +94,7 @@ router.get('/trial-status', async (req, res) => {
 
 /**
  * GET /api/client/me
- * Returns the authenticated client's info.
- * Blocks access if the linked user has not verified their email.
+ * Returns the authenticated client's info + onboarding status.
  */
 router.get('/me', async (req, res) => {
   const clientReq = req as ClientAuthenticatedRequest;
@@ -106,28 +105,19 @@ router.get('/me', async (req, res) => {
     return;
   }
 
-  // Single query: fetch email verification + onboarding status for the linked user
+  // Fetch onboarding status for the linked user
   let hasCompletedOnboarding = true; // default for legacy clients without a linked user
   let onboardingStep = 'complete';
 
   if (client.organizationId) {
     const [linkedUser] = await db
       .select({
-        emailVerified: users.emailVerified,
         hasCompletedOnboarding: users.hasCompletedOnboarding,
         onboardingStep: users.onboardingStep,
       })
       .from(users)
       .where(eq(users.organizationId, client.organizationId))
       .limit(1);
-
-    if (linkedUser && !linkedUser.emailVerified) {
-      res.status(403).json({
-        error: 'email_not_verified',
-        message: 'Please verify your email before accessing the dashboard.',
-      });
-      return;
-    }
 
     if (linkedUser) {
       hasCompletedOnboarding = linkedUser.hasCompletedOnboarding;

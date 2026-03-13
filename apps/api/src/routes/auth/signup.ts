@@ -142,28 +142,20 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       return { user, org, client };
     });
 
-    // Send verification email (non-blocking, outside transaction)
-    emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
-      logger.error('Failed to send verification email', { error: (error as Error).message });
-    });
-
-    // NOTE: We intentionally do NOT return clientAccessToken or sdkApiKey here.
-    // The user must verify their email first (via /verify-email), then login
-    // to receive their tokens. This prevents unverified users from accessing
-    // the dashboard.
     const token = jwt.sign({ userId: result.user.id, email: result.user.email }, JWT_SECRET, {
       expiresIn: JWT_EXPIRES_IN,
     } as jwt.SignOptions);
 
     res.status(201).json({
       token,
-      requiresVerification: true,
+      clientAccessToken,
+      sdkApiKey,
+      sdkApiKeyShownOnce: true,
       user: {
         id: result.user.id,
         email: result.user.email,
         plan: result.user.plan,
-        emailVerified: false,
-        hasCompletedOnboarding: false,
+        hasCompletedOnboarding: result.user.hasCompletedOnboarding,
       },
     });
   } catch (error) {
@@ -201,27 +193,7 @@ router.post('/verify-email', emailVerifyLimiter, async (req: Request, res: Respo
       })
       .where(eq(users.id, user.id));
 
-    // Return clientAccessToken so the frontend can redirect to dashboard
-    let clientAccessToken: string | null = null;
-    if (user.organizationId) {
-      const [client] = await db
-        .select({ accessToken: clients.accessToken })
-        .from(clients)
-        .where(eq(clients.organizationId, user.organizationId))
-        .limit(1);
-      clientAccessToken = client?.accessToken || null;
-    }
-
-    const jwtToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-    } as jwt.SignOptions);
-
-    res.json({
-      success: true,
-      message: 'Email verified successfully',
-      token: jwtToken,
-      clientAccessToken,
-    });
+    res.json({ success: true, message: 'Email verified successfully' });
   } catch (error) {
     logger.error('Verify email error', { error: (error as Error).message });
     res.status(500).json({ error: 'Internal server error' });

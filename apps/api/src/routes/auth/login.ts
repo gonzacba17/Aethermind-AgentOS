@@ -57,14 +57,6 @@ router.post('/login', authLimiter, async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (!user.emailVerified) {
-      return res.status(403).json({
-        error: 'email_not_verified',
-        message: 'Please verify your email before signing in.',
-        email: user.email,
-      });
-    }
-
     // Look up existing client via organizationId, or auto-provision one
     let clientAccessToken: string | null = null;
 
