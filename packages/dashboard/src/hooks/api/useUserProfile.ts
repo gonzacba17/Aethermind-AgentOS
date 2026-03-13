@@ -8,7 +8,7 @@ export interface UserProfile {
   email: string;
   name: string | null;
   plan: 'free' | 'pro' | 'enterprise';
-  sdkApiKeyPrefix: string | null;
+  apiKey: string;
   organizationId: string | null;
   hasCompletedOnboarding: boolean;
   onboardingStep: string;
@@ -34,7 +34,7 @@ export const userProfileKeys = {
 };
 
 /**
- * Hook to fetch user profile including SDK API key prefix
+ * Hook to fetch user profile including SDK API key
  */
 export function useUserProfile() {
   return useQuery({
@@ -43,7 +43,7 @@ export function useUserProfile() {
       const response = await apiRequest<{
         id: string;
         companyName: string;
-        sdkApiKeyPrefix?: string | null;
+        sdkApiKey?: string;
         hasCompletedOnboarding?: boolean;
         onboardingStep?: string;
       }>('/api/client/me');
@@ -52,7 +52,7 @@ export function useUserProfile() {
         email: '',
         name: response.companyName,
         plan: 'pro' as UserProfile['plan'],
-        sdkApiKeyPrefix: response.sdkApiKeyPrefix ?? null,
+        apiKey: response.sdkApiKey || '',
         organizationId: null,
         hasCompletedOnboarding: response.hasCompletedOnboarding ?? true,
         onboardingStep: response.onboardingStep || 'complete',
@@ -95,33 +95,6 @@ export function useTestSDKConnection() {
     },
     onSuccess: (data) => {
       queryClient.setQueryData(userProfileKeys.sdkStatus(), data);
-    },
-  });
-}
-
-/**
- * Hook to regenerate SDK API key.
- * Returns the new key plaintext (shown once).
- */
-export function useRegenerateApiKey() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest<{
-        sdkApiKey: string;
-        sdkApiKeyShownOnce: boolean;
-        message: string;
-      }>('/api/client/regenerate-sdk-key', {
-        method: 'POST',
-      });
-      return response.sdkApiKey;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userProfileKeys.me() });
-    },
-    onError: (error) => {
-      console.error('[useRegenerateApiKey] Failed:', error);
     },
   });
 }

@@ -1,18 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Home, ArrowRight, Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2, RefreshCw, AlertTriangle, Loader2 } from "lucide-react"
+import { Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2, Eye, EyeOff } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import Link from "next/link"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useRegenerateApiKey } from "@/hooks/api/useUserProfile"
-import { useToast } from "@/hooks/use-toast"
-
-// ─── Previous version used SDKConnectCard with useUserProfile hook ───
-// import { SDKConnectCard } from "@/components/dashboard/SDKConnectCard"
 
 const quickLinks = [
   {
@@ -50,12 +44,12 @@ const quickLinks = [
 function SDKKeyCard() {
   const client = useAuthStore((s) => s.client)
   const [copied, setCopied] = useState<string | null>(null)
-  const [revealedKey, setRevealedKey] = useState<string | null>(null)
-  const regenerateKey = useRegenerateApiKey()
-  const refreshClient = useAuthStore((s) => s.refreshClient)
-  const { toast } = useToast()
+  const [showKey, setShowKey] = useState(false)
 
-  const sdkApiKeyPrefix = client?.sdkApiKeyPrefix || null
+  const sdkApiKey = client?.sdkApiKey || ''
+  const maskedKey = sdkApiKey
+    ? `${sdkApiKey.slice(0, 14)}${'•'.repeat(20)}${sdkApiKey.slice(-4)}`
+    : ''
 
   const handleCopy = async (text: string, label: string) => {
     try {
@@ -67,28 +61,12 @@ function SDKKeyCard() {
     }
   }
 
-  const handleGenerateKey = async () => {
-    try {
-      const newKey = await regenerateKey.mutateAsync()
-      setRevealedKey(newKey)
-      // Re-fetch /me to update sdkApiKeyPrefix in store
-      refreshClient()
-    } catch (error) {
-      console.error('[SDKKeyCard] Generate key failed:', error)
-      toast({
-        title: "Failed to generate key",
-        description: (error as Error)?.message || "Please try again later",
-        variant: "destructive",
-      })
-    }
-  }
-
   const installCode = `npm install @aethermind/agent`
 
   const connectCode = `import { initAethermind } from '@aethermind/agent';
 
 initAethermind({
-  apiKey: 'YOUR_SDK_API_KEY',
+  apiKey: '${showKey ? sdkApiKey : 'YOUR_SDK_API_KEY'}',
   endpoint: '${process.env.NEXT_PUBLIC_API_URL || 'https://aethermind-agentos-production.up.railway.app'}',
 });
 
@@ -108,7 +86,6 @@ const response = await openai.chat.completions.create({
 console.log(response.choices[0].message.content);`
 
   return (
-    <>
     <Card className="bg-[#111] border border-white/[0.06] rounded-none">
       <CardHeader>
         <div className="flex items-center gap-3">
@@ -133,53 +110,35 @@ console.log(response.choices[0].message.content);`
               <span className="font-light text-white/50">SDK API Key</span>
             </div>
             <div className="flex items-center gap-2">
-              {sdkApiKeyPrefix && (
-                <button
-                  onClick={() => handleCopy(sdkApiKeyPrefix, 'SDK Key Prefix')}
-                  className="text-white/40 hover:text-white/70 transition-colors"
-                >
-                  {copied === 'SDK Key Prefix' ? (
-                    <Check className="h-4 w-4 text-[#00BFA5]" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </button>
+              {sdkApiKey && (
+                <>
+                  <button
+                    onClick={() => setShowKey(!showKey)}
+                    className="text-white/40 hover:text-white/70 transition-colors"
+                  >
+                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                  <button
+                    onClick={() => handleCopy(sdkApiKey, 'SDK Key')}
+                    className="text-white/40 hover:text-white/70 transition-colors"
+                  >
+                    {copied === 'SDK Key' ? (
+                      <Check className="h-4 w-4 text-[#00BFA5]" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </button>
+                </>
               )}
-              <button
-                onClick={handleGenerateKey}
-                className="text-white/40 hover:text-white/70 transition-colors flex items-center gap-1 text-sm"
-                disabled={regenerateKey.isPending}
-              >
-                {regenerateKey.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-              </button>
             </div>
           </div>
-          {sdkApiKeyPrefix ? (
+          {sdkApiKey ? (
             <code className="block p-3 bg-black border border-white/[0.1] font-mono text-sm break-all text-white/70">
-              {sdkApiKeyPrefix}
+              {showKey ? sdkApiKey : maskedKey}
             </code>
           ) : (
-            <div className="p-3 bg-black border border-amber-500/20">
-              <div className="flex items-center justify-between">
-                <span className="text-amber-500/70 text-sm">No SDK key found</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 gap-2"
-                  onClick={handleGenerateKey}
-                  disabled={regenerateKey.isPending}
-                >
-                  {regenerateKey.isPending ? (
-                    <><Loader2 className="h-3 w-3 animate-spin" /> Generating...</>
-                  ) : (
-                    <><Key className="h-3 w-3" /> Generate Key</>
-                  )}
-                </Button>
-              </div>
+            <div className="p-3 bg-black border border-white/[0.06]">
+              <span className="text-white/30 text-sm">No SDK key found — key is generated automatically on signup.</span>
             </div>
           )}
         </div>
@@ -241,51 +200,6 @@ console.log(response.choices[0].message.content);`
         </Tabs>
       </CardContent>
     </Card>
-
-    {/* Revealed Key Modal */}
-    <Dialog open={!!revealedKey} onOpenChange={(open) => { if (!open) setRevealedKey(null) }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Key className="h-5 w-5" />
-            Your New SDK API Key
-          </DialogTitle>
-          <DialogDescription>
-            Copy this key now — you will not be able to see it again.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
-            <div className="flex items-start gap-2 mb-3">
-              <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-amber-500 font-medium">
-                This is the only time this key will be shown. Store it securely.
-              </p>
-            </div>
-            <code className="block p-3 rounded-lg bg-zinc-950 text-zinc-100 font-mono text-sm break-all select-all">
-              {revealedKey}
-            </code>
-          </div>
-          <Button
-            className="w-full gap-2"
-            size="lg"
-            onClick={() => revealedKey && handleCopy(revealedKey, 'SDK Key')}
-          >
-            {copied === 'SDK Key' ? (
-              <><Check className="h-4 w-4" /> Copied!</>
-            ) : (
-              <><Copy className="h-4 w-4" /> Copy to Clipboard</>
-            )}
-          </Button>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setRevealedKey(null)}>
-            I've saved my key
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    </>
   )
 }
 
@@ -299,7 +213,7 @@ export default function HomePage() {
       <div>
         <span className="font-mono text-[9px] text-white/20 uppercase tracking-[0.12em]">Quick Navigation</span>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4 border border-white/[0.06]">
-          {quickLinks.map((link, index) => (
+          {quickLinks.map((link) => (
             <Link key={link.href} href={link.href}>
               <div className="flex items-start gap-3 p-5 border border-white/[0.06] hover:border-white/[0.15] transition-colors cursor-pointer group">
                 <link.icon className="h-5 w-5 text-white/40 mt-0.5 shrink-0" />

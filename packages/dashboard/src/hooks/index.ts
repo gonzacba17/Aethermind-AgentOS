@@ -189,7 +189,6 @@ export type { Organization, OrganizationMember, Invitation, CreateOrganizationDa
 export {
   useUserProfile,
   useTestSDKConnection,
-  useRegenerateApiKey,
   userProfileKeys
 } from './api/useUserProfile';
 export type { UserProfile, SDKConnectionStatus } from './api/useUserProfile';

@@ -130,102 +130,10 @@ router.get('/me', async (req, res) => {
     id: client.id,
     hasCompletedOnboarding,
     onboardingStep,
-    sdkApiKeyPrefix: client.sdkApiKeyPrefix
-      ? `${client.sdkApiKeyPrefix}...`
-      : client.sdkApiKey
-        ? `${client.sdkApiKey.slice(0, 8)}...`
-        : null,
+    sdkApiKey: client.sdkApiKey || null,
   });
 });
 
-/**
- * POST /api/client/regenerate-sdk-key
- * Generates a new SDK API key for the authenticated client.
- * Returns the plaintext key ONCE. Stores bcrypt hash.
- */
-router.post('/regenerate-sdk-key', async (req, res) => {
-  try {
-    const clientReq = req as ClientAuthenticatedRequest;
-    const client = clientReq.client;
-
-    if (!client) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    const { randomBytes } = await import('crypto');
-    const bcrypt = await import('bcryptjs');
-
-    const newSdkApiKey = `aether_sdk_${randomBytes(24).toString('hex')}`;
-    const sdkApiKeyHash = await bcrypt.hash(newSdkApiKey, 10);
-    const sdkApiKeyPrefix = newSdkApiKey.slice(0, 20);
-
-    await db
-      .update(clients)
-      .set({
-        sdkApiKey: newSdkApiKey,
-        sdkApiKeyHash,
-        sdkApiKeyPrefix,
-      })
-      .where(eq(clients.id, client.id));
-
-    res.json({
-      sdkApiKey: newSdkApiKey,
-      sdkApiKeyShownOnce: true,
-      message: 'New SDK API key generated. Save it now — it will not be shown again.',
-    });
-  } catch (error) {
-    console.error('[Client] regenerate-sdk-key error:', (error as Error).message);
-    res.status(500).json({ error: 'Failed to regenerate SDK API key' });
-  }
-});
-
-/**
- * GET /api/client/sdk-key-reveal
- * Returns the full SDK API key for first-time users (onboarding not completed).
- * After onboarding is complete, this endpoint returns 403.
- */
-router.get('/sdk-key-reveal', async (req, res) => {
-  try {
-    const clientReq = req as ClientAuthenticatedRequest;
-    const client = clientReq.client;
-
-    if (!client) {
-      res.status(401).json({ error: 'Not authenticated' });
-      return;
-    }
-
-    // Check if onboarding is completed — if so, deny reveal
-    if (client.organizationId) {
-      const [linkedUser] = await db
-        .select({ hasCompletedOnboarding: users.hasCompletedOnboarding })
-        .from(users)
-        .where(eq(users.organizationId, client.organizationId))
-        .limit(1);
-
-      if (linkedUser?.hasCompletedOnboarding) {
-        res.status(403).json({
-          error: 'SDK key can only be revealed during onboarding. Use regenerate instead.',
-        });
-        return;
-      }
-    }
-
-    if (!client.sdkApiKey) {
-      res.status(404).json({ error: 'No SDK API key found. Use regenerate to create one.' });
-      return;
-    }
-
-    res.json({
-      sdkApiKey: client.sdkApiKey,
-      sdkApiKeyShownOnce: true,
-      message: 'Save this key now — after onboarding it will not be shown again.',
-    });
-  } catch (error) {
-    console.error('[Client] sdk-key-reveal error:', (error as Error).message);
-    res.status(500).json({ error: 'Failed to reveal SDK API key' });
-  }
-});
 
 /**
  * POST /api/client/complete-onboarding
