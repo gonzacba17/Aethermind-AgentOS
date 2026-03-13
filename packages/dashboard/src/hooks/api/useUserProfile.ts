@@ -8,7 +8,7 @@ export interface UserProfile {
   email: string;
   name: string | null;
   plan: 'free' | 'pro' | 'enterprise';
-  apiKey: string;
+  sdkApiKeyPrefix: string | null;
   organizationId: string | null;
   hasCompletedOnboarding: boolean;
   onboardingStep: string;
@@ -17,7 +17,6 @@ export interface UserProfile {
   maxAgents: number;
   logRetentionDays: number;
   subscriptionStatus: string;
-  isFirstTimeUser?: boolean;
 }
 
 export interface SDKConnectionStatus {
@@ -35,7 +34,7 @@ export const userProfileKeys = {
 };
 
 /**
- * Hook to fetch user profile including API key
+ * Hook to fetch user profile including SDK API key prefix
  */
 export function useUserProfile() {
   return useQuery({
@@ -44,7 +43,7 @@ export function useUserProfile() {
       const response = await apiRequest<{
         id: string;
         companyName: string;
-        sdkApiKey?: string;
+        sdkApiKeyPrefix?: string | null;
         hasCompletedOnboarding?: boolean;
         onboardingStep?: string;
       }>('/api/client/me');
@@ -53,7 +52,7 @@ export function useUserProfile() {
         email: '',
         name: response.companyName,
         plan: 'pro' as UserProfile['plan'],
-        apiKey: response.sdkApiKey || '',
+        sdkApiKeyPrefix: response.sdkApiKeyPrefix ?? null,
         organizationId: null,
         hasCompletedOnboarding: response.hasCompletedOnboarding ?? true,
         onboardingStep: response.onboardingStep || 'complete',
@@ -77,7 +76,6 @@ export function useTestSDKConnection() {
 
   return useMutation({
     mutationFn: async (apiKey: string): Promise<SDKConnectionStatus> => {
-      // Test the connection by hitting the health endpoint with the API key
       const response = await fetch(`${API_URL}/health`, {
         headers: {
           'X-API-Key': apiKey,
@@ -102,17 +100,22 @@ export function useTestSDKConnection() {
 }
 
 /**
- * Hook to regenerate API key
+ * Hook to regenerate SDK API key.
+ * Returns the new key plaintext (shown once).
  */
 export function useRegenerateApiKey() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async () => {
-      const response = await apiRequest<{ apiKey: string }>('/api/auth/regenerate-api-key', {
+      const response = await apiRequest<{
+        sdkApiKey: string;
+        sdkApiKeyShownOnce: boolean;
+        message: string;
+      }>('/api/client/regenerate-sdk-key', {
         method: 'POST',
       });
-      return response.apiKey;
+      return response.sdkApiKey;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userProfileKeys.me() });

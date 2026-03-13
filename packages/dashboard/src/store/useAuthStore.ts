@@ -4,7 +4,7 @@ import { API_URL } from '@/lib/config';
 
 export interface ClientInfo {
   companyName: string;
-  sdkApiKey: string;
+  sdkApiKeyPrefix: string | null;
   id: string;
   hasCompletedOnboarding: boolean;
 }
@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({
         client: {
           companyName: data.companyName,
-          sdkApiKey: data.sdkApiKey,
+          sdkApiKeyPrefix: data.sdkApiKeyPrefix ?? null,
           id: data.id,
           hasCompletedOnboarding: data.hasCompletedOnboarding ?? true,
         },

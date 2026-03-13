@@ -5,8 +5,6 @@ import {
   Zap,
   Copy,
   Check,
-  Eye,
-  EyeOff,
   RefreshCw,
   Terminal,
   CheckCircle2,
@@ -16,7 +14,8 @@ import {
   Sparkles,
   Code2,
   Key,
-  Rocket
+  Rocket,
+  AlertTriangle,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,6 +34,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 export function SDKConnectCard() {
   const { toast } = useToast()
@@ -42,13 +49,13 @@ export function SDKConnectCard() {
   const testConnection = useTestSDKConnection()
   const regenerateKey = useRegenerateApiKey()
 
-  const [showApiKey, setShowApiKey] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  // Holds the newly generated key shown only once
+  const [revealedKey, setRevealedKey] = useState<string | null>(null)
 
-  const apiKey = user?.apiKey || ''
-  const maskedKey = apiKey ? `${apiKey.slice(0, 12)}${'•'.repeat(20)}${apiKey.slice(-4)}` : ''
+  const sdkApiKeyPrefix = user?.sdkApiKeyPrefix || null
 
   const handleCopy = async (text: string, label: string) => {
     try {
@@ -69,10 +76,11 @@ export function SDKConnectCard() {
   }
 
   const handleTestConnection = async () => {
-    if (!apiKey) return
+    if (!sdkApiKeyPrefix) return
 
     try {
-      await testConnection.mutateAsync(apiKey)
+      // Test connection uses the prefix just to verify connectivity
+      await testConnection.mutateAsync(sdkApiKeyPrefix)
       setConnectionStatus('success')
       toast({
         title: "Connection Successful!",
@@ -90,12 +98,9 @@ export function SDKConnectCard() {
 
   const handleRegenerateKey = async () => {
     try {
-      await regenerateKey.mutateAsync()
+      const newKey = await regenerateKey.mutateAsync()
       setShowRegenerateDialog(false)
-      toast({
-        title: "API Key Regenerated",
-        description: "Your new API key is ready. Update your SDK configuration.",
-      })
+      setRevealedKey(newKey)
     } catch {
       toast({
         title: "Failed to regenerate",
@@ -111,8 +116,8 @@ export function SDKConnectCard() {
 
 // Initialize telemetry — auto-instruments OpenAI & Anthropic SDKs
 initAethermind({
-  apiKey: '${showApiKey ? apiKey : 'YOUR_API_KEY'}',
-  endpoint: '${process.env.NEXT_PUBLIC_API_URL || 'https://api.aethermind.io'}',
+  apiKey: 'YOUR_SDK_API_KEY',
+  endpoint: '${process.env.NEXT_PUBLIC_API_URL || 'https://aethermind-agentos-production.up.railway.app'}',
 });
 
 // That's it! All OpenAI/Anthropic calls are now tracked.
@@ -205,35 +210,33 @@ const completion = await openai.chat.completions.create({
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Key className="h-4 w-4 text-primary" />
-                <span className="font-medium">Your API Key</span>
+                <span className="font-medium">Your SDK API Key</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                >
-                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleCopy(apiKey, 'API Key')}
-                >
-                  {copied === 'API Key' ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowRegenerateDialog(true)}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setShowRegenerateDialog(true)}
+              >
+                <RefreshCw className="h-4 w-4" />
+                {sdkApiKeyPrefix ? 'Regenerate' : 'Generate Key'}
+              </Button>
             </div>
-            <code className="block p-3 rounded-lg bg-muted font-mono text-sm break-all">
-              {showApiKey ? apiKey : maskedKey}
-            </code>
+            {sdkApiKeyPrefix ? (
+              <code className="block p-3 rounded-lg bg-muted font-mono text-sm">
+                {sdkApiKeyPrefix}
+              </code>
+            ) : (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                <span className="text-amber-500">
+                  No SDK API key found. Click "Generate Key" to create one.
+                </span>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-2">
+              For security, only the prefix is shown. Regenerate to get the full key.
+            </p>
           </div>
 
           {/* Steps */}
@@ -357,34 +360,89 @@ const completion = await openai.chat.completions.create({
         </CardContent>
       </Card>
 
-      {/* Regenerate API Key Dialog */}
+      {/* Regenerate Confirmation Dialog */}
       <AlertDialog open={showRegenerateDialog} onOpenChange={setShowRegenerateDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Regenerate API Key?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {sdkApiKeyPrefix ? 'Regenerate SDK API Key?' : 'Generate SDK API Key'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This will invalidate your current API key. Any applications using the old key will stop working.
-              You'll need to update your SDK configuration with the new key.
+              {sdkApiKeyPrefix
+                ? 'This will invalidate your current SDK API key. Any applications using the old key will stop working. You\'ll need to update your SDK configuration with the new key.'
+                : 'This will generate a new SDK API key for your account. You\'ll be shown the key once — make sure to copy it.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRegenerateKey}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={sdkApiKeyPrefix ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
             >
               {regenerateKey.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Regenerating...
+                  Generating...
                 </>
-              ) : (
+              ) : sdkApiKeyPrefix ? (
                 'Regenerate Key'
+              ) : (
+                'Generate Key'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Revealed Key Dialog — shown once after generate/regenerate */}
+      <Dialog open={!!revealedKey} onOpenChange={(open) => { if (!open) setRevealedKey(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-primary" />
+              Your New SDK API Key
+            </DialogTitle>
+            <DialogDescription>
+              Copy this key now — you will not be able to see it again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <div className="flex items-start gap-2 mb-3">
+                <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-amber-500 font-medium">
+                  This is the only time this key will be shown. Store it securely.
+                </p>
+              </div>
+              <code className="block p-3 rounded-lg bg-zinc-950 text-zinc-100 font-mono text-sm break-all select-all">
+                {revealedKey}
+              </code>
+            </div>
+            <Button
+              className="w-full gap-2"
+              size="lg"
+              onClick={() => revealedKey && handleCopy(revealedKey, 'SDK API Key')}
+            >
+              {copied === 'SDK API Key' ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copy to Clipboard
+                </>
+              )}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevealedKey(null)}>
+              I've saved my key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

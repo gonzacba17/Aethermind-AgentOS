@@ -47,12 +47,8 @@ const quickLinks = [
 function SDKKeyCard() {
   const client = useAuthStore((s) => s.client)
   const [copied, setCopied] = useState<string | null>(null)
-  const [showKey, setShowKey] = useState(false)
 
-  const sdkApiKey = client?.sdkApiKey || ''
-  const maskedKey = sdkApiKey
-    ? `${sdkApiKey.slice(0, 14)}${'•'.repeat(20)}${sdkApiKey.slice(-4)}`
-    : ''
+  const sdkApiKeyPrefix = client?.sdkApiKeyPrefix || null
 
   const handleCopy = async (text: string, label: string) => {
     try {
@@ -69,7 +65,7 @@ function SDKKeyCard() {
   const connectCode = `import { initAethermind } from '@aethermind/agent';
 
 initAethermind({
-  apiKey: '${showKey ? sdkApiKey : 'YOUR_SDK_API_KEY'}',
+  apiKey: 'YOUR_SDK_API_KEY',
   endpoint: '${process.env.NEXT_PUBLIC_API_URL || 'https://aethermind-agentos-production.up.railway.app'}',
 });
 
@@ -113,14 +109,11 @@ console.log(response.choices[0].message.content);`
               <span className="font-light text-white/50">SDK API Key</span>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setShowKey(!showKey)} className="text-white/40 hover:text-white/70 text-sm transition-colors">
-                {showKey ? 'Hide' : 'Show'}
-              </button>
               <button
-                onClick={() => handleCopy(sdkApiKey, 'SDK Key')}
+                onClick={() => sdkApiKeyPrefix && handleCopy(sdkApiKeyPrefix, 'SDK Key Prefix')}
                 className="text-white/40 hover:text-white/70 transition-colors"
               >
-                {copied === 'SDK Key' ? (
+                {copied === 'SDK Key Prefix' ? (
                   <Check className="h-4 w-4 text-[#00BFA5]" />
                 ) : (
                   <Copy className="h-4 w-4" />
@@ -129,7 +122,7 @@ console.log(response.choices[0].message.content);`
             </div>
           </div>
           <code className="block p-3 bg-black border border-white/[0.1] font-mono text-sm break-all text-white/70">
-            {showKey ? sdkApiKey : maskedKey}
+            {sdkApiKeyPrefix || 'No SDK key — generate one in Settings'}
           </code>
         </div>
 
