@@ -134,6 +134,48 @@ router.get('/me', async (req, res) => {
 });
 
 /**
+ * POST /api/client/complete-onboarding
+ * Marks onboarding as completed for the user linked to this client's org.
+ */
+router.post('/complete-onboarding', async (req, res) => {
+  try {
+    const clientReq = req as ClientAuthenticatedRequest;
+    const client = clientReq.client;
+
+    if (!client?.organizationId) {
+      res.status(401).json({ error: 'Not authenticated or no linked organization' });
+      return;
+    }
+
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        hasCompletedOnboarding: true,
+        onboardingStep: 'complete',
+      })
+      .where(eq(users.organizationId, client.organizationId))
+      .returning({
+        hasCompletedOnboarding: users.hasCompletedOnboarding,
+        onboardingStep: users.onboardingStep,
+      });
+
+    if (!updatedUser) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      hasCompletedOnboarding: updatedUser.hasCompletedOnboarding,
+      onboardingStep: updatedUser.onboardingStep,
+    });
+  } catch (error) {
+    console.error('[Client] complete-onboarding error:', (error as Error).message);
+    res.status(500).json({ error: 'Failed to complete onboarding' });
+  }
+});
+
+/**
  * PATCH /api/client/me
  * Update the authenticated client's profile info.
  * Accepts: name (companyName), webhookUrl, notes
@@ -3406,11 +3448,24 @@ router.delete('/workflows/:name', async (req, res) => {
       return;
     }
 
+    const decodedName = decodeURIComponent(name);
+
+    // Delete from workflows table
     await db
       .delete(workflows)
       .where(and(
-        eq(workflows.name, decodeURIComponent(name)),
+        eq(workflows.name, decodedName),
         inArray(workflows.userId, userIds),
+      ));
+
+    // Also clear workflowId on matching agent_traces so gateway-sourced
+    // workflows no longer appear in the list after deletion
+    await db
+      .update(agentTraces)
+      .set({ workflowId: null })
+      .where(and(
+        eq(agentTraces.organizationId, client.organizationId),
+        eq(agentTraces.workflowId, decodedName),
       ));
 
     res.json({ message: 'Workflow deleted' });

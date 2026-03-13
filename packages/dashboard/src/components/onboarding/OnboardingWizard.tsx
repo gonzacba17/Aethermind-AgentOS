@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   Rocket, Key, Bot, DollarSign, CheckCircle2, ChevronRight,
-  ChevronLeft, Sparkles, Loader2, X
+  ChevronLeft, Sparkles, Loader2
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,14 @@ interface OnboardingWizardProps {
   onClose: () => void;
   onComplete: () => void;
 }
+
+const PROVIDERS = [
+  { value: 'openai', label: 'OpenAI', placeholder: 'sk-...', helpUrl: 'https://platform.openai.com/api-keys', helpLabel: 'Get OpenAI key' },
+  { value: 'anthropic', label: 'Anthropic', placeholder: 'sk-ant-...', helpUrl: 'https://console.anthropic.com/settings/keys', helpLabel: 'Get Anthropic key' },
+  { value: 'google', label: 'Gemini', placeholder: 'AIza...', helpUrl: 'https://aistudio.google.com/app/apikey', helpLabel: 'Get Gemini key' },
+  { value: 'groq', label: 'Groq', placeholder: 'gsk_...', helpUrl: 'https://console.groq.com/keys', helpLabel: 'Get Groq key' },
+  { value: 'openrouter', label: 'OpenRouter', placeholder: 'sk-or-...', helpUrl: 'https://openrouter.ai/keys', helpLabel: 'Get OpenRouter key' },
+] as const;
 
 const STEPS = [
   { 
@@ -94,18 +102,9 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
     if (currentStep === STEPS.length - 1) {
       setIsLoading(true)
       try {
-        await apiRequest('/api/auth/onboarding', {
-          method: 'PATCH',
+        await apiRequest('/api/client/complete-onboarding', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            completed: true,
-            step: 'complete',
-            data: {
-              apiKey: { provider: apiKeyData.provider },
-              agent: { name: agentData.name, model: agentData.model },
-              budget: { limit: budgetData.limit, period: budgetData.period },
-            },
-          }),
         })
         onComplete()
         toast({
@@ -143,12 +142,6 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
         <div className="px-6 pt-6">
           <div className="flex items-center justify-between mb-4">
             <DialogTitle className="text-lg font-semibold">Getting Started</DialogTitle>
-            <button 
-              onClick={onClose}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
           </div>
           <Progress value={progress} className="h-2" />
           <div className="flex justify-between text-xs text-muted-foreground mt-2">
@@ -188,41 +181,44 @@ export function OnboardingWizard({ open, onClose, onComplete }: OnboardingWizard
             </div>
           )}
 
-          {currentStep === 1 && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Provider</Label>
-                <Select 
-                  value={apiKeyData.provider} 
-                  onValueChange={(v) => setApiKeyData(prev => ({ ...prev, provider: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openai">OpenAI</SelectItem>
-                    <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="cohere">Cohere</SelectItem>
-                  </SelectContent>
-                </Select>
+          {currentStep === 1 && (() => {
+            const selectedProvider = PROVIDERS.find(p => p.value === apiKeyData.provider) || PROVIDERS[0];
+            return (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Provider</Label>
+                  <Select
+                    value={apiKeyData.provider}
+                    onValueChange={(v) => setApiKeyData(prev => ({ ...prev, provider: v, key: '' }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROVIDERS.map(p => (
+                        <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>API Key</Label>
+                  <Input
+                    type="password"
+                    placeholder={selectedProvider.placeholder}
+                    value={apiKeyData.key}
+                    onChange={(e) => setApiKeyData(prev => ({ ...prev, key: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Your API key is encrypted and stored securely.
+                    <a href={selectedProvider.helpUrl} target="_blank" rel="noopener noreferrer" className="text-primary ml-1 hover:underline">
+                      {selectedProvider.helpLabel} →
+                    </a>
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>API Key</Label>
-                <Input 
-                  type="password"
-                  placeholder="sk-..."
-                  value={apiKeyData.key}
-                  onChange={(e) => setApiKeyData(prev => ({ ...prev, key: e.target.value }))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Your API key is encrypted and stored securely. 
-                  <a href="https://platform.openai.com/api-keys" target="_blank" className="text-primary ml-1 hover:underline">
-                    Get OpenAI key →
-                  </a>
-                </p>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {currentStep === 2 && (
             <div className="space-y-4">
