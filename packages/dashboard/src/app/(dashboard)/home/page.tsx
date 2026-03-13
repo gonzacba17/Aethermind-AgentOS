@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import Link from "next/link"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useRegenerateApiKey } from "@/hooks/api/useUserProfile"
+import { useToast } from "@/hooks/use-toast"
 
 // ─── Previous version used SDKConnectCard with useUserProfile hook ───
 // import { SDKConnectCard } from "@/components/dashboard/SDKConnectCard"
@@ -52,6 +53,7 @@ function SDKKeyCard() {
   const [revealedKey, setRevealedKey] = useState<string | null>(null)
   const regenerateKey = useRegenerateApiKey()
   const refreshClient = useAuthStore((s) => s.refreshClient)
+  const { toast } = useToast()
 
   const sdkApiKeyPrefix = client?.sdkApiKeyPrefix || null
 
@@ -71,8 +73,13 @@ function SDKKeyCard() {
       setRevealedKey(newKey)
       // Re-fetch /me to update sdkApiKeyPrefix in store
       refreshClient()
-    } catch {
-      // error handled by toast in hook
+    } catch (error) {
+      console.error('[SDKKeyCard] Generate key failed:', error)
+      toast({
+        title: "Failed to generate key",
+        description: (error as Error)?.message || "Please try again later",
+        variant: "destructive",
+      })
     }
   }
 

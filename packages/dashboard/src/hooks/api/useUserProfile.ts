@@ -120,5 +120,8 @@ export function useRegenerateApiKey() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userProfileKeys.me() });
     },
+    onError: (error) => {
+      console.error('[useRegenerateApiKey] Failed:', error);
+    },
   });
 }
