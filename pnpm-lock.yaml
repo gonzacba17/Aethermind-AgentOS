@@ -696,8 +696,8 @@ importers:
   packages/providers:
     dependencies:
       '@aethermind/agent':
-        specifier: ^0.1.5
-        version: 0.1.5(@anthropic-ai/sdk@0.78.0(zod@3.25.76))(openai@4.104.0(ws@8.18.3)(zod@3.25.76))
+        specifier: ^0.1.6
+        version: 0.1.6(@anthropic-ai/sdk@0.78.0(zod@3.25.76))(openai@4.104.0(ws@8.18.3)(zod@3.25.76))
       '@anthropic-ai/sdk':
         specifier: '>=0.1.0'
         version: 0.78.0(zod@3.25.76)
@@ -725,8 +725,8 @@ packages:
   '@adobe/css-tools@4.4.4':
     resolution: {integrity: sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg==}
 
-  '@aethermind/agent@0.1.5':
-    resolution: {integrity: sha512-aIR8WWh6Ngnblk13yJrHjco7n9z2vwE7JU3WDpVOWEvFTfyNU8EuK/lq7uc3iUO1OBvUXVWktaSpTMaVPjLsXA==}
+  '@aethermind/agent@0.1.6':
+    resolution: {integrity: sha512-vnZ1Gpx5OQO3yVVkKLp9wEkNnD/zUJWK8Pb3aUfbDt5h427ZzNrzfYMv4sHu3rCT4G4koxClezzI16YDGyvMYQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '*'
@@ -8302,7 +8302,7 @@ snapshots:
 
   '@adobe/css-tools@4.4.4': {}
 
-  '@aethermind/agent@0.1.5(@anthropic-ai/sdk@0.78.0(zod@3.25.76))(openai@4.104.0(ws@8.18.3)(zod@3.25.76))':
+  '@aethermind/agent@0.1.6(@anthropic-ai/sdk@0.78.0(zod@3.25.76))(openai@4.104.0(ws@8.18.3)(zod@3.25.76))':
     dependencies:
       zod: 3.25.76
     optionalDependencies:
