@@ -4,7 +4,7 @@ import { apiRequest } from '@/lib/api';
 // Types
 export interface UserApiKey {
   id: string;
-  provider: 'openai' | 'anthropic' | 'cohere' | 'google' | 'groq' | 'azure' | 'custom';
+  provider: 'openai' | 'anthropic' | 'cohere' | 'google' | 'groq' | 'openrouter' | 'azure' | 'custom';
   name: string;
   maskedKey: string;
   isValid: boolean;

@@ -21,6 +21,7 @@ const PROVIDERS = [
   { value: 'cohere', label: 'Cohere', prefix: '' },
   { value: 'google', label: 'Google AI', prefix: '' },
   { value: 'groq', label: 'Groq', prefix: 'gsk_' },
+  { value: 'openrouter', label: 'OpenRouter', prefix: 'sk-or-' },
   { value: 'azure', label: 'Azure OpenAI', prefix: '' },
   { value: 'custom', label: 'Custom', prefix: '' },
 ] as const

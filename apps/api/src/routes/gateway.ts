@@ -74,6 +74,7 @@ const PROVIDER_URLS: Record<string, string> = {
   anthropic: 'https://api.anthropic.com',
   gemini: 'https://generativelanguage.googleapis.com',
   groq: 'https://api.groq.com/openai',
+  openrouter: 'https://openrouter.ai/api',
   lmstudio: process.env.LMSTUDIO_BASE_URL || 'https://conscientious-bertram-gangliate.ngrok-free.dev',
 };
 
@@ -112,19 +113,33 @@ function decrypt(encryptedText: string): string {
 
 // ─── Helpers ────────────────────────────────────────────────
 
-/** Detect provider from model name */
-function detectProvider(model: string): string {
+/**
+ * Detect provider from model name and normalize the model ID.
+ *
+ * OpenRouter models use an explicit `openrouter/` prefix:
+ *   "openrouter/meta-llama/llama-3.1-70b-instruct"
+ *     → provider: "openrouter", model: "meta-llama/llama-3.1-70b-instruct"
+ *
+ * Returns { provider, model } where model is the normalized ID to send upstream.
+ */
+function detectProvider(model: string): { provider: string; model: string } {
   const m = model.toLowerCase();
   let provider: string;
-  if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('o3-')) provider = 'openai';
+  let normalizedModel = model;
+
+  if (m.startsWith('openrouter/')) {
+    provider = 'openrouter';
+    normalizedModel = model.slice('openrouter/'.length); // strip prefix for upstream
+  } else if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('o3-')) provider = 'openai';
   else if (m.startsWith('claude-')) provider = 'anthropic';
   else if (m.startsWith('gemini-')) provider = 'gemini';
   else if (m.startsWith('llama-') || m.startsWith('llama3') || m.startsWith('mixtral-')) provider = 'groq';
   else if (m.includes('qwen') || m.includes('lmstudio')) provider = 'lmstudio';
   // Default to openai for unknown models (OpenAI-compatible endpoint)
   else provider = 'openai';
-  console.log(`[Gateway] detectProvider: ${model} → ${provider}`);
-  return provider;
+
+  console.log(`[Gateway] detectProvider: ${model} → ${provider} (upstream model: ${normalizedModel})`);
+  return { provider, model: normalizedModel };
 }
 
 /** Extract prompt text from messages array */
@@ -156,6 +171,11 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'llama-3.3-70b-versatile': { input: 0.00059, output: 0.00079 },
   'llama-3.1-8b-instant': { input: 0.00005, output: 0.00008 },
   'mixtral-8x7b-32768': { input: 0.00024, output: 0.00024 },
+  // OpenRouter (popular models — pricing varies, these are approximate)
+  'meta-llama/llama-3.1-405b-instruct': { input: 0.003, output: 0.003 },
+  'meta-llama/llama-3.1-70b-instruct': { input: 0.00052, output: 0.00075 },
+  'mistralai/mistral-large-latest': { input: 0.002, output: 0.006 },
+  'google/gemma-2-27b-it': { input: 0.00027, output: 0.00027 },
 };
 
 function calculateCost(model: string, promptTokens: number, completionTokens: number): number {
@@ -222,6 +242,7 @@ function getEnvApiKey(provider: string): string | null {
     anthropic: 'ANTHROPIC_API_KEY',
     gemini: 'GEMINI_API_KEY',
     groq: 'GROQ_API_KEY',
+    openrouter: 'OPENROUTER_API_KEY',
     lmstudio: '', // LM Studio doesn't need an API key
   };
   const envVar = map[provider];
@@ -358,6 +379,10 @@ function buildProviderHeaders(provider: string, apiKey: string): Record<string, 
     headers['Authorization'] = `Bearer ${apiKey}`;
   } else if (provider === 'groq') {
     headers['Authorization'] = `Bearer ${apiKey}`;
+  } else if (provider === 'openrouter') {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+    headers['HTTP-Referer'] = 'https://aethermind.dev';
+    headers['X-Title'] = 'Aethermind Gateway';
   } else if (provider === 'lmstudio') {
     headers['Authorization'] = 'Bearer lm-studio';
   }
@@ -376,6 +401,8 @@ function buildProviderUrl(provider: string, apiKey: string): string {
     url = `${PROVIDER_URLS.gemini}/v1beta/openai/chat/completions`;
   } else if (provider === 'groq') {
     url = `${PROVIDER_URLS.groq}/v1/chat/completions`;
+  } else if (provider === 'openrouter') {
+    url = `${PROVIDER_URLS.openrouter}/v1/chat/completions`;
   } else if (provider === 'lmstudio') {
     url = `${PROVIDER_URLS.lmstudio}/v1/chat/completions`;
   } else {
@@ -528,6 +555,7 @@ const PROVIDER_FALLBACKS: Record<string, string | null> = {
   anthropic: 'openai',
   gemini: 'openai',
   groq: 'openai',
+  openrouter: 'openai',
   lmstudio: 'openai',
 };
 
@@ -618,7 +646,7 @@ router.post(
 
           // Record cache hit telemetry (fire-and-forget)
           recordTelemetry(organizationId, {
-            provider: detectProvider(originalModel),
+            provider: detectProvider(originalModel).provider,
             model: originalModel,
             promptTokens: 0,
             completionTokens: 0,
@@ -709,8 +737,7 @@ router.post(
       // Non-blocking — use original model
     }
 
-    const finalModel = routingMeta.model;
-    const provider = detectProvider(finalModel);
+    const { provider, model: upstreamModel } = detectProvider(routingMeta.model);
 
     // ── 5. Resolve API key ─────────────────────────────
     let apiKey = await getUserApiKey(organizationId, provider);
@@ -729,8 +756,8 @@ router.post(
     // ── 6. Proxy to provider ───────────────────────────
     const isAnthropic = provider === 'anthropic';
     const proxyBody = isAnthropic
-      ? translateOpenAIToAnthropic({ ...body, model: finalModel, stream: isStream })
-      : { ...body, model: finalModel, stream: isStream };
+      ? translateOpenAIToAnthropic({ ...body, model: upstreamModel, stream: isStream })
+      : { ...body, model: upstreamModel, stream: isStream };
     const providerUrl = buildProviderUrl(provider, apiKey);
     const providerHeaders = buildProviderHeaders(provider, apiKey);
 
@@ -844,11 +871,11 @@ router.post(
         const promptTokens = usageData?.prompt_tokens || 0;
         const completionTokens = usageData?.completion_tokens || 0;
         const totalTokens = usageData?.total_tokens || promptTokens + completionTokens;
-        const cost = calculateCost(finalModel, promptTokens, completionTokens);
+        const cost = calculateCost(upstreamModel, promptTokens, completionTokens);
 
         recordTelemetry(organizationId, {
           provider,
-          model: finalModel,
+          model: upstreamModel,
           promptTokens,
           completionTokens,
           totalTokens,
@@ -856,7 +883,7 @@ router.post(
           latency,
           status: 'success',
           originalModel: routingMeta.wasRouted ? originalModel : undefined,
-          routedModel: routingMeta.wasRouted ? finalModel : undefined,
+          routedModel: routingMeta.wasRouted ? upstreamModel : undefined,
           compressionApplied: compressionMeta.applied || undefined,
           originalTokens: compressionMeta.applied ? compressionMeta.originalTokens : undefined,
           compressedTokens: compressionMeta.applied ? compressionMeta.compressedTokens : undefined,
@@ -879,7 +906,7 @@ router.post(
             parentAgentId: agentContext.parentAgentId,
             workflowId: agentContext.workflowId,
             workflowStep: agentContext.workflowStep,
-            model: finalModel,
+            model: upstreamModel,
             provider,
             inputTokens: promptTokens,
             outputTokens: completionTokens,
@@ -894,7 +921,7 @@ router.post(
 
         // Cache store for streaming (fire-and-forget)
         if (fullContent) {
-          SemanticCacheService.store(client.id, promptText, fullContent, finalModel, totalTokens, cost).catch(() => {});
+          SemanticCacheService.store(client.id, promptText, fullContent, upstreamModel, totalTokens, cost).catch(() => {});
         }
 
         return;
@@ -902,7 +929,7 @@ router.post(
         const latency = Date.now() - startTime;
         recordTelemetry(organizationId, {
           provider,
-          model: finalModel,
+          model: upstreamModel,
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
@@ -950,7 +977,7 @@ router.post(
             const latency = Date.now() - startTime;
             recordTelemetry(organizationId, {
               provider,
-              model: finalModel,
+              model: upstreamModel,
               promptTokens: 0,
               completionTokens: 0,
               totalTokens: 0,
@@ -968,7 +995,7 @@ router.post(
           const latency = Date.now() - startTime;
           recordTelemetry(organizationId, {
             provider,
-            model: finalModel,
+            model: upstreamModel,
             promptTokens: 0,
             completionTokens: 0,
             totalTokens: 0,
@@ -985,7 +1012,7 @@ router.post(
         const latency = Date.now() - startTime;
         recordTelemetry(organizationId, {
           provider,
-          model: finalModel,
+          model: upstreamModel,
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
@@ -1093,7 +1120,7 @@ router.post(
       status: 'success',
       originalModel: routingMeta.wasRouted ? originalModel : undefined,
       routedModel: routingMeta.wasRouted ? routingMeta.model : undefined,
-      fallbackUsed: routingMeta.wasRouted && provider !== detectProvider(originalModel) ? true : undefined,
+      fallbackUsed: routingMeta.wasRouted && provider !== detectProvider(originalModel).provider ? true : undefined,
       compressionApplied: compressionMeta.applied || undefined,
       originalTokens: compressionMeta.applied ? compressionMeta.originalTokens : undefined,
       compressedTokens: compressionMeta.applied ? compressionMeta.compressedTokens : undefined,
@@ -1371,6 +1398,11 @@ router.get(
       { id: 'llama-3.3-70b-versatile', provider: 'groq' },
       { id: 'llama-3.1-8b-instant', provider: 'groq' },
       { id: 'mixtral-8x7b-32768', provider: 'groq' },
+      // OpenRouter (prefix openrouter/ to route through OpenRouter)
+      { id: 'openrouter/meta-llama/llama-3.1-405b-instruct', provider: 'openrouter' },
+      { id: 'openrouter/meta-llama/llama-3.1-70b-instruct', provider: 'openrouter' },
+      { id: 'openrouter/mistralai/mistral-large-latest', provider: 'openrouter' },
+      { id: 'openrouter/google/gemma-2-27b-it', provider: 'openrouter' },
     ];
 
     return res.json({

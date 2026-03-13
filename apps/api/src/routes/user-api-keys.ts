@@ -101,7 +101,7 @@ function maskApiKey(key: string): string {
 
 // Validation schema
 const apiKeySchema = z.object({
-  provider: z.enum(['openai', 'anthropic', 'cohere', 'google', 'groq', 'azure', 'custom']),
+  provider: z.enum(['openai', 'anthropic', 'cohere', 'google', 'groq', 'openrouter', 'azure', 'custom']),
   name: z.string().min(1).max(100),
   apiKey: z.string().min(10),
 });
@@ -141,6 +141,25 @@ async function validateApiKey(provider: string, apiKey: string): Promise<{ valid
           headers: { 'Authorization': `Bearer ${apiKey}` },
         });
         if (cohereRes.status === 401) return { valid: false, error: 'Invalid API key' };
+        return { valid: true };
+
+      case 'groq':
+        const groqRes = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+        });
+        if (groqRes.status === 401) return { valid: false, error: 'Invalid API key' };
+        return { valid: true };
+
+      case 'openrouter':
+        const openrouterRes = await fetch('https://openrouter.ai/api/v1/models', {
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+        });
+        if (openrouterRes.status === 401) return { valid: false, error: 'Invalid API key' };
+        return { valid: true };
+
+      case 'google':
+        const googleRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (googleRes.status === 400 || googleRes.status === 403) return { valid: false, error: 'Invalid API key' };
         return { valid: true };
 
       default:

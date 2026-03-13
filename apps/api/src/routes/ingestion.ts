@@ -20,7 +20,7 @@ const router: Router = Router();
  */
 const TelemetryEventSchema = z.object({
   timestamp: z.string().datetime(),
-  provider: z.enum(['openai', 'anthropic', 'gemini', 'groq', 'ollama', 'lmstudio']),
+  provider: z.enum(['openai', 'anthropic', 'gemini', 'groq', 'openrouter', 'ollama', 'lmstudio']),
   model: z.string(),
   tokens: z.object({
     promptTokens: z.number().int().nonnegative(),
