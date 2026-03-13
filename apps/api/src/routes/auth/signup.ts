@@ -196,4 +196,39 @@ router.post('/verify-email', emailVerifyLimiter, async (req: Request, res: Respo
   }
 });
 
+router.post('/resend-verification', emailVerifyLimiter, async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email required' });
+    }
+
+    const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+
+    // Always return success to prevent email enumeration
+    if (!user || user.emailVerified) {
+      return res.json({ success: true, message: 'If that email exists, a verification link has been sent.' });
+    }
+
+    // Generate new token
+    const verificationToken = randomBytes(32).toString('hex');
+    const verificationExpiry = new Date(Date.now() + EMAIL_VERIFICATION_TTL_MS);
+
+    await db.update(users)
+      .set({ verificationToken, verificationExpiry })
+      .where(eq(users.id, user.id));
+
+    // Send email (non-blocking)
+    emailService.sendVerificationEmail(email, verificationToken).catch((error) => {
+      logger.error('Failed to resend verification email', { error: (error as Error).message });
+    });
+
+    res.json({ success: true, message: 'If that email exists, a verification link has been sent.' });
+  } catch (error) {
+    logger.error('Resend verification error', { error: (error as Error).message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

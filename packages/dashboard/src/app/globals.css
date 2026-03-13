@@ -3,41 +3,41 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Dark theme as default matching v1 design with teal accent */
+/* Dark theme — Aethermind design system */
 :root {
-  --background: oklch(0.12 0.01 260);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.16 0.01 260);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.14 0.01 260);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.72 0.15 180);
-  --primary-foreground: oklch(0.12 0.01 260);
-  --secondary: oklch(0.22 0.01 260);
-  --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.22 0.01 260);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.72 0.15 180);
-  --accent-foreground: oklch(0.12 0.01 260);
-  --destructive: oklch(0.6 0.22 25);
+  --background: oklch(0.07 0 0);
+  --foreground: oklch(1 0 0);
+  --card: oklch(0.11 0 0);
+  --card-foreground: oklch(1 0 0);
+  --popover: oklch(0.11 0 0);
+  --popover-foreground: oklch(1 0 0);
+  --primary: oklch(0.72 0.15 175);
+  --primary-foreground: oklch(0.07 0 0);
+  --secondary: oklch(0.13 0 0);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.13 0 0);
+  --muted-foreground: oklch(0.55 0 0);
+  --accent: oklch(0.13 0 0);
+  --accent-foreground: oklch(1 0 0);
+  --destructive: oklch(0.63 0.24 25);
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.26 0.01 260);
-  --input: oklch(0.22 0.01 260);
-  --ring: oklch(0.72 0.15 180);
-  --chart-1: oklch(0.72 0.15 180);
+  --border: oklch(0.2 0 0 / 0.06);
+  --input: oklch(0.2 0 0 / 0.06);
+  --ring: oklch(0.72 0.15 175);
+  --chart-1: oklch(0.72 0.15 175);
   --chart-2: oklch(0.65 0.18 280);
   --chart-3: oklch(0.7 0.15 40);
   --chart-4: oklch(0.65 0.2 330);
   --chart-5: oklch(0.6 0.15 220);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.1 0.01 260);
-  --sidebar-foreground: oklch(0.7 0 0);
-  --sidebar-primary: oklch(0.72 0.15 180);
-  --sidebar-primary-foreground: oklch(0.12 0.01 260);
-  --sidebar-accent: oklch(0.18 0.01 260);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.22 0.01 260);
-  --sidebar-ring: oklch(0.72 0.15 180);
+  --radius: 0rem;
+  --sidebar: oklch(0.07 0 0);
+  --sidebar-foreground: oklch(0.55 0 0);
+  --sidebar-primary: oklch(0.72 0.15 175);
+  --sidebar-primary-foreground: oklch(0.07 0 0);
+  --sidebar-accent: oklch(1 0 0 / 0.03);
+  --sidebar-accent-foreground: oklch(1 0 0);
+  --sidebar-border: oklch(1 0 0 / 0.06);
+  --sidebar-ring: oklch(0.72 0.15 175);
 }
 
 @theme inline {

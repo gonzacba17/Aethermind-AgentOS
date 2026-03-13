@@ -22,12 +22,12 @@ export default function OnboardingDemo() {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-3xl w-full">
           <h2
-            className="font-light tracking-[-0.04em] text-white mb-4"
+            className="font-extralight tracking-[-0.04em] text-white mb-4"
             style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
           >
             This is what you&apos;ll see.
           </h2>
-          <p className="text-[1.1rem] font-light text-white/40 mb-12">
+          <p className="text-[1.1rem] font-light text-white/50 mb-12">
             Every agent. Every call. Full trace in your dashboard.
           </p>
 
@@ -70,9 +70,9 @@ export default function OnboardingDemo() {
 
           <button
             onClick={() => router.push('/onboarding/value')}
-            className="font-mono text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
+            className="text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
           >
-            this_looks_useful()
+            Continue
           </button>
         </div>
       </div>

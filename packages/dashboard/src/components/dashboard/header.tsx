@@ -25,37 +25,40 @@ export function DashboardHeader() {
   }, [])
 
   return (
-    <header className="flex items-center justify-between px-6 py-4 border-b border-border bg-card">
-      <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+    <header className="flex items-center justify-between px-6 h-12 border-b border-white/[0.06] bg-[#0a0a0a]">
+      <h1 className="font-light text-[1.25rem] text-white">Dashboard</h1>
 
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="icon" className="text-white/35 hover:text-white/70 rounded-none">
           <Bell className="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="icon" className="text-white/35 hover:text-white/70 rounded-none">
           <Settings className="h-5 w-5" />
         </Button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          asChild
-          className="gap-2 bg-transparent border-border text-foreground hover:bg-secondary"
+        <a
+          href={LANDING_PAGE_URL}
+          className="text-white/40 hover:text-white/70 text-sm transition-colors"
         >
-          <a href={LANDING_PAGE_URL}>
-            <Home className="h-4 w-4" />
-            Back to Home
-          </a>
-        </Button>
+          Back to Home
+        </a>
 
         {/* API Status Badge */}
         {apiConnected !== null && (
           <span
             className={cn(
-              "px-3 py-1.5 rounded-full text-xs font-medium",
-              apiConnected ? "bg-primary/20 text-primary" : "bg-destructive text-destructive-foreground",
+              "inline-flex items-center gap-2 px-3 py-1 text-xs font-medium rounded-[4px]",
+              apiConnected
+                ? "text-[#00BFA5] bg-[rgba(0,191,165,0.08)] border border-[rgba(0,191,165,0.2)]"
+                : "text-[#ff4444] bg-[rgba(255,68,68,0.08)] border border-[rgba(255,68,68,0.2)]",
             )}
           >
+            <span
+              className={cn(
+                "w-1.5 h-1.5 rounded-full",
+                apiConnected ? "bg-[#00BFA5] animate-pulse" : "bg-[#ff4444]",
+              )}
+            />
             {apiConnected ? "API Connected" : "API Disconnected"}
           </span>
         )}

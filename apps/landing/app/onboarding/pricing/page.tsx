@@ -8,7 +8,7 @@ const plans = [
     price: 0,
     period: '14 days',
     features: ['Gateway access', '10k requests', 'Basic analytics', 'No credit card required'],
-    cta: 'start_free()',
+    cta: 'Get Started Free',
   },
   {
     id: 'starter',
@@ -16,7 +16,7 @@ const plans = [
     price: 9,
     period: '/month',
     features: ['100k requests/month', 'Agent tracing', 'Multi-provider routing', 'Email support'],
-    cta: 'get_started()',
+    cta: 'Get Started',
   },
   {
     id: 'growth',
@@ -24,7 +24,7 @@ const plans = [
     price: 49,
     period: '/month',
     features: ['500k requests/month', 'Agent tracing', 'Budget controls', 'Ollama support'],
-    cta: 'get_started()',
+    cta: 'Get Started',
   },
   {
     id: 'pro',
@@ -32,7 +32,7 @@ const plans = [
     price: 149,
     period: '/month',
     features: ['Unlimited requests', 'Priority support', 'Custom models', 'Advanced analytics'],
-    cta: 'get_started()',
+    cta: 'Get Started',
   },
 ]
 
@@ -62,12 +62,12 @@ export default function OnboardingPricing() {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-5xl w-full py-16">
           <h2
-            className="font-light tracking-[-0.04em] text-white mb-4"
+            className="font-extralight tracking-[-0.04em] text-white mb-4"
             style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
           >
             Simple pricing. No surprises.
           </h2>
-          <p className="text-[1.1rem] font-light text-white/40 mb-12">
+          <p className="text-[1.1rem] font-light text-white/50 mb-12">
             BYOK — you pay your provider directly. We charge for the gateway.
           </p>
 
@@ -98,7 +98,7 @@ export default function OnboardingPricing() {
 
                   <button
                     onClick={() => handleSelectPlan(plan.id)}
-                    className="w-full font-mono text-xs py-2.5 border border-white/[0.15] text-white hover:bg-white hover:text-black transition-colors"
+                    className="w-full text-xs py-2.5 border border-white/[0.15] text-white hover:bg-white hover:text-black transition-colors"
                   >
                     {plan.cta}
                   </button>

@@ -1,6 +1,7 @@
 "use client"
 
 import { motion } from "framer-motion"
+import { useEffect, useRef, useState } from "react"
 
 const steps = [
   {
@@ -28,6 +29,52 @@ const codeSnippet = `const openai = new OpenAI({
   }
 });`
 
+function TypewriterCode({ code, className }: { code: string; className?: string }) {
+  const containerRef = useRef<HTMLPreElement>(null)
+  const hasPlayedRef = useRef(false)
+  const [displayedText, setDisplayedText] = useState("")
+  const [isTyping, setIsTyping] = useState(false)
+  const [isDone, setIsDone] = useState(false)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasPlayedRef.current) {
+          hasPlayedRef.current = true
+          setIsTyping(true)
+
+          let i = 0
+          const interval = setInterval(() => {
+            i++
+            setDisplayedText(code.slice(0, i))
+            if (i >= code.length) {
+              clearInterval(interval)
+              setIsTyping(false)
+              setIsDone(true)
+            }
+          }, 30)
+        }
+      },
+      { threshold: 0.3 }
+    )
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [code])
+
+  return (
+    <pre ref={containerRef} className="p-6 overflow-x-auto">
+      <code className={className}>
+        {isDone ? code : displayedText}
+        {isTyping && <span className="animate-pulse">|</span>}
+      </code>
+    </pre>
+  )
+}
+
 export function HowItWorks() {
   return (
     <section className="relative px-6 py-32 border-t border-white/[0.06]">
@@ -39,14 +86,14 @@ export function HowItWorks() {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <p className="font-mono text-xs text-white/20 mb-4">// how_it_works</p>
+          <p className="font-mono text-xs text-white/25 uppercase tracking-[0.1em] mb-4">// how_it_works</p>
           <h2
-            className="font-light tracking-[-0.04em] text-white mb-6"
+            className="font-extralight tracking-[-0.04em] text-white mb-6"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
           >
             Three headers. Full visibility.
           </h2>
-          <p className="text-[1.1rem] font-light text-white/40 max-w-2xl leading-relaxed">
+          <p className="text-[1.1rem] font-light text-white/50 max-w-2xl leading-relaxed">
             Add agent context to every request. See each agent individually in your dashboard.
           </p>
         </motion.div>
@@ -67,11 +114,10 @@ export function HowItWorks() {
               copy
             </button>
           </div>
-          <pre className="p-6 overflow-x-auto">
-            <code className="font-mono text-sm text-white/70 leading-relaxed whitespace-pre">
-              {codeSnippet}
-            </code>
-          </pre>
+          <TypewriterCode
+            code={codeSnippet}
+            className="font-mono text-sm text-white/70 leading-relaxed whitespace-pre"
+          />
         </motion.div>
 
         <div className="grid md:grid-cols-3">

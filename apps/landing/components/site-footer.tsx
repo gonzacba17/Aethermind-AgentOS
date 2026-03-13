@@ -22,7 +22,7 @@ const footerLinks = {
 export function SiteFooter() {
   return (
     <footer className="relative border-t border-white/[0.06] bg-black">
-      <div className="max-w-[1200px] mx-auto px-10 py-16 grid grid-cols-1 md:grid-cols-4 gap-12">
+      <div className="max-w-[1200px] mx-auto px-10 pt-20 pb-12 grid grid-cols-1 md:grid-cols-4 gap-12">
         <div>
           <h3 className="font-mono text-xs tracking-[0.2em] text-white mb-4">AETHERMIND</h3>
           <p className="text-sm text-white/40 leading-relaxed max-w-xs">
@@ -32,7 +32,7 @@ export function SiteFooter() {
 
         {Object.entries(footerLinks).map(([category, links]) => (
           <div key={category}>
-            <h3 className="font-mono text-xs tracking-[0.15em] text-white/20 mb-4 uppercase">
+            <h3 className="font-mono text-xs tracking-[0.1em] text-white/25 mb-4 uppercase">
               {category}
             </h3>
             <ul className="space-y-3">

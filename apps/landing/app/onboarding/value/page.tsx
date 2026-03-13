@@ -30,12 +30,12 @@ export default function OnboardingValue() {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-5xl w-full py-16">
           <h2
-            className="font-light tracking-[-0.04em] text-white mb-4"
+            className="font-extralight tracking-[-0.04em] text-white mb-4"
             style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
           >
             Built for multi-agent systems.
           </h2>
-          <p className="text-[1.1rem] font-light text-white/40 mb-12">
+          <p className="text-[1.1rem] font-light text-white/50 mb-12">
             The first AI gateway with native per-agent tracing.
           </p>
 
@@ -82,9 +82,9 @@ export default function OnboardingValue() {
           <div className="mt-12">
             <button
               onClick={() => router.push('/onboarding/pricing')}
-              className="font-mono text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
+              className="text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
             >
-              im_ready()
+              I'm Ready
             </button>
           </div>
         </div>

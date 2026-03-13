@@ -40,9 +40,9 @@ export function SiteHeader() {
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/[0.06] ${
           isScrolled
-            ? "bg-black/90 backdrop-blur-md border-b border-white/[0.06]"
+            ? "bg-black/90 backdrop-blur-md"
             : "bg-transparent"
         }`}
       >
@@ -73,23 +73,23 @@ export function SiteHeader() {
                     <span className="font-mono text-xs text-white/40">{user.name}</span>
                     <button
                       onClick={handleLogout}
-                      className="font-mono text-xs px-4 py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
+                      className="text-xs px-4 py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
                     >
-                      logout()
+                      Log Out
                     </button>
                     <Link
                       href={config.dashboardUrl}
-                      className="font-mono text-xs px-4 py-2 bg-white text-black hover:bg-white/90 transition-colors"
+                      className="text-xs px-4 py-2 bg-white text-black hover:bg-white/90 transition-colors"
                     >
-                      dashboard()
+                      Open Dashboard
                     </Link>
                   </div>
                 ) : (
                   <Link
                     href="/login"
-                    className="font-mono text-xs px-5 py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
+                    className="text-xs px-5 py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
                   >
-                    sign_in()
+                    Sign In
                   </Link>
                 )
               )}
@@ -160,16 +160,16 @@ export function SiteHeader() {
                             <div className="border-b border-white/[0.06] py-4">
                               <div className="font-mono text-xs text-white/20 mb-2">Logged in as</div>
                               <div className="text-white mb-3 text-sm">{user.name}</div>
-                              <button onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }} className="w-full font-mono text-xs py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors">
-                                logout()
+                              <button onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }} className="w-full text-xs py-2 border border-white/[0.15] text-white hover:border-white/30 transition-colors">
+                                Log Out
                               </button>
                             </div>
                           </motion.li>
                         </>
                       ) : (
                         <motion.li initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: navigationLinks.length * 0.05 }}>
-                          <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="block border-b border-white/[0.06] py-4 font-mono text-sm text-white/40 hover:text-white">
-                            sign_in()
+                          <Link href="/login" onClick={() => setIsMobileMenuOpen(false)} className="block border-b border-white/[0.06] py-4 text-sm text-white/40 hover:text-white">
+                            Sign In
                           </Link>
                         </motion.li>
                       )

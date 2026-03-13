@@ -8,12 +8,12 @@ import { useClientInsights } from "@/hooks/api/useClientInsights"
 import type { ClientInsight } from "@/hooks/api/useClientInsights"
 
 const typeConfig: Record<string, { icon: typeof Lightbulb; label: string; color: string }> = {
-  peak_hours: { icon: Clock, label: 'Horas pico', color: 'bg-blue-100 text-blue-700' },
-  underutilized_agent: { icon: AlertTriangle, label: 'Agente subutilizado', color: 'bg-yellow-100 text-yellow-700' },
-  overloaded_agent: { icon: Cpu, label: 'Agente sobrecargado', color: 'bg-red-100 text-red-700' },
-  similar_agents: { icon: BadgeIcon, label: 'Agentes similares', color: 'bg-purple-100 text-purple-700' },
-  cache_suggestion: { icon: Lightbulb, label: 'Cache', color: 'bg-green-100 text-green-700' },
-  routing_suggestion: { icon: Lightbulb, label: 'Routing', color: 'bg-indigo-100 text-indigo-700' },
+  peak_hours: { icon: Clock, label: 'Peak Hours', color: 'text-white/40' },
+  underutilized_agent: { icon: AlertTriangle, label: 'Underutilized Agent', color: 'text-white/40' },
+  overloaded_agent: { icon: Cpu, label: 'Overloaded Agent', color: 'text-white/40' },
+  similar_agents: { icon: BadgeIcon, label: 'Similar Agents', color: 'text-white/40' },
+  cache_suggestion: { icon: Lightbulb, label: 'Cache', color: 'text-white/40' },
+  routing_suggestion: { icon: Lightbulb, label: 'Routing', color: 'text-white/40' },
 }
 
 export function UsageInsightsCard() {
@@ -44,13 +44,13 @@ export function UsageInsightsCard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Lightbulb className="h-4 w-4" />
-            Insights de uso
+            <Lightbulb className="h-4 w-4 text-white/40" />
+            Usage Insights
           </CardTitle>
-          <CardDescription>Patrones detectados en tus datos</CardDescription>
+          <CardDescription>Patterns detected in your data</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">No se han detectado patrones de uso todavia.</p>
+          <p className="text-sm text-white/40">No usage patterns detected yet.</p>
         </CardContent>
       </Card>
     )
@@ -60,15 +60,15 @@ export function UsageInsightsCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          <Lightbulb className="h-4 w-4" />
-          Insights de uso
+          <Lightbulb className="h-4 w-4 text-white/40" />
+          Usage Insights
           {patternInsights.length > 0 && (
             <Badge variant="secondary" className="ml-2 text-xs">
-              {patternInsights.length} nuevo{patternInsights.length > 1 ? 's' : ''}
+              {patternInsights.length} new
             </Badge>
           )}
         </CardTitle>
-        <CardDescription>Patrones detectados en tus datos</CardDescription>
+        <CardDescription>Patterns detected in your data</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {patternInsights.slice(0, 5).map((insight) => (
@@ -86,23 +86,21 @@ function InsightRow({ insight }: { insight: ClientInsight }) {
   const summary = getInsightSummary(insight)
 
   return (
-    <div className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50">
-      <div className={`mt-0.5 p-1.5 rounded-md ${config.color}`}>
-        <Icon className="h-3.5 w-3.5" />
-      </div>
+    <div className="flex items-start gap-3 p-2 rounded-none hover:bg-white/[0.03]">
+      <Icon className="mt-0.5 h-3.5 w-3.5 text-white/40 shrink-0" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{config.label}</span>
+          <span className="text-sm font-medium text-white">{config.label}</span>
           {!insight.acknowledged && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-              Nuevo
+              New
             </Badge>
           )}
         </div>
-        <p className="text-xs text-muted-foreground truncate">{summary}</p>
+        <p className="text-xs text-white/30 truncate">{summary}</p>
       </div>
       {insight.estimatedSavingsUsd && (
-        <span className="text-xs font-medium text-green-600 whitespace-nowrap">
+        <span className="text-xs font-medium text-[#00BFA5] whitespace-nowrap">
           ~${insight.estimatedSavingsUsd.toFixed(2)}
         </span>
       )}
@@ -117,16 +115,16 @@ function getInsightSummary(insight: ClientInsight): string {
     case 'peak_hours': {
       const peaks = data.peakHours as Array<{ hour: number; totalCost: number }> | undefined
       if (peaks?.length) {
-        return `Mayor gasto a las ${peaks.map((p) => `${p.hour}:00`).join(', ')}`
+        return `Peak spending at ${peaks.map((p) => `${p.hour}:00`).join(', ')}`
       }
-      return 'Horas de mayor gasto detectadas'
+      return 'Peak spending hours detected'
     }
     case 'underutilized_agent':
-      return `Agente ${data.agentId ?? 'desconocido'}: ${data.recentRequests ?? 0} requests recientes (antes: ${data.previousRequests ?? 0})`
+      return `Agent ${data.agentId ?? 'unknown'}: ${data.recentRequests ?? 0} recent requests (previously: ${data.previousRequests ?? 0})`
     case 'overloaded_agent':
-      return `Agente ${data.agentId ?? 'desconocido'}: latencia promedio ${data.avgLatencyMs ?? 0}ms`
+      return `Agent ${data.agentId ?? 'unknown'}: average latency ${data.avgLatencyMs ?? 0}ms`
     case 'similar_agents':
-      return `${data.agentIdA ?? '?'} y ${data.agentIdB ?? '?'} tienen prompts similares (${((data.similarity as number) * 100).toFixed(0)}%)`
+      return `${data.agentIdA ?? '?'} and ${data.agentIdB ?? '?'} have similar prompts (${((data.similarity as number) * 100).toFixed(0)}%)`
     default:
       return JSON.stringify(data).substring(0, 80)
   }

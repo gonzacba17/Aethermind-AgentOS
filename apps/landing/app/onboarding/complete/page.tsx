@@ -73,13 +73,13 @@ export default function CompletePage() {
           <p className="font-mono text-xs text-white/20 mb-8">// setup_complete</p>
 
           <h1
-            className="font-light tracking-[-0.04em] text-white mb-4"
+            className="font-extralight tracking-[-0.04em] text-white mb-4"
             style={{ fontSize: 'clamp(2.5rem, 5vw, 4rem)' }}
           >
             You&apos;re all set.
           </h1>
 
-          <p className="text-[1.1rem] font-light text-white/40 max-w-lg mx-auto mb-12">
+          <p className="text-[1.1rem] font-light text-white/50 max-w-lg mx-auto mb-12">
             Your gateway is connected. Start sending requests and watch your agent traces appear in real-time.
           </p>
 
@@ -106,9 +106,9 @@ export default function CompletePage() {
           <button
             onClick={handleGoToDashboard}
             disabled={redirecting}
-            className="font-mono text-sm px-10 py-3 bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+            className="text-sm px-10 py-3 bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mb-6"
           >
-            {redirecting ? 'redirecting...' : 'open_dashboard()'}
+            {redirecting ? 'Redirecting...' : 'Open Dashboard'}
           </button>
 
           <div>

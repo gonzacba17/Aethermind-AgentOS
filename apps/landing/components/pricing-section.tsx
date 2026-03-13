@@ -13,7 +13,7 @@ const plans = [
       "basic analytics",
       "no credit card required",
     ],
-    cta: "start_free()",
+    cta: "Get Started Free",
     href: "/signup",
     highlighted: false,
   },
@@ -27,7 +27,7 @@ const plans = [
       "multi-provider routing",
       "email support",
     ],
-    cta: "get_started()",
+    cta: "Get Started",
     href: "/signup?plan=starter",
     highlighted: false,
   },
@@ -41,7 +41,7 @@ const plans = [
       "budget controls",
       "Ollama support",
     ],
-    cta: "get_started()",
+    cta: "Get Started",
     href: "/signup?plan=growth",
     highlighted: false,
   },
@@ -55,7 +55,7 @@ const plans = [
       "custom models",
       "advanced analytics",
     ],
-    cta: "get_started()",
+    cta: "Get Started",
     href: "/signup?plan=pro",
     highlighted: false,
   },
@@ -72,14 +72,14 @@ export function PricingSection() {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <p className="font-mono text-xs text-white/20 mb-4">// pricing</p>
+          <p className="font-mono text-xs text-white/25 uppercase tracking-[0.1em] mb-4">// pricing</p>
           <h2
-            className="font-light tracking-[-0.04em] text-white mb-6"
+            className="font-extralight tracking-[-0.04em] text-white mb-6"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
           >
             Simple pricing. No surprises.
           </h2>
-          <p className="text-[1.1rem] font-light text-white/40 max-w-2xl leading-relaxed">
+          <p className="text-[1.1rem] font-light text-white/50 max-w-2xl leading-relaxed">
             BYOK — you pay your provider directly. We charge for the gateway.
           </p>
         </motion.div>
@@ -117,7 +117,7 @@ export function PricingSection() {
 
                 <a
                   href={plan.href}
-                  className="block w-full text-center font-mono text-xs py-2.5 border border-white/[0.15] text-white hover:bg-white hover:text-black transition-colors"
+                  className="block w-full text-center text-xs py-2.5 border border-white/[0.15] text-white hover:bg-white hover:text-black transition-colors"
                 >
                   {plan.cta}
                 </a>

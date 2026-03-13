@@ -40,9 +40,9 @@ export function CapabilitiesSection() {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <p className="font-mono text-xs text-white/20 mb-4">// capabilities</p>
+          <p className="font-mono text-xs text-white/25 uppercase tracking-[0.1em] mb-4">// capabilities</p>
           <h2
-            className="font-light tracking-[-0.04em] text-white"
+            className="font-extralight tracking-[-0.04em] text-white"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
           >
             Everything your multi-agent system needs.
@@ -58,9 +58,9 @@ export function CapabilitiesSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.08 }}
                 viewport={{ once: true }}
-                className="p-8 border-b border-r border-white/[0.06] last:border-b-0 group hover:bg-white/[0.02] transition-colors"
+                className="p-8 border-b border-r border-white/[0.06] last:border-b-0 group hover:bg-white/[0.02] transition-all duration-200 hover:border-white/[0.2]"
               >
-                <h3 className="font-mono text-xs text-white/60 mb-3 tracking-wide">
+                <h3 className="font-mono text-xs text-white/30 mb-3 tracking-wide group-hover:text-white/70 transition-colors duration-200">
                   :: {cap.label}
                 </h3>
                 <p className="text-sm text-white/40 leading-relaxed group-hover:text-white/60 transition-colors">

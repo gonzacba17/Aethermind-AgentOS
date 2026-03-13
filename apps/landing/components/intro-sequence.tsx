@@ -25,7 +25,7 @@ export function IntroSequence() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            className="text-white font-light tracking-[-0.04em] leading-[1.05]"
+            className="text-white font-extralight tracking-[-0.04em] leading-[1.05]"
             style={{ fontSize: "clamp(3rem, 7vw, 6rem)" }}
           >
             See inside your agents.
@@ -50,15 +50,15 @@ export function IntroSequence() {
           >
             <a
               href="/signup"
-              className="font-mono text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
+              className="text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
             >
-              start_free()
+              Get Started Free
             </a>
             <a
               href="/docs"
-              className="font-mono text-sm px-8 py-3 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
+              className="text-sm px-8 py-3 border border-white/[0.15] text-white hover:border-white/30 transition-colors"
             >
-              read_docs()
+              Read the Docs
             </a>
           </motion.div>
 
@@ -66,7 +66,7 @@ export function IntroSequence() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.8, duration: 0.8 }}
-            className="mt-6 font-mono text-xs text-white/20 flex items-center justify-center gap-4"
+            className="mt-6 font-mono text-xs text-white/25 flex items-center justify-center gap-4"
           >
             <span>// no credit card</span>
             <span>·</span>

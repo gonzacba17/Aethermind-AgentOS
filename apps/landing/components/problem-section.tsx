@@ -28,14 +28,14 @@ export function ProblemSection() {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <p className="font-mono text-xs text-white/20 mb-4">// the_problem</p>
+          <p className="font-mono text-xs text-white/25 uppercase tracking-[0.1em] mb-4">// the_problem</p>
           <h2
-            className="font-light tracking-[-0.04em] text-white mb-6"
+            className="font-extralight tracking-[-0.04em] text-white mb-6"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
           >
             Multi-agent systems are a black box.
           </h2>
-          <p className="text-[1.1rem] font-light text-white/40 max-w-2xl leading-relaxed">
+          <p className="text-[1.1rem] font-light text-white/50 max-w-2xl leading-relaxed">
             You know your pipeline ran. You don&apos;t know which agent failed,
             what it cost, or why it slowed down. Until now.
           </p>

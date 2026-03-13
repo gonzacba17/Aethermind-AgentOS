@@ -78,12 +78,12 @@ const response = await openai.chat.completions.create({
         <div className="max-w-3xl mx-auto space-y-12">
           <div>
             <h1
-              className="font-light tracking-[-0.04em] text-white mb-4"
+              className="font-extralight tracking-[-0.04em] text-white mb-4"
               style={{ fontSize: 'clamp(2rem, 4vw, 3rem)' }}
             >
               Connect to the gateway.
             </h1>
-            <p className="text-[1.1rem] font-light text-white/40 max-w-2xl">
+            <p className="text-[1.1rem] font-light text-white/50 max-w-2xl">
               Add your Client Token to your AI client. No SDK needed —
               just change one line in your existing code.
             </p>
@@ -136,15 +136,15 @@ const response = await openai.chat.completions.create({
           <div className="flex justify-between items-center pt-6 border-t border-white/[0.06]">
             <button
               onClick={() => router.push('/onboarding/pricing')}
-              className="font-mono text-xs px-6 py-2.5 border border-white/[0.15] text-white/40 hover:text-white hover:border-white/30 transition-colors"
+              className="text-xs px-6 py-2.5 border border-white/[0.15] text-white/40 hover:text-white hover:border-white/30 transition-colors"
             >
-              back()
+              Back
             </button>
             <button
               onClick={() => router.push('/onboarding/complete')}
-              className="font-mono text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
+              className="text-sm px-8 py-3 bg-white text-black hover:bg-white/90 transition-colors"
             >
-              ive_set_this_up()
+              Continue
             </button>
           </div>
         </div>

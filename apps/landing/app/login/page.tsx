@@ -13,6 +13,10 @@ import { config } from '@/lib/config'
 function LoginForm() {
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [emailNotVerified, setEmailNotVerified] = useState(false)
+  const [verificationEmail, setVerificationEmail] = useState('')
+  const [resendingVerification, setResendingVerification] = useState(false)
+  const [resendSuccess, setResendSuccess] = useState(false)
   const searchParams = useSearchParams()
   const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
@@ -64,8 +68,27 @@ function LoginForm() {
     }
   }, [searchParams]);
 
+  const handleResendVerification = async () => {
+    setResendingVerification(true)
+    setResendSuccess(false)
+    try {
+      await fetch(`${config.apiUrl}/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verificationEmail }),
+      })
+      setResendSuccess(true)
+    } catch {
+      setError('Failed to resend verification email. Please try again.')
+    } finally {
+      setResendingVerification(false)
+    }
+  }
+
   const onSubmit = async (data: LoginFormData) => {
     setError('')
+    setEmailNotVerified(false)
+    setResendSuccess(false)
     try {
       const response = await authAPI.login(data, false)
       const returnTo = searchParams.get('returnTo');
@@ -78,7 +101,13 @@ function LoginForm() {
         await redirectAfterAuth(response.user)
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      const apiErr = err as { statusCode?: number; message?: string }
+      if (apiErr.statusCode === 403 && apiErr.message === 'email_not_verified') {
+        setEmailNotVerified(true)
+        setVerificationEmail(data.email)
+      } else {
+        setError(apiErr.message || (err instanceof Error ? err.message : 'An error occurred'))
+      }
     }
   }
 
@@ -102,7 +131,7 @@ function LoginForm() {
         <p className="text-lg font-light text-white/40 mb-12 leading-relaxed">
           The AI Gateway built for<br />multi-agent systems.
         </p>
-        <div className="space-y-4 font-mono text-xs text-white/20">
+        <div className="space-y-4 font-mono text-xs text-white/25">
           <p>// agent-level tracing</p>
           <p>// byok — your keys</p>
           <p>// drop-in openai replacement</p>
@@ -134,6 +163,24 @@ function LoginForm() {
           {error && (
             <div className="border border-[#ff4444]/30 text-[#ff4444] px-4 py-3 text-sm">
               {error}
+            </div>
+          )}
+
+          {emailNotVerified && (
+            <div className="border border-yellow-500/30 text-yellow-400 px-4 py-3 text-sm space-y-2">
+              <p>Check your inbox. We sent a verification link to {verificationEmail}.</p>
+              {resendSuccess ? (
+                <p className="text-green-400 text-xs">Verification email resent.</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendingVerification}
+                  className="text-xs text-yellow-400 underline hover:text-yellow-300 transition-colors disabled:opacity-50"
+                >
+                  {resendingVerification ? 'Resending...' : 'Resend verification email'}
+                </button>
+              )}
             </div>
           )}
 
@@ -179,16 +226,16 @@ function LoginForm() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full font-mono text-sm bg-white text-black py-3 hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full text-sm bg-white text-black py-3 hover:bg-white/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'signing in...' : 'sign_in()'}
+              {isSubmitting ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
 
           <div className="text-center text-sm">
             <span className="text-white/40">Don&apos;t have an account?</span>{' '}
-            <Link href="/signup" className="font-mono text-xs text-white hover:text-white/70 transition-colors">
-              start_free()
+            <Link href="/signup" className="text-xs text-white hover:text-white/70 transition-colors">
+              Get Started Free
             </Link>
           </div>
         </div>

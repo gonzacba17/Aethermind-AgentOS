@@ -38,24 +38,22 @@ interface StatCardProps {
 
 function StatCard({ title, value, subtitle, icon: Icon, trend, trendUp = true, showTrend = true }: StatCardProps) {
   return (
-    <Card className="bg-card border-border hover:border-primary/50 transition-colors">
-      <CardContent className="p-5">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{title}</span>
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Icon className="h-4 w-4 text-primary" />
-          </div>
+    <Card className="bg-[#111] border border-white/[0.06] rounded-none">
+      <CardContent className="px-6 py-5">
+        <div className="flex items-start justify-between">
+          <span className="text-[0.7rem] font-light text-white/35 uppercase tracking-[0.08em]">{title}</span>
+          <Icon className="h-4 w-4 text-white/15" />
         </div>
         <div className="mt-3 flex items-end justify-between">
           <div>
-            <span className="text-3xl font-bold text-foreground">{value}</span>
-            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+            <span className="text-[1.75rem] font-extralight text-white">{value}</span>
+            <p className="text-[0.7rem] font-light text-white/30 mt-1">{subtitle}</p>
           </div>
           {showTrend && trend && (
             <div
               className={cn(
-                "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full",
-                trendUp ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive",
+                "flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-[4px]",
+                trendUp ? "bg-[rgba(0,191,165,0.08)] text-[#00BFA5]" : "bg-[rgba(255,68,68,0.08)] text-[#ff4444]",
               )}
             >
               {trendUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -70,7 +68,7 @@ function StatCard({ title, value, subtitle, icon: Icon, trend, trendUp = true, s
 
 /**
  * Stats Cards Component
- * 
+ *
  * Displays key metrics in a grid of cards.
  * Connected to real data via useMetrics hook.
  */
@@ -87,10 +85,10 @@ export function StatsCards() {
   if (metricsError) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="col-span-full bg-destructive/10 border-destructive/50">
+        <Card className="col-span-full bg-[rgba(255,68,68,0.08)] border-[rgba(255,68,68,0.2)]">
           <CardContent className="p-5 flex items-center gap-3">
-            <AlertCircle className="h-5 w-5 text-destructive" />
-            <span className="text-sm text-destructive">Failed to load metrics</span>
+            <AlertCircle className="h-5 w-5 text-[#ff4444]" />
+            <span className="text-sm text-[#ff4444]">Failed to load metrics</span>
           </CardContent>
         </Card>
       </div>

@@ -49,9 +49,9 @@ export function QuickstartSection() {
           viewport={{ once: true }}
           className="mb-16"
         >
-          <p className="font-mono text-xs text-white/20 mb-4">// quickstart</p>
+          <p className="font-mono text-xs text-white/25 uppercase tracking-[0.1em] mb-4">// quickstart</p>
           <h2
-            className="font-light tracking-[-0.04em] text-white"
+            className="font-extralight tracking-[-0.04em] text-white"
             style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
           >
             Up and running in 5 minutes.
@@ -69,15 +69,15 @@ export function QuickstartSection() {
               className="border-t border-white/[0.06] grid md:grid-cols-2 gap-8"
             >
               <div className="py-8">
-                <p className="font-mono text-xs text-white/20 mb-3">{step.label}</p>
+                <p className="font-mono text-xs text-white/25 uppercase tracking-[0.1em] mb-3">{step.label}</p>
                 <h3 className="text-lg font-light text-white mb-2">{step.title}</h3>
                 <p className="text-sm text-white/40 leading-relaxed">{step.description}</p>
                 {index === steps.length - 1 && (
                   <a
                     href="/signup"
-                    className="inline-block mt-6 font-mono text-sm px-6 py-2.5 bg-white text-black hover:bg-white/90 transition-colors"
+                    className="inline-block mt-6 text-sm px-6 py-2.5 bg-white text-black hover:bg-white/90 transition-colors"
                   >
-                    open_dashboard()
+                    Open Dashboard
                   </a>
                 )}
               </div>

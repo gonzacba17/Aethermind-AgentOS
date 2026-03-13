@@ -151,11 +151,11 @@ export function CacheSettingsCard() {
         {/* Purge */}
         <div className="pt-2 border-t border-border">
           <Button
-            variant="destructive"
+            variant="outline"
             size="sm"
             onClick={handlePurge}
             disabled={purgeCache.isPending}
-            className="w-full"
+            className="w-full border-red-500/30 text-[#ff4444] hover:bg-red-500/10"
           >
             {purgeCache.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
