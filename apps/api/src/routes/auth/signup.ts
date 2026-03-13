@@ -80,6 +80,11 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
     const orgApiKeyPrefix = orgApiKeyPlaintext.slice(0, 16);
     const clientAccessToken = `ct_${randomBytes(32).toString('hex')}`;
     const sdkApiKey = `aether_sdk_${randomBytes(24).toString('hex')}`;
+    // Pre-compute hashes for secure storage
+    const clientAccessTokenHash = await bcrypt.hash(clientAccessToken, 10);
+    const clientAccessTokenPrefix = clientAccessToken.slice(0, 16);
+    const sdkApiKeyHash = await bcrypt.hash(sdkApiKey, 10);
+    const sdkApiKeyPrefix = sdkApiKey.slice(0, 20);
     // Token expires in 30 days (rotatable via dashboard)
     const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -118,10 +123,15 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       if (!user) throw new Error('Failed to create user');
 
       // 3. Create client linked to same organization
+      //    Store both plaintext (legacy, to be dropped) and hashed tokens
       const [client] = await tx.insert(clients).values({
         companyName: email,
         accessToken: clientAccessToken,
+        accessTokenHash: clientAccessTokenHash,
+        accessTokenPrefix: clientAccessTokenPrefix,
         sdkApiKey,
+        sdkApiKeyHash,
+        sdkApiKeyPrefix,
         organizationId: org.id,
         isActive: true,
         tokenExpiresAt,
@@ -146,6 +156,8 @@ router.post('/signup', authLimiter, async (req: Request, res: Response) => {
       apiKey: apiKeyPlaintext,
       apiKeyShownOnce: true,
       clientAccessToken,
+      sdkApiKey,
+      sdkApiKeyShownOnce: true,
       user: {
         id: result.user.id,
         email: result.user.email,

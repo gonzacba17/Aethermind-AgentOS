@@ -309,6 +309,7 @@ async function recordTelemetry(
     workflowId?: string;
     workflowStep?: number;
     parentAgentId?: string;
+    environment?: string;
   },
 ): Promise<void> {
   try {
@@ -338,6 +339,7 @@ async function recordTelemetry(
       workflowId: data.workflowId,
       workflowStep: data.workflowStep,
       parentAgentId: data.parentAgentId,
+      environment: data.environment,
     });
   } catch (err) {
     console.error('[Gateway] Failed to record telemetry:', (err as Error).message);
@@ -381,6 +383,143 @@ function buildProviderUrl(provider: string, apiKey: string): string {
   }
   console.log(`[Gateway] buildProviderUrl provider=${provider} url=${url}`);
   return url;
+}
+
+// ─── OpenAI ↔ Anthropic format translation ─────────────────
+
+/**
+ * Translate an OpenAI /chat/completions request body to Anthropic /v1/messages format.
+ * - Extracts system messages into top-level `system` field
+ * - Ensures `max_tokens` is set (required by Anthropic)
+ * - Strips fields Anthropic doesn't accept
+ */
+function translateOpenAIToAnthropic(body: any): any {
+  const messages: any[] = body.messages || [];
+  const systemMessages = messages.filter((m: any) => m.role === 'system');
+  const nonSystemMessages = messages.filter((m: any) => m.role !== 'system');
+  const systemText = systemMessages.map((m: any) =>
+    typeof m.content === 'string' ? m.content : ''
+  ).join('\n\n');
+
+  const anthropicBody: any = {
+    model: body.model,
+    messages: nonSystemMessages,
+    max_tokens: body.max_tokens || 4096,
+    stream: body.stream ?? false,
+  };
+
+  if (systemText) {
+    anthropicBody.system = systemText;
+  }
+
+  // Pass through supported optional params
+  if (body.temperature != null) anthropicBody.temperature = body.temperature;
+  if (body.top_p != null) anthropicBody.top_p = body.top_p;
+  if (body.stop) anthropicBody.stop_sequences = Array.isArray(body.stop) ? body.stop : [body.stop];
+  if (body.metadata) anthropicBody.metadata = body.metadata;
+
+  return anthropicBody;
+}
+
+/**
+ * Translate an Anthropic /v1/messages response to OpenAI /chat/completions format.
+ */
+function translateAnthropicResponseToOpenAI(anthropicRes: any): any {
+  const content = (anthropicRes.content || [])
+    .filter((c: any) => c.type === 'text')
+    .map((c: any) => c.text)
+    .join('');
+
+  const inputTokens = anthropicRes.usage?.input_tokens || 0;
+  const outputTokens = anthropicRes.usage?.output_tokens || 0;
+
+  return {
+    id: anthropicRes.id || `chatcmpl-${Date.now()}`,
+    object: 'chat.completion',
+    created: Math.floor(Date.now() / 1000),
+    model: anthropicRes.model,
+    choices: [{
+      index: 0,
+      message: { role: 'assistant', content },
+      finish_reason: anthropicRes.stop_reason === 'end_turn' ? 'stop'
+        : anthropicRes.stop_reason === 'max_tokens' ? 'length'
+        : anthropicRes.stop_reason || 'stop',
+    }],
+    usage: {
+      prompt_tokens: inputTokens,
+      completion_tokens: outputTokens,
+      total_tokens: inputTokens + outputTokens,
+    },
+  };
+}
+
+/**
+ * Translate Anthropic SSE stream to OpenAI-compatible SSE stream.
+ * Anthropic events: message_start, content_block_delta, message_delta, message_stop
+ * OpenAI events: data: {choices: [{delta: {content, role}}]}
+ */
+function translateAnthropicStreamChunk(line: string): { openAIChunk: string | null; inputTokens: number; outputTokens: number } {
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  if (!line.startsWith('data: ')) return { openAIChunk: null, inputTokens, outputTokens };
+
+  const raw = line.slice(6).trim();
+  if (!raw || raw === '[DONE]') return { openAIChunk: null, inputTokens, outputTokens };
+
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return { openAIChunk: null, inputTokens, outputTokens };
+  }
+
+  const type = data.type;
+
+  if (type === 'message_start') {
+    // Extract usage from message_start if present
+    inputTokens = data.message?.usage?.input_tokens || 0;
+    const openAI = {
+      id: data.message?.id || `chatcmpl-${Date.now()}`,
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model: data.message?.model || '',
+      choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }],
+    };
+    return { openAIChunk: `data: ${JSON.stringify(openAI)}\n\n`, inputTokens, outputTokens };
+  }
+
+  if (type === 'content_block_delta' && data.delta?.type === 'text_delta') {
+    const openAI = {
+      id: `chatcmpl-${Date.now()}`,
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model: '',
+      choices: [{ index: 0, delta: { content: data.delta.text }, finish_reason: null }],
+    };
+    return { openAIChunk: `data: ${JSON.stringify(openAI)}\n\n`, inputTokens, outputTokens };
+  }
+
+  if (type === 'message_delta') {
+    outputTokens = data.usage?.output_tokens || 0;
+    const finishReason = data.delta?.stop_reason === 'end_turn' ? 'stop'
+      : data.delta?.stop_reason === 'max_tokens' ? 'length'
+      : data.delta?.stop_reason || null;
+    const openAI = {
+      id: `chatcmpl-${Date.now()}`,
+      object: 'chat.completion.chunk',
+      created: Math.floor(Date.now() / 1000),
+      model: '',
+      choices: [{ index: 0, delta: {}, finish_reason: finishReason }],
+    };
+    return { openAIChunk: `data: ${JSON.stringify(openAI)}\n\n`, inputTokens, outputTokens };
+  }
+
+  if (type === 'message_stop') {
+    return { openAIChunk: 'data: [DONE]\n\n', inputTokens, outputTokens };
+  }
+
+  return { openAIChunk: null, inputTokens, outputTokens };
 }
 
 // ─── Provider fallback map ──────────────────────────────────
@@ -439,6 +578,7 @@ router.post(
         : undefined,
       parentAgentId: req.headers['x-parent-agent-id'] as string | undefined,
       traceId: (req.headers['x-trace-id'] as string) || crypto.randomUUID(),
+      environment: (req.headers['x-environment'] as string) || 'production',
     };
 
     const body = req.body;
@@ -587,7 +727,10 @@ router.post(
     }
 
     // ── 6. Proxy to provider ───────────────────────────
-    const proxyBody = { ...body, model: finalModel, stream: isStream };
+    const isAnthropic = provider === 'anthropic';
+    const proxyBody = isAnthropic
+      ? translateOpenAIToAnthropic({ ...body, model: finalModel, stream: isStream })
+      : { ...body, model: finalModel, stream: isStream };
     const providerUrl = buildProviderUrl(provider, apiKey);
     const providerHeaders = buildProviderHeaders(provider, apiKey);
 
@@ -644,19 +787,48 @@ router.post(
             if (done) break;
 
             const chunk = decoder.decode(value, { stream: true });
-            res.write(chunk);
 
-            // Parse SSE chunks to accumulate content and usage
-            const lines = chunk.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-                try {
-                  const data = JSON.parse(line.slice(6));
-                  const delta = data.choices?.[0]?.delta?.content;
-                  if (delta) fullContent += delta;
-                  if (data.usage) usageData = data.usage;
-                } catch {
-                  // Not all lines are valid JSON
+            if (isAnthropic) {
+              // Translate Anthropic SSE → OpenAI SSE before sending to client
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                const { openAIChunk, inputTokens, outputTokens } = translateAnthropicStreamChunk(line);
+                if (openAIChunk) res.write(openAIChunk);
+                if (inputTokens) {
+                  usageData = { prompt_tokens: inputTokens, completion_tokens: 0, total_tokens: 0 };
+                }
+                if (outputTokens) {
+                  usageData = {
+                    ...usageData,
+                    prompt_tokens: usageData?.prompt_tokens || 0,
+                    completion_tokens: outputTokens,
+                    total_tokens: (usageData?.prompt_tokens || 0) + outputTokens,
+                  };
+                }
+                // Accumulate content for cache/telemetry
+                if (line.startsWith('data: ')) {
+                  try {
+                    const data = JSON.parse(line.slice(6));
+                    if (data.type === 'content_block_delta' && data.delta?.text) {
+                      fullContent += data.delta.text;
+                    }
+                  } catch { /* skip */ }
+                }
+              }
+            } else {
+              // Non-Anthropic: passthrough SSE as-is
+              res.write(chunk);
+              const lines = chunk.split('\n');
+              for (const line of lines) {
+                if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+                  try {
+                    const data = JSON.parse(line.slice(6));
+                    const delta = data.choices?.[0]?.delta?.content;
+                    if (delta) fullContent += delta;
+                    if (data.usage) usageData = data.usage;
+                  } catch {
+                    // Not all lines are valid JSON
+                  }
                 }
               }
             }
@@ -694,6 +866,7 @@ router.post(
           workflowId: agentContext.workflowId,
           workflowStep: agentContext.workflowStep,
           parentAgentId: agentContext.parentAgentId,
+          environment: agentContext.environment,
         });
 
         if (agentContext.agentId) {
@@ -713,6 +886,7 @@ router.post(
             costUsd: String(cost),
             latencyMs: latency,
             status: 'success',
+            environment: agentContext.environment,
             startedAt: new Date(startTime),
             completedAt: new Date(),
           }).catch((err: Error) => console.error('[Gateway] Failed to write agent trace:', err.message));
@@ -870,6 +1044,7 @@ router.post(
           latencyMs: latency,
           status: 'error',
           error: errMsg,
+          environment: agentContext.environment,
           startedAt: new Date(startTime),
           completedAt: new Date(),
         }).catch((err: Error) => console.error('[Gateway] Failed to write error agent trace:', err.message));
@@ -888,12 +1063,23 @@ router.post(
       });
     }
 
-    // ── 8. Extract usage & record telemetry ────────────
-    const usage = responseBody.usage || {};
-    const promptTokens = usage.prompt_tokens || 0;
-    const completionTokens = usage.completion_tokens || 0;
-    const totalTokens = usage.total_tokens || promptTokens + completionTokens;
+    // ── 8. Translate Anthropic response → OpenAI format ──
+    if (isAnthropic) {
+      const translated = translateAnthropicResponseToOpenAI(responseBody);
+      // Preserve original Anthropic usage for accurate telemetry
+      const anthropicUsage = responseBody.usage || {};
+      responseBody = translated;
+      // Carry original usage through for cost calc
+      responseBody._anthropicUsage = anthropicUsage;
+    }
+
+    const usage = responseBody._anthropicUsage || responseBody.usage || {};
+    const promptTokens = usage.input_tokens || usage.prompt_tokens || 0;
+    const completionTokens = usage.output_tokens || usage.completion_tokens || 0;
+    const totalTokens = promptTokens + completionTokens;
     const cost = calculateCost(routingMeta.model, promptTokens, completionTokens);
+    // Clean up internal field before sending to client
+    delete responseBody._anthropicUsage;
 
     // Fire-and-forget telemetry
     recordTelemetry(organizationId, {

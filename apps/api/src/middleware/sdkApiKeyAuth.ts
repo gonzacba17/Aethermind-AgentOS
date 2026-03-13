@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import bcrypt from 'bcryptjs';
 import { db } from '../db/index.js';
 import { clients, organizations } from '../db/schema.js';
 import { eq, and } from 'drizzle-orm';
@@ -33,7 +34,7 @@ const sdkKeyCache = new LRUCache<string, IngestionAuthContext>({
  * Unified ingestion auth middleware.
  *
  * Detects key format from X-API-Key header:
- * - `aether_sdk_*` → SDK client key → lookup in clients.sdkApiKey
+ * - `aether_sdk_*` → SDK client key → lookup in clients.sdkApiKeyHash (bcrypt)
  * - `aether_*`     → Org key → delegate to existing apiKeyAuthCached
  *
  * Both paths set req.organizationId and req.organization.
@@ -80,7 +81,8 @@ export async function ingestionAuth(
  *
  * Strategy:
  * 1. Check LRU cache (keyed by SHA-256 of the API key)
- * 2. Plaintext lookup: WHERE sdk_api_key = apiKey AND is_active = true
+ * 2. Prefix-indexed lookup + bcrypt verify against sdkApiKeyHash
+ * 3. Fallback: plaintext lookup for keys not yet backfilled
  */
 async function handleSdkKey(
   apiKey: string,
@@ -99,17 +101,41 @@ async function handleSdkKey(
     return;
   }
 
-  // Plaintext lookup
-  const rows = await db
+  // Prefix-indexed lookup + bcrypt verify
+  const prefix = apiKey.slice(0, 20);
+  const candidates = await db
     .select({
       clientId: clients.id,
       organizationId: clients.organizationId,
       rateLimitPerMin: clients.rateLimitPerMin,
+      sdkApiKeyHash: clients.sdkApiKeyHash,
     })
     .from(clients)
-    .where(and(eq(clients.sdkApiKey, apiKey), eq(clients.isActive, true)));
+    .where(and(eq(clients.sdkApiKeyPrefix, prefix), eq(clients.isActive, true)));
 
-  const row = rows[0];
+  let row: typeof candidates[0] | undefined;
+
+  for (const candidate of candidates) {
+    if (candidate.sdkApiKeyHash && await bcrypt.compare(apiKey, candidate.sdkApiKeyHash)) {
+      row = candidate;
+      break;
+    }
+  }
+
+  // Fallback: plaintext lookup for keys not yet backfilled
+  if (!row) {
+    const fallbackRows = await db
+      .select({
+        clientId: clients.id,
+        organizationId: clients.organizationId,
+        rateLimitPerMin: clients.rateLimitPerMin,
+        sdkApiKeyHash: clients.sdkApiKeyHash,
+      })
+      .from(clients)
+      .where(and(eq(clients.sdkApiKey, apiKey), eq(clients.isActive, true)));
+
+    row = fallbackRows[0];
+  }
 
   if (!row) {
     res.status(401).json({

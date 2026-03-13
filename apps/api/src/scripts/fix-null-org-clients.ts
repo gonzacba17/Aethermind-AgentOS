@@ -28,7 +28,6 @@ async function main() {
   const orphanClients = await db.select({
     id: clients.id,
     companyName: clients.companyName,
-    accessToken: clients.accessToken,
     organizationId: clients.organizationId,
   })
     .from(clients)

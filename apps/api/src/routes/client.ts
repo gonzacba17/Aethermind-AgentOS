@@ -107,7 +107,6 @@ router.get('/me', (req, res) => {
 
   res.json({
     companyName: client.companyName,
-    sdkApiKey: client.sdkApiKey,
     id: client.id,
   });
 });
@@ -4182,7 +4181,10 @@ router.post('/token/rotate', async (req, res) => {
     }
 
     const crypto = await import('crypto');
+    const bcryptMod = await import('bcryptjs');
     const newToken = `ct_${crypto.randomBytes(32).toString('hex')}`;
+    const newTokenHash = await bcryptMod.default.hash(newToken, 10);
+    const newTokenPrefix = newToken.slice(0, 16);
     const newExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
     // Invalidate old token from cache before updating DB
@@ -4192,6 +4194,8 @@ router.post('/token/rotate', async (req, res) => {
     await db.update(clients)
       .set({
         accessToken: newToken,
+        accessTokenHash: newTokenHash,
+        accessTokenPrefix: newTokenPrefix,
         tokenExpiresAt: newExpiresAt,
       })
       .where(eq(clients.id, client.id));

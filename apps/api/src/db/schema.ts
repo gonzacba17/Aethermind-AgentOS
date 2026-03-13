@@ -89,6 +89,9 @@ export const users = pgTable('users', {
   githubIdIdx: index('idx_users_github_id').on(table.githubId),
   orgIdIdx: index('idx_users_organization_id').on(table.organizationId),
   deletedAtIdx: index('idx_users_deleted_at').on(table.deletedAt),
+  // Partial indexes for token lookup (only rows with active tokens)
+  verificationTokenIdx: index('idx_users_verification_token').on(table.verificationToken).where(sql`verification_token IS NOT NULL`),
+  resetTokenIdx: index('idx_users_reset_token').on(table.resetToken).where(sql`reset_token IS NOT NULL`),
 }));
 
 // ============================================
@@ -308,9 +311,12 @@ export const telemetryEvents = pgTable('telemetry_events', {
   workflowId: varchar('workflow_id', { length: 255 }),
   workflowStep: integer('workflow_step'),
   parentAgentId: varchar('parent_agent_id', { length: 255 }),
+  // Environment tag: 'production' | 'development' | 'staging' | 'test'
+  environment: varchar('environment', { length: 20 }).default('production'),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
 }, (table) => ({
   orgTimeIdx: index('idx_telemetry_org_time').on(table.organizationId, table.timestamp),
+  orgStatusIdx: index('idx_telemetry_org_status').on(table.organizationId, table.status),
   providerModelIdx: index('idx_telemetry_provider_model').on(table.provider, table.model),
   statusIdx: index('idx_telemetry_status').on(table.status),
   createdAtIdx: index('idx_telemetry_created_at').on(table.createdAt),
@@ -410,8 +416,14 @@ export const backupHistory = pgTable('backup_history', {
 export const clients = pgTable('clients', {
   id: uuid('id').primaryKey().defaultRandom(),
   companyName: varchar('company_name', { length: 255 }).notNull(),
+  // Legacy plaintext columns — kept temporarily for migration; will be dropped after verification
   accessToken: varchar('access_token', { length: 80 }).notNull().unique(),
   sdkApiKey: varchar('sdk_api_key', { length: 255 }).notNull(),
+  // Hashed token columns (bcrypt)
+  accessTokenHash: varchar('access_token_hash', { length: 255 }),
+  accessTokenPrefix: varchar('access_token_prefix', { length: 16 }),
+  sdkApiKeyHash: varchar('sdk_api_key_hash', { length: 255 }),
+  sdkApiKeyPrefix: varchar('sdk_api_key_prefix', { length: 20 }),
   organizationId: uuid('organization_id').references(() => organizations.id, { onDelete: 'set null' }),
   rateLimitPerMin: integer('rate_limit_per_min').default(100).notNull(),
   isActive: boolean('is_active').default(true),
@@ -423,8 +435,10 @@ export const clients = pgTable('clients', {
 }, (table) => ({
   accessTokenIdx: index('idx_clients_access_token').on(table.accessToken),
   sdkApiKeyIdx: index('idx_clients_sdk_api_key').on(table.sdkApiKey),
+  accessTokenPrefixIdx: index('idx_clients_access_token_prefix').on(table.accessTokenPrefix),
+  sdkApiKeyPrefixIdx: index('idx_clients_sdk_api_key_prefix').on(table.sdkApiKeyPrefix),
   orgIdIdx: index('idx_clients_organization_id').on(table.organizationId),
-  tokenExpiresIdx: index('idx_clients_token_expires_at').on(table.tokenExpiresAt),
+  tokenExpiresIdx: index('idx_clients_token_expires_at_partial').on(table.tokenExpiresAt).where(sql`token_expires_at IS NOT NULL`),
 }));
 
 // ============================================
@@ -644,6 +658,8 @@ export const agentTraces = pgTable('agent_traces', {
   latencyMs: integer('latency_ms'),
   status: varchar('status', { length: 20 }).default('success').notNull(),
   error: text('error'),
+  // Environment tag: 'production' | 'development' | 'staging' | 'test'
+  environment: varchar('environment', { length: 20 }).default('production'),
   startedAt: timestamp('started_at', { withTimezone: true, precision: 6 }).notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true, precision: 6 }),
   createdAt: timestamp('created_at', { withTimezone: true, precision: 6 }).defaultNow().notNull(),
