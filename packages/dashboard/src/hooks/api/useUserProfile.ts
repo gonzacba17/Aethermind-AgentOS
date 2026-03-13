@@ -41,16 +41,22 @@ export function useUserProfile() {
   return useQuery({
     queryKey: userProfileKeys.me(),
     queryFn: async () => {
-      const response = await apiRequest<{ id: string; companyName: string; sdkApiKey: string }>('/api/client/me');
+      const response = await apiRequest<{
+        id: string;
+        companyName: string;
+        sdkApiKey?: string;
+        hasCompletedOnboarding?: boolean;
+        onboardingStep?: string;
+      }>('/api/client/me');
       return {
         id: response.id,
         email: '',
         name: response.companyName,
         plan: 'pro' as UserProfile['plan'],
-        apiKey: response.sdkApiKey,
+        apiKey: response.sdkApiKey || '',
         organizationId: null,
-        hasCompletedOnboarding: true,
-        onboardingStep: 'complete',
+        hasCompletedOnboarding: response.hasCompletedOnboarding ?? true,
+        onboardingStep: response.onboardingStep || 'complete',
         usageCount: 0,
         usageLimit: 10000,
         maxAgents: 100,

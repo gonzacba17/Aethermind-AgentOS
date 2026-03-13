@@ -6,6 +6,7 @@ export interface ClientInfo {
   companyName: string;
   sdkApiKey: string;
   id: string;
+  hasCompletedOnboarding: boolean;
 }
 
 interface AuthState {
@@ -14,6 +15,7 @@ interface AuthState {
   isLoading: boolean;
 
   initialize: () => Promise<boolean>;
+  setOnboardingComplete: () => void;
   logout: () => void;
 }
 
@@ -51,6 +53,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
           companyName: data.companyName,
           sdkApiKey: data.sdkApiKey,
           id: data.id,
+          hasCompletedOnboarding: data.hasCompletedOnboarding ?? true,
         },
         isAuthenticated: true,
         isLoading: false,
@@ -59,6 +62,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     } catch {
       set({ client: null, isAuthenticated: false, isLoading: false });
       return false;
+    }
+  },
+
+  setOnboardingComplete: () => {
+    const client = get().client;
+    if (client) {
+      set({ client: { ...client, hasCompletedOnboarding: true } });
     }
   },
 
