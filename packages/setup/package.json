@@ -1,0 +1,36 @@
+{
+  "name": "@aethermind/setup",
+  "version": "0.1.4",
+  "description": "CLI setup tool for Aethermind AgentOS — configures your project with one command",
+  "bin": {
+    "aethermind-setup": "./bin/setup.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "node bin/setup.js --help"
+  },
+  "keywords": [
+    "aethermind",
+    "setup",
+    "cli",
+    "ai",
+    "monitoring",
+    "telemetry"
+  ],
+  "author": "Aethermind Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gonzacba17/Aethermind-AgentOS.git",
+    "directory": "packages/setup"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

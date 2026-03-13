@@ -442,19 +442,6 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  examples/ollama-test:
-    dependencies:
-      '@aethermind/agent':
-        specifier: workspace:*
-        version: link:../../packages/agent
-    devDependencies:
-      tsx:
-        specifier: ^4.0.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.0.0
-        version: 5.9.3
-
   packages/agent:
     dependencies:
       openai:
