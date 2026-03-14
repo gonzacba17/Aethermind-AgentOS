@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
-import { Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2, Eye, EyeOff } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
 import { useAuthStore } from "@/store/useAuthStore"
+import { useTimeAgo } from "@/hooks/useTimeAgo"
 
 const quickLinks = [
   {
@@ -43,8 +44,25 @@ const quickLinks = [
 
 function SDKKeyCard() {
   const client = useAuthStore((s) => s.client)
+  const refreshClient = useAuthStore((s) => s.refreshClient)
   const [copied, setCopied] = useState<string | null>(null)
   const [showKey, setShowKey] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState(Date.now())
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const updatedAgo = useTimeAgo(lastRefresh)
+
+  const doRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    await refreshClient()
+    setLastRefresh(Date.now())
+    setIsRefreshing(false)
+  }, [refreshClient])
+
+  // Auto-refresh every 30s
+  useEffect(() => {
+    const id = setInterval(doRefresh, 30_000)
+    return () => clearInterval(id)
+  }, [doRefresh])
 
   const sdkApiKey = client?.sdkApiKey || ''
   const maskedKey = sdkApiKey
@@ -88,15 +106,30 @@ console.log(response.choices[0].message.content);`
   return (
     <Card className="bg-[#111] border border-white/[0.06] rounded-none">
       <CardHeader>
-        <div className="flex items-center gap-3">
-          <Key className="h-5 w-5 text-white/40" />
-          <div>
-            <CardTitle className="text-lg font-light text-white">
-              {client?.companyName ? `Welcome, ${client.companyName}` : 'Your SDK API Key'}
-            </CardTitle>
-            <CardDescription className="text-sm mt-1 text-white/40">
-              Use this key to connect the @aethermind/agent SDK to your application
-            </CardDescription>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Key className="h-5 w-5 text-white/40" />
+            <div>
+              <CardTitle className="text-lg font-light text-white">
+                {client?.companyName ? `Welcome, ${client.companyName}` : 'Your SDK API Key'}
+              </CardTitle>
+              <CardDescription className="text-sm mt-1 text-white/40">
+                Use this key to connect the @aethermind/agent SDK to your application
+              </CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {updatedAgo && (
+              <span className="text-[11px] text-white/25 font-mono tabular-nums">
+                {isRefreshing ? 'updating...' : `updated ${updatedAgo}`}
+              </span>
+            )}
+            <button
+              onClick={doRefresh}
+              className="text-white/30 hover:text-white/60 transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
           </div>
         </div>
       </CardHeader>

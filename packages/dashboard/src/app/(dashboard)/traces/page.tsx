@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { GitBranch, Search, Filter, Clock, CheckCircle2, XCircle, AlertCircle, Download, X, RefreshCw, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useTraces, useTraceStats, exportTraces, TraceListItem } from "@/hooks"
 import { EmptyState } from "@/components/ui/empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useTimeAgo } from "@/hooks/useTimeAgo"
 
 const statusConfig = {
   success: { icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
@@ -31,11 +32,12 @@ export default function TracesPage() {
   const [isExporting, setIsExporting] = useState(false)
 
   // Data fetching
-  const { data, isLoading, error, refetch } = useTraces({
+  const { data, isLoading, error, refetch, dataUpdatedAt, isFetching } = useTraces({
     status: statusFilters,
     agentId: agentFilters[0], // API might only support single agent filter
   })
   const { data: stats } = useTraceStats()
+  const updatedAgo = useTimeAgo(dataUpdatedAt)
 
   const traces = data?.data || []
   const totalTraces = data?.total || traces.length
@@ -167,8 +169,13 @@ export default function TracesPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {updatedAgo && (
+            <span className="text-[11px] text-white/25 font-mono tabular-nums">
+              {isFetching ? 'updating...' : `updated ${updatedAgo}`}
+            </span>
+          )}
           <Button variant="outline" onClick={() => refetch()} className="gap-2 rounded-[4px]">
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <DropdownMenu>
