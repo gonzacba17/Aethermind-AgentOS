@@ -101,8 +101,9 @@ export function useTraces(
 
       return { data: filtered, total: filtered.length };
     },
-    staleTime: 15 * 1000,
-    refetchInterval: 30 * 1000,
+    staleTime: 5 * 1000,
+    refetchInterval: 10 * 1000,
+    refetchIntervalInBackground: true,
     retry: 1,
     ...options,
   });
@@ -240,8 +241,9 @@ export function useTraceStats() {
           : '0',
       };
     },
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 5 * 1000,
+    refetchInterval: 10 * 1000,
+    refetchIntervalInBackground: true,
   });
 }
 

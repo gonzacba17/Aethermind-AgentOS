@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Bot, GitBranch, FileText, DollarSign, BarChart3, Copy, Check, Key, Terminal, Code2, Eye, EyeOff, RefreshCw } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -50,19 +50,24 @@ function SDKKeyCard() {
   const [lastRefresh, setLastRefresh] = useState(Date.now())
   const [isRefreshing, setIsRefreshing] = useState(false)
   const updatedAgo = useTimeAgo(lastRefresh)
+  const refreshRef = useRef(refreshClient)
+  refreshRef.current = refreshClient
 
-  const doRefresh = useCallback(async () => {
+  const doRefresh = async () => {
     setIsRefreshing(true)
-    await refreshClient()
+    await refreshRef.current()
     setLastRefresh(Date.now())
     setIsRefreshing(false)
-  }, [refreshClient])
+  }
 
-  // Auto-refresh every 30s
+  // Auto-refresh every 10s — stable interval, never torn down by re-renders
   useEffect(() => {
-    const id = setInterval(doRefresh, 30_000)
+    const id = setInterval(async () => {
+      await refreshRef.current()
+      setLastRefresh(Date.now())
+    }, 10_000)
     return () => clearInterval(id)
-  }, [doRefresh])
+  }, [])
 
   const sdkApiKey = client?.sdkApiKey || ''
   const maskedKey = sdkApiKey
