@@ -73,7 +73,7 @@ export default function SettingsPage() {
   const [clearResult, setClearResult] = useState<string | null>(null)
 
   async function handleClearTestData() {
-    if (!confirm("¿Estás seguro? Esto borrará todos los eventos de telemetría de tu cuenta.")) {
+    if (!confirm("This will permanently delete ALL your data including traces, agents, and workflows. Are you sure?")) {
       return
     }
 
@@ -84,7 +84,7 @@ export default function SettingsPage() {
       const data = await apiRequest<{ deleted: number }>("/api/client/telemetry", {
         method: "DELETE",
       })
-      setClearResult(`Telemetry data cleared (${data.deleted} events deleted)`)
+      setClearResult(`All data cleared (${data.deleted} records deleted)`)
       router.refresh()
     } catch (err) {
       setClearResult(`Error: ${err instanceof Error ? err.message : "Unknown error"}`)
@@ -149,10 +149,10 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Trash2 className="h-5 w-5 text-destructive" />
-            Data Management
+            Clear All Data
           </CardTitle>
           <CardDescription>
-            Clear telemetry data from your dashboard. Useful after testing with dummy events.
+            Permanently delete all traces, agents, workflows, and telemetry from your account. This action cannot be undone.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -162,7 +162,7 @@ export default function SettingsPage() {
               onClick={handleClearTestData}
               disabled={clearing}
             >
-              {clearing ? "Clearing..." : "Clear all test data"}
+              {clearing ? "Clearing..." : "Clear All Data"}
             </Button>
             {clearResult && (
               <span className={`text-sm ${clearResult.startsWith("Error") ? "text-destructive" : "text-muted-foreground"}`}>

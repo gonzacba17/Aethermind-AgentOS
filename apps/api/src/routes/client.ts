@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/index.js';
 import { telemetryEvents, clientBudgets, clients, routingRules, providerHealth, cacheSettings, semanticCache, promptCompressionLog, optimizationSettings, clientInsights, agents, logs, users, traces, executions, costs, workflows, organizations, alertRules, agentTraces } from '../db/schema.js';
-import { eq, and, gte, lte, sql, isNotNull, isNull, desc, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, isNotNull, isNull, desc, inArray, or } from 'drizzle-orm';
 import { ClientAuthenticatedRequest, invalidateClientCache } from '../middleware/clientAuth.js';
 import { evaluateBudget } from '../services/ClientBudgetService.js';
 import { classifyPrompt } from '../services/PromptClassifier.js';
@@ -231,8 +231,9 @@ router.patch('/me', async (req, res) => {
 /**
  * DELETE /api/client/telemetry
  *
- * Deletes all telemetry_events for this organization.
- * Used to clear test/demo data from the dashboard.
+ * Deletes ALL usage data for this client's organization:
+ * agent_traces, telemetry_events, logs, client_insights, agents, workflows.
+ * Order respects foreign-key constraints.
  */
 router.delete('/telemetry', async (req, res) => {
   try {
@@ -244,17 +245,70 @@ router.delete('/telemetry', async (req, res) => {
       return;
     }
 
-    const result = await db
-      .delete(telemetryEvents)
-      .where(eq(telemetryEvents.organizationId, client.organizationId));
+    const orgId = client.organizationId;
+    const clientId = client.id;
 
-    const deleted = (result as any).rowCount ?? (result as any).count ?? 0;
+    // Find all userIds in this organization (agents/workflows/logs use userId)
+    const orgUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.organizationId, orgId));
+    const userIds = orgUsers.map(u => u.id);
 
-    console.log(`[Client DELETE /telemetry] Deleted ${deleted} events for org ${client.organizationId}`);
-    res.json({ deleted });
+    // Find agentIds owned by those users (logs reference agentId)
+    let agentIds: string[] = [];
+    if (userIds.length > 0) {
+      const ownedAgents = await db
+        .select({ id: agents.id })
+        .from(agents)
+        .where(inArray(agents.userId, userIds));
+      agentIds = ownedAgents.map(a => a.id);
+    }
+
+    const counts: Record<string, number> = {};
+
+    // 1. agent_traces (references no other cleared table)
+    const r1 = await db.delete(agentTraces).where(eq(agentTraces.organizationId, orgId));
+    counts.agent_traces = (r1 as any).rowCount ?? 0;
+
+    // 2. telemetry_events
+    const r2 = await db.delete(telemetryEvents).where(eq(telemetryEvents.organizationId, orgId));
+    counts.telemetry_events = (r2 as any).rowCount ?? 0;
+
+    // 3. logs (FK → agents, executions)
+    if (agentIds.length > 0) {
+      const r3 = await db.delete(logs).where(inArray(logs.agentId, agentIds));
+      counts.logs = (r3 as any).rowCount ?? 0;
+    } else {
+      counts.logs = 0;
+    }
+
+    // 4. client_insights
+    const r4 = await db.delete(clientInsights).where(eq(clientInsights.clientId, clientId));
+    counts.client_insights = (r4 as any).rowCount ?? 0;
+
+    // 5. agents (FK → users)
+    if (userIds.length > 0) {
+      const r5 = await db.delete(agents).where(inArray(agents.userId, userIds));
+      counts.agents = (r5 as any).rowCount ?? 0;
+    } else {
+      counts.agents = 0;
+    }
+
+    // 6. workflows (FK → users)
+    if (userIds.length > 0) {
+      const r6 = await db.delete(workflows).where(inArray(workflows.userId, userIds));
+      counts.workflows = (r6 as any).rowCount ?? 0;
+    } else {
+      counts.workflows = 0;
+    }
+
+    const totalDeleted = Object.values(counts).reduce((s, n) => s + n, 0);
+    console.log(`[Client DELETE /telemetry] Cleared all data for org ${orgId}:`, counts);
+    res.json({ deleted: totalDeleted, details: counts });
   } catch (error) {
     console.error('[Client DELETE /telemetry] Error:', error);
-    res.status(500).json({ error: 'Failed to delete telemetry data' });
+    res.status(500).json({ error: 'Failed to delete data' });
   }
 });
 
